@@ -49,6 +49,8 @@ export interface IEvent extends Document {
   country ?: string;
   zipCode?: string;
   maxParticipants?: number; // 0 means unlimited
+  registrationFeeType?: 'free' | 'paid';
+  registrationFeeAmount?: number;
   minAge?: number;
   maxAge?: number;
   distance?: number; // in kilometers
@@ -208,6 +210,17 @@ const EventSchema = new Schema(
       type: Number,
       min: [0, 'Max participants cannot be negative'],
       // 0 means unlimited
+    },
+    registrationFeeType: {
+      type: String,
+      enum: ['free', 'paid'],
+      default: 'free',
+      trim: true,
+    },
+    registrationFeeAmount: {
+      type: Number,
+      min: [0, 'Registration fee amount cannot be negative'],
+      default: 0,
     },
     minAge: {
       type: Number,

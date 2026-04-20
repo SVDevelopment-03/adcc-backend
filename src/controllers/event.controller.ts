@@ -227,6 +227,19 @@ const getRouteParam = (value?: string | string[]): string => {
   return value ?? '';
 };
 
+const normalizeRegistrationFee = (data: Record<string, any>) => {
+  const hasType = Object.prototype.hasOwnProperty.call(data, 'registrationFeeType');
+  const incomingType = data.registrationFeeType;
+  const amountValue = Number(data.registrationFeeAmount);
+  const amount = Number.isFinite(amountValue) && amountValue > 0 ? amountValue : 0;
+  const type = hasType
+    ? (incomingType === 'paid' ? 'paid' : 'free')
+    : (amount > 0 ? 'paid' : 'free');
+
+  data.registrationFeeType = type;
+  data.registrationFeeAmount = type === 'paid' ? amount : 0;
+};
+
 const buildEventResultsPipeline = (eventId: string, statuses?: string[]): PipelineStage[] => {
   const matchStage: Record<string, any> = {
     eventId: new mongoose.Types.ObjectId(eventId),
@@ -367,6 +380,8 @@ export const createEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     eventDate: req.body.eventDate ? new Date(req.body.eventDate) : undefined,
     createdBy: userId,
   };
+
+  normalizeRegistrationFee(eventData);
 
   await attachEventImages(req, eventData);
 
@@ -552,6 +567,9 @@ export const updateEvent = asyncHandler(async (req: AuthRequest, res: Response) 
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
   const { id } = req.params;
   const updateData = { ...req.body };
+  if ('registrationFeeType' in updateData || 'registrationFeeAmount' in updateData) {
+    normalizeRegistrationFee(updateData);
+  }
 
   await attachEventImages(req, updateData);
 
