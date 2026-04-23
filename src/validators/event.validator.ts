@@ -114,7 +114,7 @@ export const createEventSchema = z
     allowCancellation: z.preprocess(firstValue, z.coerce.boolean()).default(false),
     galleryImages: z.preprocess(jsonOrValue, z.array(z.string().url('Invalid image URL'))).optional().default([])
   })
-  .strict();
+  .strip();
 
 export const updateEventSchema = z
   .object({
@@ -184,7 +184,7 @@ export const updateEventSchema = z
     galleryImages: z.preprocess(jsonOrValue, z.array(z.string().url('Invalid image URL'))).optional()
 
   })
-  .strict();
+  .strip();
 
 export const getEventsQuerySchema = z.object({
   status: z.enum(['Draft', 'Open', 'Full', 'Closed', 'Disabled', 'Completed', 'Archived']).optional(),
