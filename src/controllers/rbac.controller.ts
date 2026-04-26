@@ -333,13 +333,19 @@ export const assignUserRole = asyncHandler(async (req: AuthRequest, res: Respons
   }
 
   if (roleId === null) {
-    await User.findByIdAndUpdate(userId, { $unset: { roleId: 1 } });
+    await User.findByIdAndUpdate(userId, { $unset: { roleId: 1 } }, { runValidators: true });
   } else {
     const role = await Role.findById(roleId);
     if (!role) {
       throw new AppError('Role not found', 404);
     }
-    await User.findByIdAndUpdate(userId, { roleId: role._id, role: role.name });
+    // RBAC role assignment is separate from legacy `role` enum (Admin/Vendor/Member).
+    // Keep legacy role compatible with schema while RBAC permissions drive authorization.
+    await User.findByIdAndUpdate(
+      userId,
+      { roleId: role._id, role: 'Admin' },
+      { runValidators: true }
+    );
   }
 
   const updated = await User.findById(userId)

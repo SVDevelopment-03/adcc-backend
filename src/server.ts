@@ -8,11 +8,13 @@ import cors from 'cors';
 import helmet from 'helmet';
 import morgan from 'morgan';
 import compression from 'compression';
+import mongoose from 'mongoose';
 import { connectDB } from './data/database';
 import routes from './routes';
 import { errorHandler } from './middleware/error.middleware';
 import { notFound } from './middleware/not-found.middleware';
 import { languageMiddleware } from './middleware/language.middleware';
+import { requireDbReady } from './middleware/db-ready.middleware';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -55,27 +57,53 @@ app.get('/health', (_req, res) => {
 });
 
 // Routes with explicit language short code: /v1/en/* or /v1/ar/*
-app.use(`/${API_VERSION}/en`, languageMiddleware, routes);
-app.use(`/${API_VERSION}/ar`, languageMiddleware, routes);
+app.use(`/${API_VERSION}/en`, requireDbReady, languageMiddleware, routes);
+app.use(`/${API_VERSION}/ar`, requireDbReady, languageMiddleware, routes);
 
 // Backward-compatible routes without language short code
-app.use(`/${API_VERSION}`, languageMiddleware, routes);
+app.use(`/${API_VERSION}`, requireDbReady, languageMiddleware, routes);
 
 // Error handling
 app.use(notFound as any);
 app.use(errorHandler as any);
 
 const startServer = async () => {
-  try {
-    await connectDB();
+  const isProduction = process.env.NODE_ENV === 'production';
 
-    app.listen(PORT, () => {
-      console.log(`Server running on port ${PORT}`);
-    });
-  } catch (error) {
-    console.error('Failed to start server due to database connection error:', error);
-    process.exit(1);
+  // In production we fail fast (so the process manager can restart).
+  // In development we keep the server up so the frontend doesn't see "ERR_CONNECTION_REFUSED",
+  // and we retry DB connection in the background.
+  if (isProduction) {
+    try {
+      await connectDB();
+      app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+      });
+      return;
+    } catch (error) {
+      console.error('Failed to start server due to database connection error:', error);
+      process.exit(1);
+    }
   }
+
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
+  });
+
+  const retryDelayMs = 10_000;
+  const connectLoop = async () => {
+    try {
+      await connectDB();
+      return;
+    } catch (error) {
+      console.error('Database not connected yet. Retrying...', error);
+      setTimeout(connectLoop, retryDelayMs);
+    }
+  };
+
+  // Avoid Mongoose buffering commands forever while DB isn't connected.
+  mongoose.set('bufferCommands', false);
+  connectLoop();
 };
 
 startServer();

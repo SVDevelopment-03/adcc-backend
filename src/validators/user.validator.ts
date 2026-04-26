@@ -62,7 +62,20 @@ export const unregisterFcmTokenSchema = z
   })
   .strict();
 
+export const createUserSchema = z
+  .object({
+    fullName: stringField('Full name is required'),
+    email: z.preprocess(firstValue, z.string().email('Valid email is required')),
+    password: z.preprocess(firstValue, z.string().min(8, 'Password must be at least 8 characters')),
+    phone: optionalStringField('Invalid phone number'),
+    profileImage: optionalStringField('Invalid profile image'),
+    gender: z.preprocess(firstValue, z.enum(['Male', 'Female'])),
+    role: z.preprocess(firstValue, z.enum(['Admin', 'Vendor', 'Member'])).optional(),
+    isVerified: z.preprocess(coerceBoolean, z.boolean()).optional(),
+  })
+  .strict();
+
 export type UpdateUserVerifiedInput = z.infer<typeof updateUserVerifiedSchema>;
 export type RegisterFcmTokenInput = z.infer<typeof registerFcmTokenSchema>;
 export type UnregisterFcmTokenInput = z.infer<typeof unregisterFcmTokenSchema>;
-
+export type CreateUserInput = z.infer<typeof createUserSchema>;

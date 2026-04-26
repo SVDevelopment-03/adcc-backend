@@ -52,7 +52,9 @@
   },
   "user": {
     "not_found": "User not found",
+    "already_exists": "User already exists",
     "retrieved": "User retrieved successfully",
+    "created": "User created successfully",
     "deleted": "User deleted successfully",
     "list_retrieved": "Users retrieved successfully",
     "verified_updated": "User verification status updated successfully"

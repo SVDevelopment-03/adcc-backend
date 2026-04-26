@@ -7,9 +7,62 @@ import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { upsertUserFcmToken } from '@/services/push-token.service';
+import { createFirebaseUser } from '@/services/firebase.service';
 
 /** Fields to exclude from user response (sensitive data) */
 const USER_PROJECTION = '-refreshTokens';
+
+/**
+ * Create a new user from the admin panel
+ * POST /user
+ * Staff only. Creates user in Firebase (email/password) + Mongo user record.
+ */
+export const createUser = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as AuthRequest & { lang?: string }).lang || 'en') as string;
+  const { fullName, email, password, phone, profileImage, gender, role, isVerified } = req.body as {
+    fullName: string;
+    email: string;
+    password: string;
+    phone?: string;
+    profileImage?: string;
+    gender: 'Male' | 'Female';
+    role?: 'Admin' | 'Vendor' | 'Member';
+    isVerified?: boolean;
+  };
+
+  const normalizedEmail = email.trim().toLowerCase();
+
+  const existing = await User.findOne({
+    $or: [{ email: normalizedEmail }, ...(phone ? [{ phone: phone.trim() }] : [])],
+  }).lean();
+  if (existing) {
+    throw new AppError(t(lang, 'user.already_exists'), 400);
+  }
+
+  let userRecordUid = '';
+  try {
+    const userRecord = await createFirebaseUser(normalizedEmail, password, fullName, true);
+    userRecordUid = userRecord.uid;
+  } catch (e: any) {
+    throw new AppError(e?.message || 'Failed to create Firebase user', 400);
+  }
+
+  const user = await User.create({
+    fullName: fullName.trim(),
+    firebaseUid: userRecordUid,
+    email: normalizedEmail,
+    phone: phone?.trim() || undefined,
+    profileImage: profileImage?.trim() || undefined,
+    gender,
+    role: role || 'Member',
+    isVerified: isVerified ?? true,
+    provider: 'admin',
+  });
+
+  const safeUser = await User.findById(user._id).select(USER_PROJECTION).lean();
+
+  sendSuccess(res, safeUser, t(lang, 'user.created'), 201);
+});
 
 /**
  * Get all users (paginated)

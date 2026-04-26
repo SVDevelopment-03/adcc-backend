@@ -22,9 +22,16 @@ import { upsertUserFcmToken } from '@/services/push-token.service';
 /** Guest role and ID prefix - guest users are stateless (no DB record) */
 const GUEST_ROLE = 'Guest';
 const GUEST_ID_PREFIX = 'guest_';
+const LEGACY_ROLE_VALUES = new Set(['Admin', 'Vendor', 'Member']);
 
 function isGuestPayload(id?: string, role?: string): boolean {
   return role === GUEST_ROLE && typeof id === 'string' && id.startsWith(GUEST_ID_PREFIX);
+}
+
+function normalizeLegacyRole(raw: unknown, hasRbacRole: boolean): 'Admin' | 'Vendor' | 'Member' {
+  const role = typeof raw === 'string' ? raw.trim() : '';
+  if (LEGACY_ROLE_VALUES.has(role)) return role as 'Admin' | 'Vendor' | 'Member';
+  return hasRbacRole ? 'Admin' : 'Member';
 }
 
 /**
@@ -65,6 +72,13 @@ export const verifyFirebaseAuth = asyncHandler(
     const user = await User.findOne({ firebaseUid: uid });
 
     if (user) {
+      // Keep legacy `role` schema-compatible (Admin/Vendor/Member). Some users may have been
+      // mistakenly assigned RBAC role names like "Content Manager" into `role`.
+      const safeRole = normalizeLegacyRole(user.role, !!user.roleId);
+      if (user.role !== safeRole) {
+        user.role = safeRole;
+      }
+
       if (fcmToken) {
         await upsertUserFcmToken(user._id.toString(), {
           token: fcmToken,
@@ -98,7 +112,7 @@ export const verifyFirebaseAuth = asyncHandler(
         uid: user.firebaseUid,
         phone: user.phone || phone || '',
         email: user.email || email || '',
-        role: user.role,
+        role: safeRole,
       });
 
       // Store refresh token in database
@@ -1082,4 +1096,3 @@ export const guestLogin = asyncHandler(
     );
   }
 );
-
