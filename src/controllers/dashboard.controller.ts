@@ -158,6 +158,8 @@ export const getDashboardLanding = asyncHandler(async (req: AuthRequest, res: Re
 
   const [
     totalUsers,
+    maleUsers,
+    femaleUsers,
     activeUsers,
     eventsThisMonth,
     activeTracks,
@@ -170,6 +172,8 @@ export const getDashboardLanding = asyncHandler(async (req: AuthRequest, res: Re
     tracksRankedByEvents,
   ] = await Promise.all([
     User.countDocuments(),
+    User.countDocuments({ gender: 'Male' }),
+    User.countDocuments({ gender: 'Female' }),
     User.countDocuments({ isVerified: true }),
     Event.countDocuments({
       eventDate: { $gte: monthStart, $lte: monthEnd },
@@ -198,6 +202,8 @@ export const getDashboardLanding = asyncHandler(async (req: AuthRequest, res: Re
     {
       stats: {
         totalUsers,
+        maleUsers,
+        femaleUsers,
         /** Verified users (`isVerified`). */
         activeUsers,
         eventsThisMonth,
