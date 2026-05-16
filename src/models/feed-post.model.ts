@@ -7,6 +7,12 @@ export interface IFeedPost extends Document {
   description: string;
   status: FeedPostStatus;
   image?: string;
+  likes: mongoose.Types.ObjectId[];
+  comments: {
+    user?: mongoose.Types.ObjectId;
+    text: string;
+    createdAt: Date;
+  }[];
   reported: boolean;
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -27,7 +33,7 @@ const FeedPostSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ['pending', 'approved' , 'rejected'],
+      enum: ['pending', 'approved', 'rejected'],
       required: [true, 'Post status is required'],
       default: 'pending',
       index: true,
@@ -36,6 +42,29 @@ const FeedPostSchema = new Schema(
       type: String,
       trim: true,
     },
+    likes: [
+      {
+        type: Schema.Types.ObjectId,
+        ref: 'users',
+      },
+    ],
+    comments: [
+      {
+        user: {
+          type: Schema.Types.ObjectId,
+          ref: 'users',
+        },
+        text: {
+          type: String,
+          trim: true,
+          required: true,
+        },
+        createdAt: {
+          type: Date,
+          default: Date.now,
+        },
+      },
+    ],
     reported: {
       type: Boolean,
       default: false,
@@ -52,6 +81,6 @@ const FeedPostSchema = new Schema(
 );
 
 FeedPostSchema.index({ status: 1, reported: 1, createdAt: -1 });
+FeedPostSchema.index({ createdBy: 1, createdAt: -1 });
 
 export default mongoose.model<IFeedPost>('feedPosts', FeedPostSchema);
-

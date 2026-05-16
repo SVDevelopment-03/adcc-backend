@@ -5,11 +5,7 @@ export interface AuthRequest extends Request {
   user?: JWTPayload;
 }
 
-export const authenticate = (
-  req: AuthRequest,
-  res: Response,
-  next: NextFunction
-): void => {
+export const authenticate = (req: AuthRequest, res: Response, next: NextFunction): void => {
   try {
     const token = req.headers.authorization?.split(' ')[1];
 
@@ -41,8 +37,8 @@ export const authenticate = (
     }
 
     req.user = {
-        ...decoded,
-        isGuest: false,
+      ...decoded,
+      isGuest: false,
     };
 
     next();
@@ -54,3 +50,39 @@ export const authenticate = (
   }
 };
 
+export const optionalAuthenticate = (
+  req: AuthRequest,
+  _res: Response,
+  next: NextFunction
+): void => {
+  try {
+    const token = req.headers.authorization?.split(' ')[1];
+
+    if (!token) {
+      next();
+      return;
+    }
+
+    const decoded = verifyAccessToken(token);
+
+    if (decoded.type === 'Guest' || decoded.role === 'Guest' || decoded.isGuest) {
+      req.user = {
+        role: 'Guest',
+        isGuest: true,
+        id: decoded.id ?? `guest_${decoded.uid || 'anonymous'}`,
+      };
+      return next();
+    }
+
+    if (decoded.id || decoded.uid) {
+      req.user = {
+        ...decoded,
+        isGuest: false,
+      };
+    }
+
+    next();
+  } catch {
+    next();
+  }
+};

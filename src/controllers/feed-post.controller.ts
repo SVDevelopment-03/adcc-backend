@@ -23,7 +23,11 @@ const ensureObjectId = (id: string | string[] | undefined, message: string) => {
   return new mongoose.Types.ObjectId(raw);
 };
 
-const attachRequiredImage = async (req: AuthRequest, data: Record<string, any>, folderKey: string) => {
+const attachOptionalImage = async (
+  req: AuthRequest,
+  data: Record<string, any>,
+  folderKey: string
+) => {
   const fileFromSingle = (req as any).file as Express.Multer.File | undefined;
   const filesFromAny = (req as any).files as
     | Express.Multer.File[]
@@ -35,14 +39,13 @@ const attachRequiredImage = async (req: AuthRequest, data: Record<string, any>, 
     (Array.isArray(filesFromAny)
       ? filesFromAny.find((f) => Boolean(f))
       : filesFromAny
-        ? Object.values(filesFromAny).flat().find((f) => Boolean(f))
+        ? Object.values(filesFromAny)
+            .flat()
+            .find((f) => Boolean(f))
         : undefined);
 
   if (!fileFromAnyKey) {
-    throw new AppError(
-      'Image file is required. Send it as form-data with key "image" (or "postImage", "feedImage", "photo", "file", "imageFile").',
-      400
-    );
+    return data;
   }
 
   const upload = await uploadImageBufferToS3(
@@ -53,6 +56,31 @@ const attachRequiredImage = async (req: AuthRequest, data: Record<string, any>, 
   );
   data.image = upload.url;
   return data;
+};
+
+const feedPostSelect = 'fullName profileImage banFeedPost';
+
+const mapFeedPostForClient = (post: any, currentUserId?: string) => {
+  const likes = Array.isArray(post.likes) ? post.likes : [];
+  const comments = Array.isArray(post.comments) ? post.comments : [];
+  const currentUserIdString = currentUserId ? String(currentUserId) : '';
+  const mappedComments = comments.map((comment: any) => {
+    const commentUserId = String(comment.user?._id ?? comment.user ?? '');
+    return {
+      ...comment,
+      canDeleteByMe: Boolean(currentUserIdString && commentUserId === currentUserIdString),
+    };
+  });
+
+  return {
+    ...post,
+    comments: mappedComments,
+    likesCount: likes.length,
+    commentsCount: comments.length,
+    likedByMe: currentUserIdString
+      ? likes.some((like: any) => String(like?._id ?? like) === currentUserIdString)
+      : false,
+  };
 };
 
 /**
@@ -80,10 +108,11 @@ export const createFeedPost = asyncHandler(async (req: AuthRequest, res: Respons
     createdBy: userId,
   };
 
-  // Frontend can send `status`, but the reported flag should start as false.
+  // Users submit into moderation regardless of any client-provided status.
+  data.status = 'pending';
   data.reported = false;
 
-  await attachRequiredImage(req, data, 'feed-posts');
+  await attachOptionalImage(req, data, 'feed-posts');
 
   const created = await FeedPost.create(data);
   const populated = await FeedPost.findById(created._id)
@@ -98,6 +127,97 @@ export const createFeedPost = asyncHandler(async (req: AuthRequest, res: Respons
   });
 
   sendSuccess(res, populated, t(lang, 'feedPost.created'), 201);
+});
+
+/**
+ * Public approved feed for mobile and guests.
+ * GET /v1/feed
+ */
+export const getPublicFeedPosts = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = getLang(req);
+  const { q, page, limit } = req.query as any;
+
+  const filter: any = { status: 'approved' };
+
+  if (q) {
+    const qStr = String(q);
+    filter.$or = [
+      { title: { $regex: qStr, $options: 'i' } },
+      { description: { $regex: qStr, $options: 'i' } },
+    ];
+  }
+
+  const pageNum = Math.max(1, Number(page) || 1);
+  const limitNum = Math.min(100, Math.max(1, Number(limit) || 10));
+  const skip = (pageNum - 1) * limitNum;
+
+  const [posts, total] = await Promise.all([
+    FeedPost.find(filter)
+      .populate('createdBy', feedPostSelect)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean(),
+    FeedPost.countDocuments(filter),
+  ]);
+
+  sendSuccess(
+    res,
+    {
+      posts: posts.map((post) =>
+        mapFeedPostForClient(post, req.user?.isGuest ? undefined : req.user?.id)
+      ),
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum) || 1,
+      },
+    },
+    t(lang, 'feedPost.list')
+  );
+});
+
+/**
+ * Current user's feed posts, including pending moderation items.
+ * GET /v1/feed/my-posts
+ */
+export const getMyFeedPosts = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = getLang(req);
+  const userId = req.user?.id;
+
+  if (!userId || req.user?.isGuest) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const { page, limit } = req.query as any;
+  const pageNum = Math.max(1, Number(page) || 1);
+  const limitNum = Math.min(100, Math.max(1, Number(limit) || 10));
+  const skip = (pageNum - 1) * limitNum;
+
+  const [posts, total] = await Promise.all([
+    FeedPost.find({ createdBy: userId })
+      .populate('createdBy', feedPostSelect)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean(),
+    FeedPost.countDocuments({ createdBy: userId }),
+  ]);
+
+  sendSuccess(
+    res,
+    {
+      posts: posts.map((post) => mapFeedPostForClient(post, userId)),
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum) || 1,
+      },
+    },
+    t(lang, 'feedPost.list')
+  );
 });
 
 /**
@@ -126,7 +246,7 @@ export const getFeedPosts = asyncHandler(async (req: Request, res: Response) => 
 
   const [posts, total] = await Promise.all([
     FeedPost.find(filter)
-      .populate('createdBy', 'fullName profileImage banFeedPost' )
+      .populate('createdBy', feedPostSelect)
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum)
@@ -137,7 +257,7 @@ export const getFeedPosts = asyncHandler(async (req: Request, res: Response) => 
   sendSuccess(
     res,
     {
-      posts,
+      posts: posts.map((post) => mapFeedPostForClient(post)),
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -165,7 +285,151 @@ export const getFeedPostById = asyncHandler(async (req: Request, res: Response) 
     throw new AppError(t(lang, 'feedPost.not_found'), 404);
   }
 
-  sendSuccess(res, post, t(lang, 'feedPost.retrieved'));
+  sendSuccess(
+    res,
+    mapFeedPostForClient(post, (req as AuthRequest).user?.id),
+    t(lang, 'feedPost.retrieved')
+  );
+});
+
+/**
+ * Public approved feed detail.
+ * GET /v1/feed/:id
+ */
+export const getPublicFeedPostById = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = getLang(req);
+  const { id } = req.params;
+
+  const post = await FeedPost.findOne({
+    _id: ensureObjectId(id, 'Invalid post ID'),
+    status: 'approved',
+  })
+    .populate('createdBy', 'fullName profileImage')
+    .populate('comments.user', 'fullName profileImage')
+    .lean();
+
+  if (!post) {
+    throw new AppError(t(lang, 'feedPost.not_found'), 404);
+  }
+
+  sendSuccess(
+    res,
+    mapFeedPostForClient(post, req.user?.isGuest ? undefined : req.user?.id),
+    t(lang, 'feedPost.retrieved')
+  );
+});
+
+/**
+ * Toggle like on a feed post.
+ * POST /v1/feed/:id/like
+ */
+export const likeFeedPost = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = getLang(req);
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId || req.user?.isGuest) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const postId = ensureObjectId(id, 'Invalid post ID');
+  const post = await FeedPost.findOne({ _id: postId, status: 'approved' }).select('likes');
+
+  if (!post) {
+    throw new AppError(t(lang, 'feedPost.not_found'), 404);
+  }
+
+  const userObjectId = new mongoose.Types.ObjectId(userId);
+  const liked = (post.likes || []).some((like) => like.toString() === userObjectId.toString());
+
+  const updated = await FeedPost.findByIdAndUpdate(
+    postId,
+    liked ? { $pull: { likes: userObjectId } } : { $addToSet: { likes: userObjectId } },
+    { new: true }
+  )
+    .populate('createdBy', 'fullName profileImage')
+    .lean();
+
+  sendSuccess(res, mapFeedPostForClient(updated, userId), t(lang, 'feedPost.updated'));
+});
+
+/**
+ * Add a comment on an approved feed post.
+ * POST /v1/feed/:id/comments
+ */
+export const addFeedComment = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = getLang(req);
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId || req.user?.isGuest) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const postId = ensureObjectId(id, 'Invalid post ID');
+  const post = await FeedPost.findOneAndUpdate(
+    { _id: postId, status: 'approved' },
+    {
+      $push: {
+        comments: {
+          user: new mongoose.Types.ObjectId(userId),
+          text: String(req.body.text).trim(),
+        },
+      },
+    },
+    { new: true, runValidators: true }
+  )
+    .populate('createdBy', 'fullName profileImage')
+    .populate('comments.user', 'fullName profileImage')
+    .lean();
+
+  if (!post) {
+    throw new AppError(t(lang, 'feedPost.not_found'), 404);
+  }
+
+  sendSuccess(res, mapFeedPostForClient(post, userId), t(lang, 'feedPost.updated'), 201);
+});
+
+/**
+ * Delete user's own comment from a feed post.
+ * DELETE /v1/feed/:id/comments/:commentId
+ */
+export const deleteFeedComment = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = getLang(req);
+  const { id, commentId } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId || req.user?.isGuest) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const postId = ensureObjectId(id, 'Invalid post ID');
+  const parsedCommentId = ensureObjectId(commentId, 'Invalid comment ID');
+  const post = await FeedPost.findOne({ _id: postId, status: 'approved' }).select('comments');
+
+  if (!post) {
+    throw new AppError(t(lang, 'feedPost.not_found'), 404);
+  }
+
+  const comment = (post.comments as any).id(parsedCommentId);
+  if (!comment) {
+    throw new AppError('Comment not found', 404);
+  }
+
+  if (String(comment.user) !== String(userId)) {
+    throw new AppError('You can delete only your own comments', 403);
+  }
+
+  const updated = await FeedPost.findByIdAndUpdate(
+    postId,
+    { $pull: { comments: { _id: parsedCommentId } } },
+    { new: true }
+  )
+    .populate('createdBy', 'fullName profileImage')
+    .populate('comments.user', 'fullName profileImage')
+    .lean();
+
+  sendSuccess(res, mapFeedPostForClient(updated, userId), t(lang, 'feedPost.updated'));
 });
 
 /**
@@ -226,4 +490,3 @@ export const updateUserFeedPostBan = asyncHandler(async (req: AuthRequest, res: 
 
   sendSuccess(res, user, t(lang, 'feedPost.user_ban_updated'));
 });
-
