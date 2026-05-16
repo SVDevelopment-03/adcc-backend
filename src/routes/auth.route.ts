@@ -4,6 +4,7 @@ import {
   registerUser,
   refreshAccessToken,
   logout,
+  deleteMyAccount,
   getCurrentUser,
   getCurrentUserStats,
   getMyJoinedCommunities,
@@ -42,6 +43,7 @@ router.post('/guestLogin', guestLogin);
 
 // Protected routes
 router.post('/logout', authenticate, validate(logoutSchema), logout);
+router.delete('/delete-account', authenticate, deleteMyAccount);
 router.get('/me/stats', authenticate, getCurrentUserStats);
 router.get('/me/performance-insights', authenticate, getPerformanceInsights);
 router.get('/me/joined-communities', authenticate, getMyJoinedCommunities);

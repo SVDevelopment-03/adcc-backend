@@ -3,6 +3,11 @@ import crypto from 'node:crypto';
 import mongoose from 'mongoose';
 import User from '@/models/user.model';
 import EventResult from '@/models/eventResult.model';
+import CommunityMembership from '@/models/communityMembership.model';
+import Community from '@/models/community.model';
+import FeedPost from '@/models/feed-post.model';
+import CommunityPost from '@/models/community-post.model';
+import Event from '@/models/event.model';
 import { verifyFirebaseToken } from '@/services/firebase.service';
 import { communityMembershipService } from '@/services';
 import {
@@ -424,6 +429,64 @@ export const logout = asyncHandler(async (req: AuthRequest, res: Response) => {
   sendSuccess(res, null, t(lang, 'auth.logout_success'));
 });
 
+/**
+ * Delete current user's account
+ * DELETE /v1/auth/delete-account
+ */
+export const deleteMyAccount = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const lang = resolveRequestLanguage(req);
+
+    const userId = req.user?.id;
+
+    if (!userId) {
+      throw new AppError(t(lang, 'auth.unauthorized'), 401);
+    }
+
+    if (req.user?.isGuest) {
+      throw new AppError(t(lang, 'guest.access_denied'), 403);
+    }
+
+    const user = await User.findById(userId);
+
+    if (!user) {
+      throw new AppError(t(lang, 'auth.user_not_found'), 404);
+    }
+
+    // delete event participations
+    await EventResult.deleteMany({ userId });
+
+    // remove user from all community members arrays
+    await Community.updateMany(
+      { members: userId },
+      { $pull: { members: userId } }
+    );
+
+    // delete community memberships
+    await CommunityMembership.deleteMany({ userId });
+
+    // delete user's feed posts
+    await FeedPost.deleteMany({ createdBy: userId });
+
+    // delete user's community posts
+    await CommunityPost.deleteMany({ createdBy: userId });
+
+    // delete user's created events
+    await Event.deleteMany({ createdBy: userId });
+
+    // delete user's created communities
+    await Community.deleteMany({ createdBy: userId });
+
+    await User.findByIdAndDelete(userId);
+
+    sendSuccess(
+      res,
+      null,
+      'Account deleted successfully'
+    );
+  }
+);
+ 
 /**
  * Get current user stats (distance, rides, events participated)
  * GET /v1/auth/me/stats
