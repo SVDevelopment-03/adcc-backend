@@ -27,16 +27,9 @@ import { upsertUserFcmToken } from '@/services/push-token.service';
 /** Guest role and ID prefix - guest users are stateless (no DB record) */
 const GUEST_ROLE = 'Guest';
 const GUEST_ID_PREFIX = 'guest_';
-const LEGACY_ROLE_VALUES = new Set(['Admin', 'Vendor', 'Member']);
 
 function isGuestPayload(id?: string, role?: string): boolean {
   return role === GUEST_ROLE && typeof id === 'string' && id.startsWith(GUEST_ID_PREFIX);
-}
-
-function normalizeLegacyRole(raw: unknown, hasRbacRole: boolean): 'Admin' | 'Vendor' | 'Member' {
-  const role = typeof raw === 'string' ? raw.trim() : '';
-  if (LEGACY_ROLE_VALUES.has(role)) return role as 'Admin' | 'Vendor' | 'Member';
-  return hasRbacRole ? 'Admin' : 'Member';
 }
 
 /**
@@ -74,16 +67,29 @@ export const verifyFirebaseAuth = asyncHandler(
     const { uid, phone, email } = await verifyFirebaseToken(idToken);
 
     // Find user by Firebase UID (primary lookup)
-    const user = await User.findOne({ firebaseUid: uid });
+    let user = await User.findOne({ firebaseUid: uid });
 
-    if (user) {
-      // Keep legacy `role` schema-compatible (Admin/Vendor/Member). Some users may have been
-      // mistakenly assigned RBAC role names like "Content Manager" into `role`.
-      const safeRole = normalizeLegacyRole(user.role, !!user.roleId);
-      if (user.role !== safeRole) {
-        user.role = safeRole;
+    // If no user found by firebaseUid, try to find an existing user by email or phone
+    // This helps when users sign up via one provider and later sign in with another
+    // provider that resolves to the same email/phone but a different Firebase UID.
+    if (!user) {
+      if (email) {
+        user = await User.findOne({ email: email });
+      }
+      if (!user && phone) {
+        user = await User.findOne({ phone: phone });
       }
 
+      // If we found a matching user by email/phone, attach the firebaseUid so
+      // subsequent verifies recognise the account as existing.
+      if (user) {
+        user.firebaseUid = uid;
+        // Do not overwrite other fields (provider/role) unless needed
+        await user.save();
+      }
+    }
+
+    if (user) {
       if (fcmToken) {
         await upsertUserFcmToken(user._id.toString(), {
           token: fcmToken,
@@ -117,7 +123,7 @@ export const verifyFirebaseAuth = asyncHandler(
         uid: user.firebaseUid,
         phone: user.phone || phone || '',
         email: user.email || email || '',
-        role: safeRole,
+        role: user.role,
       });
 
       // Store refresh token in database
@@ -486,7 +492,31 @@ export const deleteMyAccount = asyncHandler(
     );
   }
 );
- 
+/**
+ * Delete account
+ * DELETE /v1/auth/delete-account
+ * Deletes the current authenticated user (or no-op for guests)
+ */
+export const deleteAccount = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = resolveRequestLanguage(req);
+  const userId = req.user?.id;
+
+  if (!userId) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  // Guest users are stateless - nothing to delete
+  if (isGuestPayload(userId, req.user?.role)) {
+    sendSuccess(res, null, t(lang, 'auth.delete_success'));
+    return;
+  }
+
+  // Delete the user record from the database
+  await User.findByIdAndDelete(userId);
+
+  sendSuccess(res, null, t(lang, 'auth.delete_success'));
+});
+
 /**
  * Get current user stats (distance, rides, events participated)
  * GET /v1/auth/me/stats
@@ -798,6 +828,7 @@ export const getMyActiveParticipations = asyncHandler(
       const item = {
         event: r.eventId,
         joinedAt: r.createdAt,
+        status: r.status,
       };
       if (r.eventId?.trackId) {
         rides.push(item);
@@ -1024,7 +1055,7 @@ export const getMyCompletedEvents = asyncHandler(
     const [results, total] = await Promise.all([
       EventResult.find(filter)
         .select('eventId distance time updatedAt')
-        .populate('eventId', 'title titleAr address addressAr eventDate eventTime city status mainImage communityId trackId category')
+        .populate('eventId', 'title titleAr address addressAr eventDate eventTime city status mainImage communityId trackId category badgeName badgeImage')
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(limit)

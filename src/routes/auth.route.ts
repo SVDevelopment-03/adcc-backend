@@ -56,4 +56,3 @@ router.patch('/me', authenticate, validate(updateProfileSchema), updateMyProfile
 router.get('/me', authenticate, getCurrentUser);
 
 export default router;
-

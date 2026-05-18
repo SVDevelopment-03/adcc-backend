@@ -75,14 +75,26 @@ export const verifyFirebaseToken = async (
     throw new AppError('Firebase ID token is required', 400);
   }
 
+  // Trim whitespace/newlines that sometimes appear when tokens are pasted
+  const trimmedToken = idToken.trim();
+
+  // Log a short preview and parts count to help debug malformed tokens (do not log full token)
+  try {
+    const preview = trimmedToken.slice(0, 20);
+    console.debug(`verifyFirebaseToken: received idToken length=${trimmedToken.length}, preview=${preview}`);
+  } catch (e) {
+    // ignore preview logging failures
+  }
+
   // Check if token looks like a JWT (has 3 parts separated by dots)
-  const tokenParts = idToken.split('.');
+  const tokenParts = trimmedToken.split('.');
+  console.debug(`verifyFirebaseToken: tokenParts=${tokenParts.length}`);
   if (tokenParts.length !== 3) {
-    throw new AppError('Invalid Firebase token format. Token must be a valid JWT.', 400);
+    throw new AppError(`Invalid Firebase token format. Expected JWT with 3 parts but got ${tokenParts.length}.`, 400);
   }
 
   try {
-    const decodedToken = await admin.auth().verifyIdToken(idToken);
+    const decodedToken = await admin.auth().verifyIdToken(trimmedToken);
 
     return {
       uid: decodedToken.uid,
@@ -242,4 +254,3 @@ export const sendWebPushNotification = async (
     data: payload.url ? { url: payload.url } : undefined,
   });
 };
-

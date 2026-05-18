@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import User from '@/models/user.model';
+import Notification from '@/models/notification.model';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { sendSuccess } from '@/utils/response';
@@ -224,6 +225,109 @@ export const sendWebPushToStaff = asyncHandler(
         },
       },
       'Staff web push notification sent'
+    );
+  }
+);
+
+/**
+ * Get user's notification inbox
+ * GET /v1/push-notifications/inbox
+ */
+export const getNotificationsInbox = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const page = parseInt(req.query.page as string) || 1;
+    const limit = parseInt(req.query.limit as string) || 20;
+    const skip = (page - 1) * limit;
+
+    const notifications = await Notification.find({ userId })
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+
+    const total = await Notification.countDocuments({ userId });
+
+    sendSuccess(
+      res,
+      {
+        notifications,
+        pagination: {
+          total,
+          page,
+          limit,
+          pages: Math.ceil(total / limit),
+        },
+      },
+      'Notifications retrieved'
+    );
+  }
+);
+
+/**
+ * Mark a single notification as read
+ * PATCH /v1/push-notifications/inbox/:id/read
+ */
+export const markNotificationAsRead = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.user?.id;
+    const { id } = req.params;
+
+    if (!userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const notification = await Notification.findOneAndUpdate(
+      { _id: id, userId },
+      {
+        $set: {
+          isRead: true,
+          readAt: new Date(),
+        },
+      },
+      { new: true }
+    );
+
+    if (!notification) {
+      throw new AppError('Notification not found', 404);
+    }
+
+    sendSuccess(res, notification, 'Notification marked as read');
+  }
+);
+
+/**
+ * Mark all notifications as read
+ * PATCH /v1/push-notifications/inbox/read-all
+ */
+export const markAllNotificationsAsRead = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      throw new AppError('Unauthorized', 401);
+    }
+
+    const result = await Notification.updateMany(
+      { userId, isRead: false },
+      {
+        $set: {
+          isRead: true,
+          readAt: new Date(),
+        },
+      }
+    );
+
+    sendSuccess(
+      res,
+      {
+        modifiedCount: result.modifiedCount,
+      },
+      'All notifications marked as read'
     );
   }
 );
