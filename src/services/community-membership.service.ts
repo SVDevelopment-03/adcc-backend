@@ -3,6 +3,7 @@ import Community from '@/models/community.model';
 import User from '@/models/user.model';
 import { AppError } from '@/utils/app-error';
 import { notifyAdminCommunityMember } from '@/services/admin-notification.service';
+import type { ICommunityMembership } from '@/models/communityMembership.model';
 
 export class CommunityMembershipService {
   /**
@@ -180,7 +181,7 @@ export class CommunityMembershipService {
    */
   async getMyJoinedCommunities(userId: string, page: number = 1, limit: number = 10) {
     const skip = (page - 1) * limit;
-    const filter = { userId, status: 'active' };
+    const filter = { userId, status: 'active' as ICommunityMembership['status'] };
 
     const [memberships, total] = await Promise.all([
       CommunityMembership.find(filter)
