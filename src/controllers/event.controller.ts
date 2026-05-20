@@ -430,7 +430,7 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
   const limitNum = Math.min(100, Math.max(1, Number(limit) || 10));
   const skip = (pageNum - 1) * limitNum;
 
-  const eventsQuery = Event.find(filter)
+  const eventsQuery = Event.find(filter as any)
     .populate('createdBy', 'fullName email')
     .populate('trackId', 'title titleAr')
     .populate('communityId', 'title titleAr')
@@ -440,7 +440,7 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
     .lean();
 
   // Run list + count in parallel to reduce endpoint latency.
-  const [events, total] = await Promise.all([eventsQuery, Event.countDocuments(filter)]);
+  const [events, total] = await Promise.all([eventsQuery, Event.countDocuments(filter as any)]);
 
   const localizedEvents = events.map((event) => localizeEventPayload(event as Record<string, any>, lang));
 
@@ -510,8 +510,8 @@ export const getCompletedEventStats = asyncHandler(async (req: AuthRequest, res:
   ]);
 
   const [totalCompletedEvents, rangeCompletedEvents] = await Promise.all([
-    Event.countDocuments({ status: 'Completed' }),
-    Event.countDocuments(rangeFilter),
+    Event.countDocuments({ status: 'Completed' } as any),
+    Event.countDocuments(rangeFilter as any),
   ]);
 
   sendSuccess(

@@ -753,14 +753,14 @@ export const getMyJoinedEvents = asyncHandler(
     const filter = { userId, status: { $in: ['joined', 'checked_in', 'no_show', 'completed'] } };
 
     const [results, total] = await Promise.all([
-      EventResult.find(filter)
+      EventResult.find(filter as any)
         .select('eventId status distance time createdAt')
         .populate('eventId', 'title titleAr address addressAr eventDate eventTime city status mainImage communityId trackId category')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      EventResult.countDocuments(filter),
+      EventResult.countDocuments(filter as any),
     ]);
 
     const events = results.map((r: any) => {
@@ -811,14 +811,14 @@ export const getMyActiveParticipations = asyncHandler(
     const filter = { userId, status: { $in: ['joined', 'checked_in'] } };
 
     const [results, total] = await Promise.all([
-      EventResult.find(filter)
+      EventResult.find(filter as any)
         .select('eventId status createdAt')
         .populate('eventId', 'title titleAr address addressAr eventDate eventTime city status mainImage communityId trackId category')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      EventResult.countDocuments(filter),
+      EventResult.countDocuments(filter as any),
     ]);
 
     const rides: any[] = [];
@@ -993,14 +993,14 @@ export const getMyCancelledEvents = asyncHandler(
     const filter = { userId, status: 'cancelled' };
 
     const [results, total] = await Promise.all([
-      EventResult.find(filter)
+      EventResult.find(filter as any)
         .select('eventId reason updatedAt')
         .populate('eventId', 'title titleAr address addressAr eventDate eventTime city status mainImage communityId trackId category')
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      EventResult.countDocuments(filter),
+      EventResult.countDocuments(filter as any),
     ]);
 
     const rides: any[] = [];
@@ -1053,14 +1053,14 @@ export const getMyCompletedEvents = asyncHandler(
     const filter = { userId, status: 'completed' };
 
     const [results, total] = await Promise.all([
-      EventResult.find(filter)
+      EventResult.find(filter as any)
         .select('eventId distance time updatedAt')
         .populate('eventId', 'title titleAr address addressAr eventDate eventTime city status mainImage communityId trackId category badgeName badgeImage')
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      EventResult.countDocuments(filter),
+      EventResult.countDocuments(filter as any),
     ]);
 
     const rides: any[] = [];

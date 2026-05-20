@@ -5,6 +5,8 @@ import {
   getChallengeById,
   updateChallenge,
   deleteChallenge,
+  joinChallenge,
+  getChallengeMemberStatus,
 } from '@/controllers/challenge.controller';
 import { validate } from '@/middleware/validate.middleware';
 import {
@@ -20,6 +22,10 @@ const router = express.Router();
 
 router.get('/', authenticate, validate(getChallengesQuerySchema), getAllChallenges);
 router.get('/:id', authenticate, getChallengeById);
+router.get('/:id/member-status', authenticate, getChallengeMemberStatus);
+
+// Join a challenge (increment participants)
+router.post('/:id/join', authenticate, joinChallenge);
 
 router.post(
   '/',

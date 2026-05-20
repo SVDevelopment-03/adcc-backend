@@ -1,5 +1,6 @@
 import { Request, Response } from 'express';
 import Challenge from '@/models/challenge.model';
+import ChallengeJoin from '@/models/challengeJoin.model';
 import { t } from '@/utils/i18n';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
@@ -101,9 +102,10 @@ export const getAllChallenges = asyncHandler(async (req: Request, res: Response)
  * Get challenge by ID
  * GET /v1/challenges/:id
  */
-export const getChallengeById = asyncHandler(async (req: Request, res: Response) => {
+export const getChallengeById = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as any;
   const { id } = req.params;
+  const userId = req.user?.id;
 
   const challenge = await Challenge.findById(id)
     .populate('createdBy', 'fullName email')
@@ -114,7 +116,17 @@ export const getChallengeById = asyncHandler(async (req: Request, res: Response)
     throw new AppError(t(lang, 'challenge.not_found'), 404);
   }
 
-  sendSuccess(res, challenge, t(lang, 'challenge.details'));
+  const joinRecord = userId
+    ? await ChallengeJoin.findOne({ challengeId: id, userId }).lean()
+    : null;
+
+  const payload = {
+    ...challenge.toObject(),
+    isJoined: joinRecord?.status === 'joined',
+    joinedAt: joinRecord?.joinedAt ?? null,
+  };
+
+  sendSuccess(res, payload, t(lang, 'challenge.details'));
 });
 
 /**
@@ -167,4 +179,93 @@ export const deleteChallenge = asyncHandler(async (req: AuthRequest, res: Respon
   }
 
   sendSuccess(res, null, t(lang, 'challenge.deleted'));
+});
+
+/**
+ * Join a challenge
+ * POST /v1/challenges/:id/join
+ */
+export const joinChallenge = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as any;
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const existingJoin = await ChallengeJoin.findOne({ challengeId: id, userId });
+
+  if (existingJoin?.status === 'joined') {
+    const challenge = await Challenge.findById(id)
+      .populate('createdBy', 'fullName email')
+      .populate('communities', 'title')
+      .populate('rewardBadge', 'name icon image category rarity');
+
+    if (!challenge) {
+      throw new AppError(t(lang, 'challenge.not_found'), 404);
+    }
+
+    sendSuccess(res, challenge, t(lang, 'challenge.joined') || 'Joined challenge');
+    return;
+  }
+
+  const challenge = await Challenge.findByIdAndUpdate(
+    id,
+    { $inc: { participants: 1 } },
+    { new: true }
+  )
+    .populate('createdBy', 'fullName email')
+    .populate('communities', 'title')
+    .populate('rewardBadge', 'name icon image category rarity');
+
+  if (!challenge) {
+    throw new AppError(t(lang, 'challenge.not_found'), 404);
+  }
+
+  await ChallengeJoin.findOneAndUpdate(
+    { challengeId: id, userId },
+    {
+      challengeId: id,
+      userId,
+      status: 'joined',
+      joinedAt: existingJoin?.joinedAt || new Date(),
+      leftAt: null,
+    },
+    { upsert: true, new: true }
+  );
+
+  sendSuccess(res, challenge, t(lang, 'challenge.joined') || 'Joined challenge');
+});
+
+/**
+ * Get challenge member status
+ * GET /v1/challenges/:id/member-status
+ */
+export const getChallengeMemberStatus = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as any;
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const challenge = await Challenge.findById(id);
+  if (!challenge) {
+    throw new AppError(t(lang, 'challenge.not_found'), 404);
+  }
+
+  const joinRecord = await ChallengeJoin.findOne({ challengeId: id, userId });
+  const joined = joinRecord?.status === 'joined';
+
+  sendSuccess(res, {
+    status: joined ? 'joined' : 'not_joined',
+    participationDetails: joinRecord
+      ? {
+          joinedAt: joinRecord.joinedAt?.toISOString?.() ?? joinRecord.joinedAt,
+          leftAt: joinRecord.leftAt?.toISOString?.() ?? joinRecord.leftAt ?? null,
+        }
+      : null,
+  }, t(lang, 'challenge.details'));
 });
