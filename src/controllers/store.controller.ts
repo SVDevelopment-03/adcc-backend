@@ -9,6 +9,7 @@ import { t } from '@/utils/i18n';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import User from '@/models/user.model';
 import { notifyAdminStoreItemPending } from '@/services/admin-notification.service';
+import feedStoreNotificationService from '@/services/feed-store-notification.service';
 
 const isAdmin = (req: AuthRequest): boolean => req.user?.role === 'Admin';
 
@@ -433,6 +434,8 @@ export const approveStoreItem = asyncHandler(async (req: AuthRequest, res: Respo
     throw new AppError(t(lang, 'store.not_found'), 404);
   }
 
+  void feedStoreNotificationService.notifyStoreItemApproved(String(item._id));
+
   sendSuccess(res, item, t(lang, 'store.approved'));
 });
 
@@ -453,7 +456,7 @@ export const rejectStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
       status: 'Rejected',
       rejectedBy: req.user?.id,
       rejectedAt: new Date(),
-      // rejectionReason: req.body.reason,
+      rejectionReason: req.body.reason,
       isFeatured: false,
     },
     { new: true, runValidators: true }
@@ -464,6 +467,8 @@ export const rejectStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
   if (!item) {
     throw new AppError(t(lang, 'store.not_found'), 404);
   }
+
+  void feedStoreNotificationService.notifyStoreItemRejected(String(item._id), req.body?.reason);
 
   sendSuccess(res, item, t(lang, 'store.rejected'));
 });

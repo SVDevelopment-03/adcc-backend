@@ -5,7 +5,9 @@ import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { sendSuccess } from '@/utils/response';
 import { AuthRequest } from '@/middleware/auth.middleware';
+import notificationService from '@/services/notification.service';
 import { sendWebPushNotification } from '@/services/firebase.service';
+import emailService from '@/services/email.service';
 
 const STAFF_ROLES: Array<'Admin' | 'Vendor' | 'Member'> = ['Vendor'];
 
@@ -226,6 +228,114 @@ export const sendWebPushToStaff = asyncHandler(
       },
       'Staff web push notification sent'
     );
+  }
+);
+
+/**
+ * Test broadcast endpoint for admins — can target 'staff' (default) or 'all'
+ * POST /v1/push-notifications/test-broadcast
+ */
+export const sendTestBroadcast = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+      const { title, body, url, audienceType, deliveryType, externalEmails, selectedUserIds } = req.body as {
+        title: string;
+        body: string;
+        url?: string;
+        audienceType?: string;
+        deliveryType?: 'app' | 'email' | 'both';
+        externalEmails?: string; // comma separated
+        selectedUserIds?: string; // comma separated
+      };
+
+    const parseIdList = (value?: string) =>
+      value
+        ? Array.from(
+            new Set(
+              value
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean)
+            )
+          )
+        : [];
+
+    const selectedIds = audienceType === 'selected_users' ? parseIdList(selectedUserIds) : [];
+    const externalEmailList = parseIdList(externalEmails);
+
+    if (!title || !body) {
+      throw new AppError('Title and body are required', 400);
+    }
+
+    // If deliveryType includes email, handle email sending first (externalEmails or audience-based)
+    if (deliveryType === 'email' || deliveryType === 'both') {
+      let emailTargets: string[] = [];
+
+      if (selectedIds.length > 0) {
+        const selectedUsers = await User.find({ _id: { $in: selectedIds } }).select('email').lean();
+        emailTargets = selectedUsers.map((u: any) => u.email).filter(Boolean) as string[];
+      } else if (audienceType === 'all') {
+        const users = await User.find({}).select('email').lean();
+        emailTargets = users.map((u: any) => u.email).filter(Boolean) as string[];
+      } else {
+        const staffUsers = await User.find({ role: { $in: STAFF_ROLES } }).select('email').lean();
+        emailTargets = staffUsers.map((u: any) => u.email).filter(Boolean) as string[];
+      }
+
+      emailTargets = Array.from(new Set([...emailTargets, ...externalEmailList]));
+
+      if (emailTargets.length === 0) {
+        sendSuccess(res, { sentTo: 0 }, 'No email recipients found');
+        if (deliveryType === 'email') {
+          return;
+        }
+      } else {
+        try {
+          await emailService.sendEmail({ to: emailTargets, subject: title, text: body });
+        } catch (err) {
+          console.error('[push] failed to send email recipients', err);
+          throw new AppError('Failed to send email recipients', 500);
+        }
+
+        if (deliveryType === 'email') {
+          sendSuccess(res, { sentTo: emailTargets.length }, 'Test broadcast emails sent');
+          return;
+        }
+      }
+    }
+
+    // If deliveryType includes app or default, send in-app/web push
+    if (deliveryType === 'app' || deliveryType === 'both' || !deliveryType) {
+      if (selectedIds.length > 0) {
+        const selectedUsers = await User.find({ _id: { $in: selectedIds } }).select('_id fcmTokens').lean();
+        const selectedUserIds = selectedUsers.map((user: any) => String(user._id));
+
+        if (selectedUserIds.length === 0) {
+          sendSuccess(res, { sentToUserCount: 0 }, 'No selected users found');
+          return;
+        }
+
+        const results = await notificationService.sendNotificationToUsers(selectedUserIds, { title, body }, { url });
+        sendSuccess(res, { sentToUserCount: results.length }, 'Test broadcast sent to selected users');
+        return;
+      }
+
+      if (audienceType === 'all') {
+        // send to all users who have tokens or simply create in-app notifications for all users
+        const users = await User.find({}).select('_id fcmTokens').lean();
+        const userIdsWithTokens = users.filter((u: any) => Array.isArray(u.fcmTokens) && u.fcmTokens.length > 0).map((u: any) => String(u._id));
+
+        // create in-app notifications + attempt push per user with tokens
+        const results = await notificationService.sendNotificationToUsers(userIdsWithTokens, { title, body }, { url });
+
+        sendSuccess(res, { sentToUserCount: results.length }, 'Test broadcast sent to all users (with tokens)');
+        return;
+      }
+
+      // default: staff
+      const r = await notificationService.sendToStaff({ title, body, url });
+      sendSuccess(res, { result: r }, 'Test broadcast sent to staff');
+      return;
+    }
   }
 );
 

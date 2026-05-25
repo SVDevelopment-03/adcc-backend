@@ -62,6 +62,24 @@ const dateField = (message: string) =>
 
 const optionalDateField = (message: string) => dateField(message).optional();
 
+export const updateChallengeProgressSchema = z
+  .object({
+    progress: z.preprocess(firstValue, z.coerce.number().min(0, 'Progress cannot be negative')).optional(),
+    progressPercent: z.preprocess(
+      firstValue,
+      z.coerce.number().min(0, 'Progress percent cannot be negative').max(100, 'Progress percent cannot exceed 100')
+    ).optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.progress === undefined && data.progressPercent === undefined) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Progress or progressPercent is required',
+      });
+    }
+  })
+  .strict();
+
 export const createChallengeSchema = z
   .object({
     title: z.preprocess(firstValue, z.string().min(1, 'Challenge title is required')),
@@ -140,4 +158,5 @@ export const getChallengesQuerySchema = z.object({
 
 export type CreateChallengeInput = z.infer<typeof createChallengeSchema>;
 export type UpdateChallengeInput = z.infer<typeof updateChallengeSchema>;
+export type UpdateChallengeProgressInput = z.infer<typeof updateChallengeProgressSchema>;
 export type GetChallengesQueryInput = z.infer<typeof getChallengesQuerySchema>;

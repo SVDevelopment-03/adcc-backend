@@ -1,13 +1,13 @@
 import { Request, Response } from 'express';
 import CommunityRide from '@/models/community-ride.model';
-import Community from '@/models/community.model';
-import CommunityMembership from '@/models/communityMembership.model';
+import CommunityRideParticipation from '@/models/community-ride-participation.model';
 import { t } from '@/utils/i18n';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { localizeDocumentFields, SupportedLanguage, localizeCommunityRideStatic } from '@/utils/localization';
+import communityRideNotificationService from '@/services/community-ride-notification.service';
 
 const COMMUNITY_RIDE_LOCALIZED_FIELDS = {
   title: 'titleAr',
@@ -44,6 +44,8 @@ export const createCommunityRide = asyncHandler(async (req: AuthRequest, res: Re
   };
 
   const ride = await CommunityRide.create(rideData);
+
+  void communityRideNotificationService.notifyCommunityRidePublished(String(ride._id));
 
   sendSuccess(res, localizeCommunityRide(ride.toObject(), lang), t(lang, 'communityRide.created'), 201);
 });
@@ -146,6 +148,10 @@ export const updateCommunityRide = asyncHandler(async (req: AuthRequest, res: Re
     throw new AppError(t(lang, 'communityRide.not_found'), 404);
   }
 
+  if (ride.status === 'active') {
+    void communityRideNotificationService.notifyCommunityRidePublished(String(ride._id));
+  }
+
   sendSuccess(res, localizeCommunityRide(ride.toObject(), lang), t(lang, 'communityRide.updated'));
 });
 
@@ -167,6 +173,61 @@ export const deleteCommunityRide = asyncHandler(async (req: AuthRequest, res: Re
   sendSuccess(res, null, t(lang, 'communityRide.deleted'));
 });
 
+/**
+ * Join a community ride
+ * POST /v1/community-rides/:id/join
+ */
+export const joinCommunityRide = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as SupportedLanguage;
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const ride = await CommunityRide.findById(id);
+  if (!ride) {
+    throw new AppError(t(lang, 'communityRide.not_found'), 404);
+  }
+
+  const existingJoin = await CommunityRideParticipation.findOne({ rideId: id, userId });
+  if (existingJoin?.status === 'joined') {
+    sendSuccess(res, localizeCommunityRide(ride.toObject(), lang), t(lang, 'communityRide.joined') || 'Joined community ride');
+    return;
+  }
+
+  if (ride.maxParticipants && ride.maxParticipants > 0 && ride.currentParticipants >= ride.maxParticipants) {
+    throw new AppError(t(lang, 'communityRide.full') || 'This community ride is full', 400);
+  }
+
+  const updatedRide = await CommunityRide.findByIdAndUpdate(
+    id,
+    { $inc: { currentParticipants: 1 } },
+    { new: true }
+  );
+
+  if (!updatedRide) {
+    throw new AppError(t(lang, 'communityRide.not_found'), 404);
+  }
+
+  await CommunityRideParticipation.findOneAndUpdate(
+    { rideId: id, userId },
+    {
+      rideId: id,
+      userId,
+      status: 'joined',
+      joinedAt: existingJoin?.joinedAt || new Date(),
+      leftAt: null,
+    },
+    { upsert: true, new: true }
+  );
+
+  void communityRideNotificationService.notifyCommunityRideJoined({ rideId: String(id), userId });
+
+  sendSuccess(res, localizeCommunityRide(updatedRide.toObject(), lang), t(lang, 'communityRide.joined') || 'Joined community ride');
+});
+
 
 /**
  * Community Member Join-Status ride
@@ -176,7 +237,7 @@ export const deleteCommunityRide = asyncHandler(async (req: AuthRequest, res: Re
 export const communityMemberStatus = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const lang = ((req as any).lang || 'en') as SupportedLanguage;
-    const { id: communityId } = req.params;
+    const { id: rideId } = req.params;
     const userId = req.user?.id;
 
     if (!userId) {
@@ -184,52 +245,35 @@ export const communityMemberStatus = asyncHandler(
     }
 
 
-    // Fetch full community details
-    const community = await Community.findById(communityId);
-    if (!community) {
-      throw new AppError(t(lang, 'community.not_found'), 404);
+    const ride = await CommunityRide.findById(rideId);
+    if (!ride) {
+      throw new AppError(t(lang, 'communityRide.not_found'), 404);
     }
 
-    const membership = await CommunityMembership.findOne({
-      userId,
-      communityId,
-    });
+    const participation = await CommunityRideParticipation.findOne({ rideId, userId });
 
     let status = "not_joined";
-    let membershipDetails = null;
+    let participationDetails = null;
 
-    if (membership) {
-      status = membership.status; // active / left / banned
+    if (participation) {
+      status = participation.status;
 
-      if (membership.status === "active") {
+      if (participation.status === "joined") {
         status = "joined";
       }
 
-      membershipDetails = {
-        role: membership.role,
-        joinedAt: membership.joinedAt,
+      participationDetails = {
+        joinedAt: participation.joinedAt,
+        leftAt: participation.leftAt,
       };
     }
 
     return sendSuccess(res, {
-      communityId,
+      rideId,
       userId,
       status,
-      membershipDetails,
-      community: {
-        id: community._id,
-        title: lang === 'ar' ? community.titleAr || community.title : community.title,
-        type: community.type,
-        category: community.category,
-        location: community.location,
-        area: community.area,
-        city: community.city,
-        image: community.image,
-        logo: community.logo,
-        memberCount: community.memberCount,
-        trackName: community.trackName,
-        isActive: community.isActive
-      },
+      participationDetails,
+      ride: localizeCommunityRide(ride.toObject(), lang),
     }, t(lang, 'community.status_retrieved'), 200);
   }
 );

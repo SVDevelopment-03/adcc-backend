@@ -1,8 +1,10 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { randomInt } from 'node:crypto';
 
 export interface IEventResult extends Document {
   eventId: mongoose.Types.ObjectId;
     userId: mongoose.Types.ObjectId;
+        participantCode?: string;
     distance?: number;
     time: string;
     rank?: number;
@@ -26,6 +28,11 @@ const EventResultSchema = new Schema<IEventResult>(
     {
         eventId: { type: Schema.Types.ObjectId, ref: 'events', required: true },
         userId: { type: Schema.Types.ObjectId, ref: 'users', required: true },
+        participantCode: {
+            type: String,
+            trim: true,
+            default: () => randomInt(100000000000, 1000000000000).toString(),
+        },
         distance: { type: Number, default: null },
         time: { type: String, default: null },
         rank: { type: Number, default: null },

@@ -9,6 +9,17 @@ const DEFAULT_APP_CONFIG = {
   supportEmail: 'support@adcc.ae',
   contactPhone: '+971 2 123 4567',
   defaultLanguage: 'English' as const,
+  emailSettings: {
+    enabled: false,
+    smtpHost: '',
+    smtpPort: 587,
+    smtpUser: '',
+    smtpPassword: '',
+    smtpSecure: false,
+    fromEmail: '',
+    fromName: 'Abu Dhabi Cycling Club',
+    replyTo: '',
+  },
   features: {
     marketplace: true,
     communities: true,
@@ -31,6 +42,31 @@ const DEFAULT_APP_CONFIG = {
   },
 };
 
+function sanitizeAppConfig(doc: any) {
+  if (!doc?.config?.emailSettings) return doc;
+
+  const config = {
+    ...doc.config,
+    emailSettings: {
+      ...doc.config.emailSettings,
+      smtpPassword: '',
+    },
+  };
+
+  return { ...doc, config };
+}
+
+function mergeAppConfig(config: Record<string, any> | undefined) {
+  return {
+    ...DEFAULT_APP_CONFIG,
+    ...(config || {}),
+    emailSettings: {
+      ...DEFAULT_APP_CONFIG.emailSettings,
+      ...(config?.emailSettings || {}),
+    },
+  };
+}
+
 /**
  * Get app configuration (singleton).
  * GET /v1/app-config
@@ -41,11 +77,22 @@ export const getAppConfig = asyncHandler(async (_req: Request, res: Response) =>
 
   if (!doc) {
     const created = await AppConfig.create({ key: 'default', config: DEFAULT_APP_CONFIG });
-    sendSuccess(res, created.toObject(), 'App configuration loaded', 200);
+    sendSuccess(res, sanitizeAppConfig(created.toObject()), 'App configuration loaded', 200);
     return;
   }
 
-  sendSuccess(res, doc, 'App configuration loaded', 200);
+  if (!doc.config?.emailSettings) {
+    const updated = await AppConfig.findOneAndUpdate(
+      { key: 'default' },
+      { $set: { config: mergeAppConfig(doc.config) } },
+      { new: true }
+    ).lean();
+
+    sendSuccess(res, sanitizeAppConfig(updated || doc), 'App configuration loaded', 200);
+    return;
+  }
+
+  sendSuccess(res, sanitizeAppConfig(doc), 'App configuration loaded', 200);
 });
 
 /**
@@ -55,8 +102,24 @@ export const getAppConfig = asyncHandler(async (_req: Request, res: Response) =>
  */
 export const updateAppConfig = asyncHandler(async (req: AuthRequest, res: Response) => {
   const userId = req.user?.id;
+  const existing = await AppConfig.findOne({ key: 'default' }).lean();
+  const incomingConfig = req.body ?? {};
+  const existingPassword = existing?.config?.emailSettings?.smtpPassword ?? '';
+  const incomingPassword = incomingConfig?.emailSettings?.smtpPassword;
+
+  const config = {
+    ...mergeAppConfig(existing?.config),
+    ...incomingConfig,
+    emailSettings: {
+      ...DEFAULT_APP_CONFIG.emailSettings,
+      ...(existing?.config?.emailSettings || {}),
+      ...(incomingConfig.emailSettings || {}),
+      smtpPassword: String(incomingPassword ?? '').trim() ? String(incomingPassword) : existingPassword,
+    },
+  };
+
   const update = {
-    config: req.body,
+    config,
     updatedBy: userId,
   };
 
@@ -69,3 +132,4 @@ export const updateAppConfig = asyncHandler(async (req: AuthRequest, res: Respon
   sendSuccess(res, doc, 'App configuration saved', 200);
 });
 
+1

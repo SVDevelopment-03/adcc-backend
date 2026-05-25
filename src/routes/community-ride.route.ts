@@ -5,7 +5,8 @@ import {
   getCommunityRideById,
   updateCommunityRide,
   deleteCommunityRide,
-  communityMemberStatus
+  communityMemberStatus,
+  joinCommunityRide,
 } from '@/controllers/community-ride.controller';
 import { validate } from '@/middleware/validate.middleware';
 import {
@@ -21,6 +22,8 @@ const router = express.Router();
 // Public routes
 router.get('/', validate(getCommunityRidesQuerySchema), getAllCommunityRides);
 router.get('/:id', getCommunityRideById);
+router.get('/:id/member-status', authenticate, communityMemberStatus);
+router.post('/:id/join', authenticate, joinCommunityRide);
 
 // Admin only routes
 router.post(
@@ -38,7 +41,6 @@ router.patch(
   updateCommunityRide
 );
 router.delete('/:id', authenticate, requireStaffPermission('manage_communities'), deleteCommunityRide);
-router.get('/:id/member-status', authenticate, communityMemberStatus);
 
 export default router;
 

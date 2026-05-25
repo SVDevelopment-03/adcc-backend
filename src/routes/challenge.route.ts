@@ -7,11 +7,13 @@ import {
   deleteChallenge,
   joinChallenge,
   getChallengeMemberStatus,
+  updateChallengeProgress,
 } from '@/controllers/challenge.controller';
 import { validate } from '@/middleware/validate.middleware';
 import {
   createChallengeSchema,
   updateChallengeSchema,
+  updateChallengeProgressSchema,
   getChallengesQuerySchema,
 } from '@/validators/challenge.validator';
 import { authenticate } from '@/middleware/auth.middleware';
@@ -26,6 +28,7 @@ router.get('/:id/member-status', authenticate, getChallengeMemberStatus);
 
 // Join a challenge (increment participants)
 router.post('/:id/join', authenticate, joinChallenge);
+router.patch('/:id/progress', authenticate, validate(updateChallengeProgressSchema), updateChallengeProgress);
 
 router.post(
   '/',

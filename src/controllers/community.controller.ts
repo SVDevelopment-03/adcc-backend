@@ -11,6 +11,7 @@ import { AuthRequest } from '@/middleware/auth.middleware';
 import { communityMembershipService } from '@/services';
 import { localizeDocumentFields, SupportedLanguage, localizeCommunityStatic } from '@/utils/localization';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
+import { notifyCommunityGalleryAdded } from '@/services/community-notification.service';
 
 interface JoinCommunityParams {
   communityId: string;
@@ -52,6 +53,59 @@ const uniqueStrings = (values: string[]) => {
   }
   return result;
 };
+
+export const AVAILABLE_CITIES = [
+  'Abu Dhabi',
+  'Dubai',
+  'Sharjah',
+  'Ajman',
+  'Ras Al Khaimah',
+  'Fujairah',
+  'Umm Al Quwain',
+  'Al Ain',
+  'Riyadh',
+  'Jeddah',
+  'Mecca',
+  'Medina',
+  'Dammam',
+  'Khobar',
+  'Dhahran',
+  'Taif',
+  'Tabuk',
+  'Abha',
+  'Jubail',
+  'Yanbu',
+  'Doha',
+  'Al Wakrah',
+  'Al Khor',
+  'Al Rayyan',
+  'Mesaieed',
+  'Dukhan',
+  'Muscat',
+  'Salalah',
+  'Sohar',
+  'Nizwa',
+  'Sur',
+  'Ibri',
+  'Barka',
+  'Rustaq',
+  'Kuwait City',
+  'Hawalli',
+  'Salmiya',
+  'Farwaniya',
+  'Jahra',
+  'Ahmadi',
+  'Mangaf',
+  'Fahaheel',
+  'Manama',
+  'Muharraq',
+  'Riffa',
+  'Hamad Town',
+  'Isa Town',
+  'Sitra',
+  'Budaiya',
+  'Jidhafs',
+];
 
 /** Normalizes validated `trackId` from body (array of ObjectIds). */
 const resolveTrackIdFromBody = (body: Record<string, any>): mongoose.Types.ObjectId[] | undefined => {
@@ -112,6 +166,10 @@ const uploadImageStringToS3 = async (value: unknown): Promise<string | undefined
   }
   return trimmed;
 };
+
+export const getAvailableCities = asyncHandler(async (_req: Request, res: Response) => {
+  sendSuccess(res, AVAILABLE_CITIES);
+});
 
 const attachCommunityGalleryFiles = async (req: AuthRequest): Promise<string[]> => {
   const files = req.files as
@@ -778,6 +836,12 @@ export const addGalleryImages = asyncHandler(async (req: AuthRequest, res: Respo
   }
 
   const localizedCommunity = localizeCommunity(updatedCommunity.toObject(), lang);
+
+  void notifyCommunityGalleryAdded({
+    communityId: String(id),
+    imageCount: newImages.length,
+    url: `/communities/${id}`,
+  });
 
   sendSuccess(
     res,

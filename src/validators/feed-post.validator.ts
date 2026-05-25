@@ -34,6 +34,7 @@ export const updateFeedPostModerationSchema = z
   .object({
     status: z.preprocess(normalizedString, feedPostStatusEnum).optional(),
     reported: z.preprocess(parseBooleanFromFormData, z.boolean()).optional(),
+    reason: z.string().min(1, 'Rejection reason is required').optional(),
   })
   .refine((data) => data.status !== undefined || data.reported !== undefined, {
     message: 'Either "status" or "reported" must be provided',

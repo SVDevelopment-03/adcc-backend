@@ -37,6 +37,11 @@ export const sendStaffWebPushSchema = z
     title: stringField('Notification title is required'),
     body: stringField('Notification message is required'),
     audienceType: stringField('Audience type is required'),
+    // deliveryType: app | email | both (optional)
+    deliveryType: z.preprocess(firstValue, z.enum(['app', 'email', 'both'])).optional(),
+    selectedUserIds: optionalStringField('Invalid selected user ids'),
+    // optional comma-separated external emails for sending to outsider addresses
+    externalEmails: optionalStringField('Invalid external email list'),
     scheduleDate: optionalStringField('Invalid schedule date'),
     scheduleTime: optionalStringField('Invalid schedule time'),
     url: optionalStringField('Invalid URL').refine(

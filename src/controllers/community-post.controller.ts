@@ -2,12 +2,14 @@ import { Request, Response } from 'express';
 import mongoose from 'mongoose';
 import Community from '@/models/community.model';
 import CommunityPost from '@/models/community-post.model';
+import User from '@/models/user.model';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { t } from '@/utils/i18n';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
+import { notifyCommunityAnnouncement } from '@/services/community-notification.service';
 
 const getParamString = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
@@ -68,6 +70,17 @@ export const createCommunityPost = asyncHandler(async (req: AuthRequest, res: Re
 
   const post = await CommunityPost.create(data);
   const populated = await post.populate('createdBy', 'fullName profileImage');
+
+  if (post.postType === 'Announcement') {
+    const author = await User.findById(userId).select('fullName').lean();
+    void notifyCommunityAnnouncement({
+      communityId: String(communityObjectId),
+      titleText: post.title,
+      postTitle: post.title,
+      byName: author?.fullName?.trim() || 'Admin',
+      url: `/communities/${communityObjectId}`,
+    });
+  }
 
   sendSuccess(res, populated, t(lang, 'communityPost.created'), 201);
 });

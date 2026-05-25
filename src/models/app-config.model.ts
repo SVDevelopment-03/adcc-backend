@@ -9,6 +9,17 @@ export interface IAppConfig extends Document {
     supportEmail: string;
     contactPhone: string;
     defaultLanguage: AppConfigLanguage;
+    emailSettings?: {
+      enabled: boolean;
+      smtpHost: string;
+      smtpPort: number;
+      smtpUser: string;
+      smtpPassword: string;
+      smtpSecure: boolean;
+      fromEmail: string;
+      fromName: string;
+      replyTo: string;
+    };
     features: Record<string, boolean>;
     notifications: Record<string, boolean>;
     security: Record<string, boolean>;

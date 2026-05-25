@@ -6,6 +6,12 @@ export interface IChallengeJoin extends Document {
   status: 'joined' | 'left';
   joinedAt: Date;
   leftAt?: Date | null;
+  progressValue?: number;
+  progressPercent?: number;
+  milestone25SentAt?: Date | null;
+  milestone50SentAt?: Date | null;
+  milestone75SentAt?: Date | null;
+  completedNotificationSentAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -21,6 +27,12 @@ const ChallengeJoinSchema = new Schema<IChallengeJoin>(
     },
     joinedAt: { type: Date, default: Date.now },
     leftAt: { type: Date, default: null },
+    progressValue: { type: Number, default: 0, min: 0 },
+    progressPercent: { type: Number, default: 0, min: 0, max: 100 },
+    milestone25SentAt: { type: Date, default: null },
+    milestone50SentAt: { type: Date, default: null },
+    milestone75SentAt: { type: Date, default: null },
+    completedNotificationSentAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

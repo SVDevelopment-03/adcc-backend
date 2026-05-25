@@ -18,6 +18,7 @@ import {
 } from '@/services/user-stats.service';
 import dayjs from 'dayjs';
 import { getEffectiveEventStatus, isEventCalendarDateInPast } from '@/utils/event-date';
+import { randomInt } from 'node:crypto';
 import mongoose, { type PipelineStage } from 'mongoose';
 import { SupportedLanguage } from '@/utils/localization';
 import  {localizeEventPayload}  from '@/utils/event-payload';
@@ -26,6 +27,13 @@ import {
   notifyAdminEventRegistration,
   notifyAdminTrackRideCompleted,
 } from '@/services/admin-notification.service';
+import {
+  notifyEventPublished,
+  notifyEventRegistrationConfirmed,
+  notifyEventResultsPublished,
+  notifyEventCancelled,
+} from '@/services/event-notification.service';
+import { notifyCommunityEventCreated } from '@/services/community-notification.service';
 
 // const EVENT_LOCALIZED_FIELDS = {
 //   title: 'titleAr',
@@ -193,6 +201,22 @@ const EVENT_RESULT_STATUSES = new Set([
   'no_show',
 ]);
 
+const ACTIVE_PARTICIPANT_STATUSES = ['joined', 'checked_in', 'no_show', 'completed'] as const;
+
+const generateParticipantCode = async (eventId: string): Promise<string> => {
+  const code = (): string => randomInt(100000000000, 1000000000000).toString();
+
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const candidate = code();
+    const existingParticipant = await EventResult.exists({ eventId, participantCode: candidate });
+    if (!existingParticipant) {
+      return candidate;
+    }
+  }
+
+  throw new AppError('Unable to generate participant code', 500);
+};
+
 const normalizeEventResultStatus = (value?: string): string | null => {
   if (!value) return null;
   const trimmed = value.trim();
@@ -341,6 +365,15 @@ const buildEventResultsPipeline = (eventId: string, statuses?: string[]): Pipeli
   ];
 };
 
+const getRegisteredParticipantCount = async (eventId: string): Promise<number> => {
+  if (!mongoose.Types.ObjectId.isValid(eventId)) return 0;
+
+  return EventResult.countDocuments({
+    eventId: new mongoose.Types.ObjectId(eventId),
+    status: { $in: ACTIVE_PARTICIPANT_STATUSES as unknown as string[] },
+  } as any);
+};
+
 const ensureEventExists = async (eventId: string, lang: SupportedLanguage) => {
   if (!mongoose.Types.ObjectId.isValid(eventId)) {
     throw new AppError(t(lang, 'event.invalid_id'), 400);
@@ -403,6 +436,18 @@ export const createEvent = asyncHandler(async (req: AuthRequest, res: Response) 
   const event = await Event.create(eventData);
   const localizedEvent = localizeEventPayload(event.toObject(), lang);
 
+  if (event.status === 'Open') {
+    void notifyEventPublished(String(event._id));
+    if (event.communityId) {
+      void notifyCommunityEventCreated({
+        communityId: String(event.communityId),
+        eventId: String(event._id),
+        eventTitle: event.title,
+        url: `/events/${event._id}`,
+      });
+    }
+  }
+
   sendSuccess(res, localizedEvent, t(lang, "event.created"), 201);
 });
 
@@ -442,7 +487,13 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
   // Run list + count in parallel to reduce endpoint latency.
   const [events, total] = await Promise.all([eventsQuery, Event.countDocuments(filter as any)]);
 
-  const localizedEvents = events.map((event) => localizeEventPayload(event as Record<string, any>, lang));
+  const localizedEvents = await Promise.all(
+    events.map(async (event) => {
+      const localizedEvent = localizeEventPayload(event as Record<string, any>, lang);
+      localizedEvent.currentParticipants = await getRegisteredParticipantCount(String(event._id));
+      return localizedEvent;
+    })
+  );
 
   sendSuccess(
     res,
@@ -555,7 +606,10 @@ export const getEventById = asyncHandler(async (req: Request, res: Response) => 
     throw new AppError(t(lang, "event.not_found"), 404);
   }
 
-  sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.eventDetails"), 201);
+  const localizedEvent = localizeEventPayload(event.toObject(), lang);
+  localizedEvent.currentParticipants = await getRegisteredParticipantCount(String(event._id));
+
+  sendSuccess(res, localizedEvent, t(lang, "event.eventDetails"), 201);
 });
 
 /**
@@ -566,6 +620,7 @@ export const getEventById = asyncHandler(async (req: Request, res: Response) => 
 export const updateEvent = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
   const { id } = req.params;
+  const previousEvent = await Event.findById(id).select('status publishedNotificationSentAt resultsNotificationSentAt cancelledNotificationSentAt').lean();
   const updateData = { ...req.body };
   if ('registrationFeeType' in updateData || 'registrationFeeAmount' in updateData) {
     normalizeRegistrationFee(updateData);
@@ -590,6 +645,8 @@ export const updateEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     if (isEventCalendarDateInPast(updateData.eventDate)) {
       throw new AppError(t(lang, 'event.past_date_not_allowed'), 400);
     }
+    updateData.reminder24hSentAt = null;
+    updateData.reminder1hSentAt = null;
   }
 
   if (updateData.title && !updateData.titleAr) {
@@ -621,6 +678,26 @@ export const updateEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     throw new AppError(t(lang, "event.not_found"), 404);
   }
 
+  if (updateData.status === 'Open' && previousEvent?.status !== 'Open') {
+    void notifyEventPublished(String(event._id));
+    if (event.communityId) {
+      void notifyCommunityEventCreated({
+        communityId: String(event.communityId),
+        eventId: String(event._id),
+        eventTitle: event.title,
+        url: `/events/${event._id}`,
+      });
+    }
+  }
+
+  if (updateData.status === 'Completed' && previousEvent?.status !== 'Completed') {
+    void notifyEventResultsPublished(String(event._id));
+  }
+
+  if (updateData.status === 'Disabled' && previousEvent?.status !== 'Disabled') {
+    void notifyEventCancelled(String(event._id));
+  }
+
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.updated"), 201);
 });
 
@@ -647,6 +724,7 @@ const updateEventStatus = async (
   status: 'Draft' | 'Open' | 'Full' | 'Closed' | 'Disabled' | 'Completed' | 'Archived',
   lang: SupportedLanguage
 ) => {
+  const previous = await Event.findById(eventId).select('status publishedNotificationSentAt resultsNotificationSentAt cancelledNotificationSentAt').lean();
   const event = await Event.findByIdAndUpdate(
     eventId,
     { status },
@@ -658,6 +736,26 @@ const updateEventStatus = async (
 
   if (!event) {
     throw new AppError(t(lang, "event.not_found"), 404);
+  }
+
+  if (status === 'Open' && previous?.status !== 'Open') {
+    void notifyEventPublished(String(event._id));
+    if (event.communityId) {
+      void notifyCommunityEventCreated({
+        communityId: String(event.communityId),
+        eventId: String(event._id),
+        eventTitle: event.title,
+        url: `/events/${event._id}`,
+      });
+    }
+  }
+
+  if (status === 'Completed' && previous?.status !== 'Completed') {
+    void notifyEventResultsPublished(String(event._id));
+  }
+
+  if (status === 'Disabled' && previous?.status !== 'Disabled') {
+    void notifyEventCancelled(String(event._id));
   }
 
   return event;
@@ -827,6 +925,10 @@ export const joinEvent = asyncHandler(async (req: AuthRequest, res: Response) =>
       throw new AppError(t(lang, "event.completed"), 400);
     }
 
+    if (!eventJoin.participantCode) {
+      eventJoin.participantCode = await generateParticipantCode(String(eventId));
+    }
+
     eventJoin.set({
       status: 'joined',
       checkedInAt: null,
@@ -834,7 +936,11 @@ export const joinEvent = asyncHandler(async (req: AuthRequest, res: Response) =>
     });
     await eventJoin.save();
 
+    await Event.updateOne({ _id: eventId }, { $inc: { currentParticipants: 1 } });
+
     await incrementStatsOnJoin(userId);
+
+    void notifyEventRegistrationConfirmed({ eventId: String(eventId), userId });
 
     const regUser = await User.findById(userId).select('fullName').lean();
     void notifyAdminEventRegistration({
@@ -855,9 +961,14 @@ export const joinEvent = asyncHandler(async (req: AuthRequest, res: Response) =>
     eventId,
     userId,
     status: 'joined',
+    participantCode: await generateParticipantCode(String(eventId)),
   });
 
+  await Event.updateOne({ _id: eventId }, { $inc: { currentParticipants: 1 } });
+
   await incrementStatsOnJoin(userId);
+
+  void notifyEventRegistrationConfirmed({ eventId: String(eventId), userId });
 
   const joinUser = await User.findById(userId).select('fullName').lean();
   void notifyAdminEventRegistration({
@@ -895,6 +1006,7 @@ export const getEventResultsList = asyncHandler(async (req: Request, res: Respon
         distance: 1,
         time: 1,
         rank: 1,
+        participantCode: 1,
         createdAt: 1,
         status: 1,
         checkedInAt: 1,
@@ -1007,6 +1119,10 @@ export const removeEventParticipant = asyncHandler(async (req: AuthRequest, res:
   await EventResult.deleteOne({ _id: eventResult._id });
 
   if (['joined', 'checked_in', 'no_show'].includes(eventResult.status)) {
+    await Event.updateOne(
+      { _id: eventId, currentParticipants: { $gt: 0 } },
+      { $inc: { currentParticipants: -1 } }
+    );
     await decrementStatsOnCancel(userId);
   }
 
@@ -1102,6 +1218,7 @@ export const exportEventResults = asyncHandler(async (req: AuthRequest, res: Res
         distance: 1,
         time: 1,
         rank: 1,
+        participantCode: 1,
         createdAt: 1,
         status: 1,
         checkedInAt: 1,
@@ -1120,6 +1237,7 @@ export const exportEventResults = asyncHandler(async (req: AuthRequest, res: Res
   const rows = await EventResult.aggregate(exportPipeline);
 
   const headers = [
+    'ParticipantID',
     'Name',
     'Email',
     'Status',
@@ -1140,6 +1258,7 @@ export const exportEventResults = asyncHandler(async (req: AuthRequest, res: Res
   for (const row of rows as any[]) {
     lines.push(
       [
+        row.participantCode ?? row._id ?? '',
         row.user?.fullName ?? '',
         row.user?.email ?? '',
         row.status ?? '',
@@ -1277,11 +1396,20 @@ export const cancelRegistration = asyncHandler(async (req: AuthRequest, res: Res
     throw new AppError(t(lang, "event.completed"), 400);
   }
 
+  const previousStatus = event.status;
+
   event.set({
     reason,
     status: 'cancelled',
   });
   await event.save();
+
+  if (['joined', 'checked_in', 'no_show'].includes(previousStatus)) {
+    await Event.updateOne(
+      { _id: eventId, currentParticipants: { $gt: 0 } },
+      { $inc: { currentParticipants: -1 } }
+    );
+  }
 
 
   await decrementStatsOnCancel(userId);

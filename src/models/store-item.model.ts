@@ -22,6 +22,8 @@ export interface IStoreItem extends Document {
   rejectedBy?: mongoose.Types.ObjectId;
   rejectedAt?: Date;
   rejectionReason?: string;
+  approvedNotificationSentAt?: Date | null;
+  rejectedNotificationSentAt?: Date | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -115,6 +117,8 @@ const StoreItemSchema = new Schema(
       type: String,
       trim: true,
     },
+    approvedNotificationSentAt: { type: Date, default: null },
+    rejectedNotificationSentAt: { type: Date, default: null },
   },
   {
     timestamps: true,

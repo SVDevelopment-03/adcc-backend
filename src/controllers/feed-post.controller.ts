@@ -7,6 +7,7 @@ import { AppError } from '@/utils/app-error';
 import { t } from '@/utils/i18n';
 import FeedPost from '@/models/feed-post.model';
 import User from '@/models/user.model';
+import feedStoreNotificationService from '@/services/feed-store-notification.service';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import { notifyAdminFeedPostPending } from '@/services/admin-notification.service';
 
@@ -350,6 +351,18 @@ export const likeFeedPost = asyncHandler(async (req: AuthRequest, res: Response)
     .populate('createdBy', 'fullName profileImage')
     .lean();
 
+  if (updated && !liked) {
+    const authorRef = updated.createdBy as any;
+    const authorId = authorRef?._id ? String(authorRef._id) : String(authorRef || '');
+    if (authorId) {
+      void feedStoreNotificationService.notifyFeedPostLiked({
+        postId: String(postId),
+        likerId: userId,
+        authorId,
+      });
+    }
+  }
+
   sendSuccess(res, mapFeedPostForClient(updated, userId), t(lang, 'feedPost.updated'));
 });
 
@@ -446,6 +459,15 @@ export const updateFeedPostModeration = asyncHandler(async (req: AuthRequest, re
   const updates: Record<string, any> = {};
   if (req.body.status !== undefined) updates.status = req.body.status;
   if (req.body.reported !== undefined) updates.reported = req.body.reported;
+  if (req.body.status === 'approved') {
+    updates.rejectedReason = undefined;
+  }
+  if (req.body.status === 'rejected') {
+    const rejectionReason = typeof req.body.reason === 'string' ? req.body.reason.trim() : '';
+    if (rejectionReason) {
+      updates.rejectedReason = rejectionReason;
+    }
+  }
 
   if (Object.keys(updates).length === 0) {
     throw new AppError('Either "status" or "reported" must be provided', 400);
@@ -461,6 +483,23 @@ export const updateFeedPostModeration = asyncHandler(async (req: AuthRequest, re
 
   if (!updated) {
     throw new AppError(t(lang, 'feedPost.not_found'), 404);
+  }
+
+  try {
+    const newStatus = String((updates.status as string) || updated.status || '').toLowerCase();
+    const authorRef = updated.createdBy as any;
+    const authorId = authorRef?._id ? String(authorRef._id) : String(authorRef || '');
+
+    if (newStatus === 'approved') {
+      void feedStoreNotificationService.notifyFeedPostApproved(String(updated._id));
+    }
+
+    if (newStatus === 'rejected' && authorId) {
+      const reason = typeof req.body.reason === 'string' ? req.body.reason : undefined;
+      void feedStoreNotificationService.notifyFeedPostRejected(String(updated._id), reason);
+    }
+  } catch (err) {
+    console.error('[feed-post] moderation notification failed', err);
   }
 
   sendSuccess(res, updated, t(lang, 'feedPost.updated'));

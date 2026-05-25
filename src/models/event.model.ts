@@ -75,6 +75,12 @@ export interface IEvent extends Document {
   isFeatured?: boolean;
   allowCancellation?: boolean;
   galleryImages?: string[];
+  publishedNotificationSentAt?: Date | null;
+  resultsNotificationSentAt?: Date | null;
+  cancelledNotificationSentAt?: Date | null;
+  reminder24hSentAt?: Date | null;
+  reminder1hSentAt?: Date | null;
+  communityNotificationSentAt?: Date | null;
 }
 
 const EventSchema = new Schema(
@@ -253,6 +259,12 @@ const EventSchema = new Schema(
       type: [String],
       default: [],
     },
+    publishedNotificationSentAt: { type: Date, default: null },
+    resultsNotificationSentAt: { type: Date, default: null },
+    cancelledNotificationSentAt: { type: Date, default: null },
+    reminder24hSentAt: { type: Date, default: null },
+    reminder1hSentAt: { type: Date, default: null },
+    communityNotificationSentAt: { type: Date, default: null },
     difficulty: {
       type: String,
       trim: true,

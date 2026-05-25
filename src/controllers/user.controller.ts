@@ -71,11 +71,18 @@ export const createUser = asyncHandler(async (req: AuthRequest, res: Response) =
  */
 export const getAllUsers = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as AuthRequest & { lang?: string }).lang || 'en') as string;
-  const { page = 1, limit = 10, role } = req.query;
+  const { page = 1, limit = 10, role, gender } = req.query;
 
   const filter: Record<string, unknown> = {};
   if (role && ['Admin', 'Vendor', 'Member'].includes(role as string)) {
     filter.role = role;
+  }
+  // Allow filtering by gender (Male/Female), case-insensitive
+  if (typeof gender === 'string') {
+    const g = gender.trim();
+    if (/^male$/i.test(g) || /^female$/i.test(g)) {
+      filter.gender = { $regex: `^${g}$`, $options: 'i' };
+    }
   }
 
   const pageNum = Math.max(1, Number(page) || 1);

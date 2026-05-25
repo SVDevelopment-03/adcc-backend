@@ -40,12 +40,14 @@ const dobSchema = z
 
 export const registerUserSchema = z.object({
   fullName: z.string().min(1, 'Full name is required').trim(),
+  email: z.preprocess(firstValue, z.string().trim().email('Invalid email')).optional(),
   gender: z.enum(['Male', 'Female'], {
     message: 'Gender must be either Male or Female',
   }),
   age: z.coerce.number().int().min(0, 'Age cannot be negative').max(150, 'Age must be realistic').optional(),
   dob: dobSchema,
   country: z.string().min(1, 'Country is required').trim().optional(),
+  city: z.string().min(1, 'City is required').trim().optional(),
   provider: z.string().min(1, 'Provider is required').trim().optional(),
   fcmToken: optionalStringField('FCM token is required'),
   userAgent: optionalStringField('Invalid user agent'),
@@ -68,12 +70,15 @@ export const logoutSchema = z.object({
 
 export const updateProfileSchema = z.object({
   fullName: z.string().min(1, 'Full name is required').trim().optional(),
+  email: z.string().email('Invalid email address').trim().toLowerCase().optional(),
   gender: z.enum(['Male', 'Female'], {
     message: 'Gender must be either Male or Female',
   }).optional(),
   age: z.coerce.number().int().min(0, 'Age cannot be negative').max(150, 'Age must be realistic').optional(),
   dob: dobSchema.optional(),
   country: z.string().min(1, 'Country is required').trim().optional(),
+  city: z.string().min(1, 'City is required').trim().optional(),
+  profileImage: z.string().min(1, 'Profile image is required').trim().optional(),
 }).strict();
 
 /** Optional body for POST /auth/guest (e.g. deviceId for future rate-limiting) */

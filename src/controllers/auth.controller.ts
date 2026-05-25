@@ -1179,8 +1179,7 @@ export const guestLogin = asyncHandler(
     sendSuccess(
       res,
       {
-        user: {
-          id: guestId,
+        user: {id: guestId,
           role: GUEST_ROLE,
           isGuest: true,
         },
@@ -1189,4 +1188,5 @@ export const guestLogin = asyncHandler(
       t(lang, 'auth.guest_login_success')
     );
   }
+          
 );

@@ -7,6 +7,7 @@ import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
+import challengeNotificationService from '@/services/challenge-notification.service';
 
 const attachChallengeImage = async (req: AuthRequest, data: Record<string, any>) => {
   const file = (req as any).file as Express.Multer.File | undefined;
@@ -46,6 +47,8 @@ export const createChallenge = asyncHandler(async (req: AuthRequest, res: Respon
   await attachChallengeImage(req, challengeData);
 
   const challenge = await Challenge.create(challengeData);
+
+  void challengeNotificationService.notifyChallengePublished(String(challenge._id));
 
   sendSuccess(res, challenge, t(lang, 'challenge.created'), 201);
 });
@@ -138,6 +141,7 @@ export const updateChallenge = asyncHandler(async (req: AuthRequest, res: Respon
   const lang = ((req as any).lang || 'en') as any;
   const { id } = req.params;
   const updateData: Record<string, any> = { ...req.body };
+  const existingChallenge = await Challenge.findById(id).select('status publishedNotificationSentAt').lean();
 
   if (updateData.startDate) {
     updateData.startDate = new Date(updateData.startDate);
@@ -158,6 +162,12 @@ export const updateChallenge = asyncHandler(async (req: AuthRequest, res: Respon
 
   if (!challenge) {
     throw new AppError(t(lang, 'challenge.not_found'), 404);
+  }
+
+  const wasPublishable = existingChallenge && ['Active', 'Upcoming'].includes((existingChallenge as any).status);
+  const isPublishable = ['Active', 'Upcoming'].includes(String(challenge.status));
+  if (!wasPublishable && isPublishable) {
+    void challengeNotificationService.notifyChallengePublished(String(challenge._id));
   }
 
   sendSuccess(res, challenge, t(lang, 'challenge.updated'));
@@ -231,11 +241,98 @@ export const joinChallenge = asyncHandler(async (req: AuthRequest, res: Response
       status: 'joined',
       joinedAt: existingJoin?.joinedAt || new Date(),
       leftAt: null,
+      progressValue: 0,
+      progressPercent: 0,
+      milestone25SentAt: null,
+      milestone50SentAt: null,
+      milestone75SentAt: null,
+      completedNotificationSentAt: null,
     },
     { upsert: true, new: true }
   );
 
+  void challengeNotificationService.notifyChallengeJoined({ challengeId: String(id), userId });
+
   sendSuccess(res, challenge, t(lang, 'challenge.joined') || 'Joined challenge');
+});
+
+/**
+ * Update challenge progress
+ * PATCH /v1/challenges/:id/progress
+ */
+export const updateChallengeProgress = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as any;
+  const { id } = req.params;
+  const userId = req.user?.id;
+  const progressValueInput = req.body?.progress ?? req.body?.progressValue;
+  const progressPercentInput = req.body?.progressPercent;
+
+  if (!userId) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const challenge = await Challenge.findById(id).select('target participants completions title').lean();
+  if (!challenge) {
+    throw new AppError(t(lang, 'challenge.not_found'), 404);
+  }
+
+  const joinRecord = await ChallengeJoin.findOne({ challengeId: id, userId });
+  if (!joinRecord || joinRecord.status !== 'joined') {
+    throw new AppError(t(lang, 'challenge.not_joined') || 'Join the challenge first', 400);
+  }
+
+  const target = Math.max(1, Number((challenge as any).target) || 1);
+  const progressValue = Math.max(0, Number(progressValueInput ?? 0));
+  const progressPercent = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        progressPercentInput !== undefined
+          ? Number(progressPercentInput)
+          : (progressValue / target) * 100
+      )
+    )
+  );
+
+  const previousPercent = Number(joinRecord.progressPercent || 0);
+  const completedBefore = !!joinRecord.completedNotificationSentAt;
+
+  joinRecord.progressValue = progressValue;
+  joinRecord.progressPercent = progressPercent;
+  await joinRecord.save();
+
+  const completionTriggered = progressPercent >= 100 && !completedBefore;
+  if (completionTriggered) {
+    await Challenge.updateOne(
+      { _id: id },
+      {
+        $inc: { completions: 1 },
+      }
+    );
+  }
+
+  if (progressPercent > previousPercent) {
+    void challengeNotificationService.notifyChallengeProgressMilestones({
+      challengeId: String(id),
+      userId,
+      progressPercent,
+    });
+  }
+
+  const updatedChallenge = await Challenge.findById(id)
+    .populate('createdBy', 'fullName email')
+    .populate('communities', 'title')
+    .populate('rewardBadge', 'name icon image category rarity');
+
+  sendSuccess(res, {
+    challenge: updatedChallenge,
+    progress: {
+      progressValue,
+      progressPercent,
+      completed: completionTriggered,
+    },
+  }, t(lang, 'challenge.updated_progress') || 'Challenge progress updated');
 });
 
 /**
@@ -265,6 +362,8 @@ export const getChallengeMemberStatus = asyncHandler(async (req: AuthRequest, re
       ? {
           joinedAt: joinRecord.joinedAt?.toISOString?.() ?? joinRecord.joinedAt,
           leftAt: joinRecord.leftAt?.toISOString?.() ?? joinRecord.leftAt ?? null,
+          progressValue: joinRecord.progressValue ?? 0,
+          progressPercent: joinRecord.progressPercent ?? 0,
         }
       : null,
   }, t(lang, 'challenge.details'));

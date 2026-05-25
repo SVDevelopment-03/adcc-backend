@@ -15,6 +15,8 @@ export interface ICommunityRide extends Document {
   maxAge?: number;
   currentParticipants: number;
   status: 'active' | 'left' | 'banned';
+  publishedNotificationSentAt?: Date | null;
+  reminder24hSentAt?: Date | null;
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -84,6 +86,8 @@ const CommunityRideSchema = new Schema(
       enum: ['active', 'left', 'banned'],
       default: 'active',
     },
+    publishedNotificationSentAt: { type: Date, default: null },
+    reminder24hSentAt: { type: Date, default: null },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'users',

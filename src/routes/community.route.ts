@@ -1,6 +1,7 @@
 import express from 'express';
 import {
   createCommunity,
+  getAvailableCities,
   getAllCommunities,
   getCommunityById,
   updateCommunity,
@@ -35,6 +36,7 @@ const router = express.Router();
 // Authenticated routes
 
 // Public routes
+router.get('/metadata/cities', getAvailableCities);
 router.get('/', authenticate, validate(getCommunitiesQuerySchema), getAllCommunities);
 router.get('/:id', authenticate, getCommunityById);
 

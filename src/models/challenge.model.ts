@@ -25,6 +25,9 @@ export interface IChallenge extends Document {
   status: ChallengeStatus;
   participants: number;
   completions: number;
+  publishedNotificationSentAt?: Date | null;
+  endingSoonNotificationSentAt?: Date | null;
+  completedNotificationSentAt?: Date | null;
   createdBy: mongoose.Types.ObjectId;
   communities?: mongoose.Types.ObjectId[];
   createdAt: Date;
@@ -93,6 +96,9 @@ const ChallengeSchema = new Schema(
       default: 0,
       min: [0, 'Completions cannot be negative'],
     },
+    publishedNotificationSentAt: { type: Date, default: null },
+    endingSoonNotificationSentAt: { type: Date, default: null },
+    completedNotificationSentAt: { type: Date, default: null },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'users',

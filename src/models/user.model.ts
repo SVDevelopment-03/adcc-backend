@@ -24,6 +24,7 @@ export interface IUser extends Document {
   age?: number;
   dob?: Date;
   country?: string;
+  city?: string;
   provider?: string;
   role: 'Admin' | 'Vendor' | 'Member' | 'Guest';
   /** Optional RBAC role; when set, authorization uses RBAC permissions. Legacy `role` remains for app/JWT. */
@@ -126,6 +127,10 @@ const UserSchema = new Schema(
       type: Date,
     },
     country: {
+      type: String,
+      trim: true,
+    },
+    city: {
       type: String,
       trim: true,
     },

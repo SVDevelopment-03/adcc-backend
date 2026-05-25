@@ -14,6 +14,9 @@ export interface IFeedPost extends Document {
     createdAt: Date;
   }[];
   reported: boolean;
+  rejectedReason?: string;
+  approvedNotificationSentAt?: Date | null;
+  rejectedNotificationSentAt?: Date | null;
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -70,6 +73,12 @@ const FeedPostSchema = new Schema(
       default: false,
       index: true,
     },
+    rejectedReason: {
+      type: String,
+      trim: true,
+    },
+    approvedNotificationSentAt: { type: Date, default: null },
+    rejectedNotificationSentAt: { type: Date, default: null },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'users',

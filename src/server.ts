@@ -15,6 +15,9 @@ import { errorHandler } from './middleware/error.middleware';
 import { notFound } from './middleware/not-found.middleware';
 import { languageMiddleware } from './middleware/language.middleware';
 import { requireDbReady } from './middleware/db-ready.middleware';
+import { startEventNotificationScheduler } from './services/event-notification.service';
+import { startChallengeNotificationScheduler } from './services/challenge-notification.service';
+import { startCommunityRideNotificationScheduler } from './services/community-ride-notification.service';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -41,6 +44,23 @@ const corsOptions: cors.CorsOptions = {
     callback(new Error('Not allowed by CORS'));
   },
 };
+
+  const startNotificationSchedulers = () => {
+    startEventNotificationScheduler();
+    startChallengeNotificationScheduler();
+    startCommunityRideNotificationScheduler();
+  };
+
+  const startNotificationSchedulersWhenDbReady = () => {
+    if (mongoose.connection.readyState === 1) {
+      startNotificationSchedulers();
+      return;
+    }
+
+    mongoose.connection.once('connected', () => {
+      startNotificationSchedulers();
+    });
+  };
 
 
 app.use(helmet());
@@ -107,3 +127,4 @@ const startServer = async () => {
 };
 
 startServer();
+startNotificationSchedulersWhenDbReady();
