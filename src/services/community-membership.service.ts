@@ -3,7 +3,7 @@ import Community from '@/models/community.model';
 import User from '@/models/user.model';
 import { AppError } from '@/utils/app-error';
 import { notifyAdminCommunityMember } from '@/services/admin-notification.service';
-import type { ICommunityMembership } from '@/models/communityMembership.model';
+import { notifyCommunityNewMember } from '@/services/community-notification.service';
 
 export class CommunityMembershipService {
   /**
@@ -51,6 +51,10 @@ export class CommunityMembershipService {
             memberName: rejoinUser.fullName?.trim() || 'Member',
             communityId: String(communityId),
           });
+          void notifyCommunityNewMember({
+            communityId: String(communityId),
+            memberName: rejoinUser.fullName?.trim() || 'Member',
+          });
         }
 
         return alreadyMember.populate('userId', 'fullName email');
@@ -78,6 +82,10 @@ export class CommunityMembershipService {
         communityTitle: community.title,
         memberName: newMemberUser.fullName?.trim() || 'Member',
         communityId: String(communityId),
+      });
+      void notifyCommunityNewMember({
+        communityId: String(communityId),
+        memberName: newMemberUser.fullName?.trim() || 'Member',
       });
     }
 
@@ -138,7 +146,7 @@ export class CommunityMembershipService {
     const filter = { communityId: id };
 
     const [members, totalMembers] = await Promise.all([
-      CommunityMembership.find(filter)
+      CommunityMembership.find(filter as any)
         .select('userId role status joinedAt') 
         .populate('userId', 'fullName email')
         .sort({ joinedAt: -1 })
@@ -146,7 +154,7 @@ export class CommunityMembershipService {
         .limit(limit)
         .lean(),
 
-      CommunityMembership.countDocuments(filter),
+      CommunityMembership.countDocuments(filter as any),
     ]);
 
     return {
@@ -165,7 +173,7 @@ export class CommunityMembershipService {
   */
  async getUserCommunities(userId: string) {
 
-  const memberships = await CommunityMembership.find({ userId, status: 'active' }
+  const memberships = await CommunityMembership.find({ userId, status: 'active' } as any
   ).populate('communityId');
 
   if(!memberships) {
@@ -184,14 +192,14 @@ export class CommunityMembershipService {
     const filter = { userId, status: 'active' as ICommunityMembership['status'] };
 
     const [memberships, total] = await Promise.all([
-      CommunityMembership.find(filter)
+      CommunityMembership.find(filter as any)
         .select('communityId joinedAt role')
         .populate('communityId', 'title description image location city memberCount type category slug')
         .sort({ joinedAt: -1 })
         .skip(skip)
         .limit(limit)
         .lean(),
-      CommunityMembership.countDocuments(filter),
+      CommunityMembership.countDocuments(filter as any),
     ]);
 
     const communities = memberships.map((m: any) => ({
@@ -215,7 +223,7 @@ export class CommunityMembershipService {
 * Get banned members of a community
 */ 
 async getBannedMembers(communityId: any) {
-  const bannedMembers = await CommunityMembership.find({ communityId, status: 'banned' })
+  const bannedMembers = await CommunityMembership.find({ communityId, status: 'banned' } as any)
     .populate('userId', 'fullName email');
 
   if(!bannedMembers) {
@@ -228,7 +236,7 @@ async getBannedMembers(communityId: any) {
 * Check if user is member of community
 */
 async isMember(userId: string, communityId: any) {
-  const membership = await CommunityMembership.findOne({ userId, communityId, status: 'active' });
+  const membership = await CommunityMembership.findOne({ userId, communityId, status: 'active' } as any);
   return !!membership;
 }
 

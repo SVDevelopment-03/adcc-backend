@@ -4,6 +4,7 @@ export type StoreItemStatus = 'Pending' | 'Approved' | 'Rejected' | 'Sold' | 'Ar
 
 export interface IStoreItem extends Document {
   title: string;
+  sellerName?: string;
   description: string;
   category: string;
   condition: string;
@@ -34,6 +35,11 @@ const StoreItemSchema = new Schema(
       type: String,
       required: [true, 'Item title is required'],
       trim: true,
+    },
+    sellerName: {
+      type: String,
+      trim: true,
+      default: '',
     },
     description: {
       type: String,

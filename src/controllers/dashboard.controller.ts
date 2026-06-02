@@ -172,8 +172,8 @@ export const getDashboardLanding = asyncHandler(async (req: AuthRequest, res: Re
     tracksRankedByEvents,
   ] = await Promise.all([
     User.countDocuments(),
-    User.countDocuments({ gender: 'Male' }),
-    User.countDocuments({ gender: 'Female' }),
+    User.countDocuments({ gender: { $regex: '^male$', $options: 'i' } }),
+    User.countDocuments({ gender: { $regex: '^female$', $options: 'i' } }),
     User.countDocuments({ isVerified: true }),
     Event.countDocuments({
       eventDate: { $gte: monthStart, $lte: monthEnd },

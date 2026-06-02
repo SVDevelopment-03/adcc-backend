@@ -1482,14 +1482,20 @@ export const getMemberEventStatus = asyncHandler(async (req: AuthRequest, res: R
     throw new AppError(t(lang, "auth.unauthorized"), 401);
   }
 
+  // If userId is not a valid ObjectId (e.g., guest tokens use string ids like 'guest_xxx'),
+  // avoid querying EventResult with an invalid ObjectId which causes a CastError.
+  const isUserObjectId = mongoose.Types.ObjectId.isValid(String(userId));
+
   // Check if event exists
   const event = await Event.findById(eventId);
   if (!event) {
     throw new AppError(t(lang, "event.not_found"), 404);
   }
 
-  // Check user's participation status
-  const eventResult = await EventResult.findOne({ eventId, userId });
+  // Check user's participation status — only query if userId can be cast to ObjectId
+  const eventResult = isUserObjectId
+    ? await EventResult.findOne({ eventId, userId })
+    : null;
 
   let status: "joined" | "not_joined" = "not_joined";
   let participationDetails = null;

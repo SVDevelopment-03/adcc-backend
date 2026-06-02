@@ -60,6 +60,22 @@ const normalizePhotosInput = (value: unknown): string[] => {
   return [];
 };
 
+const enrichSellerFields = (item: any) => {
+  const createdBy = item?.createdBy;
+  const createdByName =
+    createdBy && typeof createdBy === 'object'
+      ? String(createdBy.fullName || createdBy.name || '').trim()
+      : '';
+  const sellerName =
+    createdByName || String(item?.sellerName || '').trim() || 'Unknown Seller';
+
+  return {
+    ...item,
+    sellerName,
+    postedBy: sellerName,
+  };
+};
+
 const attachStoreItemImages = async (req: AuthRequest, data: Record<string, any>) => {
   const files = req.files as {
     [fieldname: string]: Express.Multer.File[];
@@ -132,21 +148,29 @@ export const createStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
     throw new AppError(t(lang, 'store.photos_required'), 400);
   }
 
+  const seller = await User.findById(userId).select('fullName').lean();
+  const sellerName = seller?.fullName?.trim() || 'Unknown Seller';
+
   const item = await StoreItem.create({
     ...data,
     status: 'Pending',
     isFeatured: false,
     createdBy: userId,
+    sellerName,
   });
 
-  const seller = await User.findById(userId).select('fullName').lean();
   void notifyAdminStoreItemPending({
     itemTitle: item.title,
     itemId: item._id.toString(),
-    sellerName: seller?.fullName?.trim() || 'Seller',
+    sellerName,
   });
 
-  sendSuccess(res, item, t(lang, 'store.created'), 201);
+  sendSuccess(
+    res,
+    enrichSellerFields(item.toObject ? item.toObject() : item),
+    t(lang, 'store.created'),
+    201
+  );
 });
 
 /**
@@ -191,7 +215,7 @@ export const getStoreItems = asyncHandler(async (req: Request, res: Response) =>
   sendSuccess(
     res,
     {
-      items,
+      items: items.map(enrichSellerFields),
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -251,7 +275,7 @@ export const getAdminStoreItems = asyncHandler(async (req: AuthRequest, res: Res
   sendSuccess(
     res,
     {
-      items,
+      items: items.map(enrichSellerFields),
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -295,7 +319,7 @@ export const getMyStoreItems = asyncHandler(async (req: AuthRequest, res: Respon
   sendSuccess(
     res,
     {
-      items,
+      items: items.map(enrichSellerFields),
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -327,7 +351,7 @@ export const getStoreItemById = asyncHandler(async (req: AuthRequest, res: Respo
     throw new AppError(t(lang, 'store.not_found'), 404);
   }
 
-  sendSuccess(res, item, t(lang, 'store.details'));
+  sendSuccess(res, enrichSellerFields(item), t(lang, 'store.details'));
 });
 
 /**
@@ -373,7 +397,11 @@ export const updateStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
     .populate('createdBy', 'fullName profileImage')
     .lean();
 
-  sendSuccess(res, updated, t(lang, 'store.updated'));
+  sendSuccess(
+    res,
+    updated ? enrichSellerFields(updated) : updated,
+    t(lang, 'store.updated')
+  );
 });
 
 /**
@@ -396,7 +424,11 @@ export const archiveStoreItem = asyncHandler(async (req: AuthRequest, res: Respo
   item.isFeatured = false;
   await item.save();
 
-  sendSuccess(res, item, t(lang, 'store.archived'));
+  sendSuccess(
+    res,
+    enrichSellerFields(item.toObject ? item.toObject() : item),
+    t(lang, 'store.archived')
+  );
 });
 
 /**

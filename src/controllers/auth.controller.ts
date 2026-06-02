@@ -8,6 +8,13 @@ import Community from '@/models/community.model';
 import FeedPost from '@/models/feed-post.model';
 import CommunityPost from '@/models/community-post.model';
 import Event from '@/models/event.model';
+import Track from '@/models/track.model';
+import Challenge from '@/models/challenge.model';
+import ChallengeJoin from '@/models/challengeJoin.model';
+import StoreItem from '@/models/store-item.model';
+import CommunityRide from '@/models/community-ride.model';
+import Notification from '@/models/notification.model';
+import AdminNotification from '@/models/admin-notification.model';
 import { verifyFirebaseToken } from '@/services/firebase.service';
 import { communityMembershipService } from '@/services';
 import {
@@ -195,6 +202,7 @@ export const registerUser = asyncHandler(
       age,
       dob,
       country,
+      city,
       provider,
       fcmToken,
       userAgent,
@@ -210,6 +218,7 @@ export const registerUser = asyncHandler(
       age?: number;
       dob: Date;
       country?: string;
+      city?: string;
       provider?: string;
       fcmToken?: string;
       userAgent?: string;
@@ -219,10 +228,14 @@ export const registerUser = asyncHandler(
       osVersion?: string;
       appVersion?: string;
       appBuild?: string;
+      email?: string;
     };
     const uid = req.user?.uid; // From JWT (temporary token)
     const phone = req.user?.phone; // Optional phone from JWT (for phone auth)
     const email = req.user?.email; // Optional email from JWT (for email/password auth)
+    const emailFromBody = (req.body as any).email
+      ? (req.body as any).email.toString().toLowerCase().trim()
+      : undefined;
 
     if (!uid) {
       throw new AppError(t(lang, 'auth.firebase_uid_required'), 400);
@@ -234,16 +247,25 @@ export const registerUser = asyncHandler(
       throw new AppError(t(lang, 'auth.already_registered'), 400);
     }
 
+    // If email provided in body, ensure it's not already taken
+    if (emailFromBody) {
+      const byEmail = await User.findOne({ email: emailFromBody });
+      if (byEmail) {
+        throw new AppError('Email already in use', 400);
+      }
+    }
+
     // Create user with Firebase UID
     const user = await User.create({
       fullName,
       firebaseUid: uid,
       phone: phone || undefined,
-      email: email || undefined,
+      email: emailFromBody || email || undefined,
       gender,
       age,
       dob,
       country,
+      city,
       provider,
       isVerified: true,
     });
@@ -294,6 +316,7 @@ export const registerUser = asyncHandler(
           age: user.age,
           dob: user.dob,
           country: user.country,
+          city: user.city,
           provider: user.provider,
           role: user.role,
           isVerified: user.isVerified,
@@ -474,6 +497,9 @@ export const deleteMyAccount = asyncHandler(
     // delete user's feed posts
     await FeedPost.deleteMany({ createdBy: userId });
 
+    // remove user's likes and comments from feed posts
+    await FeedPost.updateMany({}, { $pull: { likes: userId, comments: { user: userId } } });
+
     // delete user's community posts
     await CommunityPost.deleteMany({ createdBy: userId });
 
@@ -482,6 +508,25 @@ export const deleteMyAccount = asyncHandler(
 
     // delete user's created communities
     await Community.deleteMany({ createdBy: userId });
+
+    // delete tracks created by user
+    await Track.deleteMany({ createdBy: userId });
+
+    // delete challenges created by user and their joins
+    await Challenge.deleteMany({ createdBy: userId });
+    await ChallengeJoin.deleteMany({ userId });
+
+    // delete community rides created by user
+    await CommunityRide.deleteMany({ createdBy: userId });
+
+    // delete store items created by user; unset approvals/rejections made by this user
+    await StoreItem.deleteMany({ createdBy: userId });
+    await StoreItem.updateMany({ approvedBy: userId }, { $unset: { approvedBy: '' } });
+    await StoreItem.updateMany({ rejectedBy: userId }, { $unset: { rejectedBy: '' } });
+
+    // delete notifications for user and remove read references from admin notifications
+    await Notification.deleteMany({ userId });
+    await AdminNotification.updateMany({}, { $pull: { readByUserIds: userId } });
 
     await User.findByIdAndDelete(userId);
 
@@ -512,6 +557,55 @@ export const deleteAccount = asyncHandler(async (req: AuthRequest, res: Response
   }
 
   // Delete the user record from the database
+  // Perform cascade cleanup similar to deleteMyAccount
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError(t(lang, 'auth.user_not_found'), 404);
+  }
+
+  // delete event participations
+  await EventResult.deleteMany({ userId });
+
+  // remove user from all community members arrays
+  await Community.updateMany({ members: userId }, { $pull: { members: userId } });
+
+  // delete community memberships
+  await CommunityMembership.deleteMany({ userId });
+
+  // delete user's feed posts
+  await FeedPost.deleteMany({ createdBy: userId });
+
+  // remove user's likes and comments from feed posts
+  await FeedPost.updateMany({}, { $pull: { likes: userId, comments: { user: userId } } });
+
+  // delete user's community posts
+  await CommunityPost.deleteMany({ createdBy: userId });
+
+  // delete user's created events
+  await Event.deleteMany({ createdBy: userId });
+
+  // delete user's created communities
+  await Community.deleteMany({ createdBy: userId });
+
+  // delete tracks created by user
+  await Track.deleteMany({ createdBy: userId });
+
+  // delete challenges created by user and their joins
+  await Challenge.deleteMany({ createdBy: userId });
+  await ChallengeJoin.deleteMany({ userId });
+
+  // delete community rides created by user
+  await CommunityRide.deleteMany({ createdBy: userId });
+
+  // delete store items created by user; unset approvals/rejections made by this user
+  await StoreItem.deleteMany({ createdBy: userId });
+  await StoreItem.updateMany({ approvedBy: userId }, { $unset: { approvedBy: '' } });
+  await StoreItem.updateMany({ rejectedBy: userId }, { $unset: { rejectedBy: '' } });
+
+  // delete notifications for user and remove read references from admin notifications
+  await Notification.deleteMany({ userId });
+  await AdminNotification.updateMany({}, { $pull: { readByUserIds: userId } });
+
   await User.findByIdAndDelete(userId);
 
   sendSuccess(res, null, t(lang, 'auth.delete_success'));
@@ -1109,13 +1203,28 @@ export const updateMyProfile = asyncHandler(
       throw new AppError(t(lang, 'guest.access_denied'), 403);
     }
     
-    const { fullName, gender, age, dob, country } = req.body;
+    const { fullName, email, gender, age, dob, country, city, profileImage } = req.body;
     const updates: Record<string, unknown> = {};
     if (fullName !== undefined) updates.fullName = fullName;
+    if (email !== undefined) {
+      const normalizedEmail = String(email).trim().toLowerCase();
+      const existingUserWithEmail = await User.findOne({
+        email: normalizedEmail,
+        _id: { $ne: userId },
+      }).select('_id');
+
+      if (existingUserWithEmail) {
+        throw new AppError('Email already in use', 400);
+      }
+
+      updates.email = normalizedEmail;
+    }
     if (gender !== undefined) updates.gender = gender;
     if (age !== undefined) updates.age = age;
     if (dob !== undefined) updates.dob = dob;
     if (country !== undefined) updates.country = country;
+    if (city !== undefined) updates.city = city;
+    if (profileImage !== undefined) updates.profileImage = profileImage;
 
     const user = await User.findByIdAndUpdate(
       userId,
