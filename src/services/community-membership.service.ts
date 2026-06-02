@@ -1,4 +1,4 @@
-import CommunityMembership from '@/models/communityMembership.model';
+import CommunityMembership, { ICommunityMembership } from '@/models/communityMembership.model';
 import Community from '@/models/community.model';
 import User from '@/models/user.model';
 import { AppError } from '@/utils/app-error';
