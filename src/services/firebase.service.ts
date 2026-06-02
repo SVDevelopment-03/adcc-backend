@@ -78,19 +78,23 @@ export const verifyFirebaseToken = async (
   // Trim whitespace/newlines that sometimes appear when tokens are pasted
   const trimmedToken = idToken.trim();
 
-  // Log a short preview and parts count to help debug malformed tokens (do not log full token)
-  try {
-    const preview = trimmedToken.slice(0, 20);
-    console.debug(`verifyFirebaseToken: received idToken length=${trimmedToken.length}, preview=${preview}`);
-  } catch (e) {
-    // ignore preview logging failures
-  }
+  // Log token details for debugging
+  const preview = trimmedToken.slice(0, 50);
+  const tokenLength = trimmedToken.length;
+  const tokenParts = trimmedToken.split('.');
+  const partCount = tokenParts.length;
+  
+  console.debug(`[FIREBASE TOKEN] length=${tokenLength}, parts=${partCount}, preview=${preview}...`);
 
   // Check if token looks like a JWT (has 3 parts separated by dots)
-  const tokenParts = trimmedToken.split('.');
-  console.debug(`verifyFirebaseToken: tokenParts=${tokenParts.length}`);
-  if (tokenParts.length !== 3) {
-    throw new AppError(`Invalid Firebase token format. Expected JWT with 3 parts but got ${tokenParts.length}.`, 400);
+  if (partCount !== 3) {
+    const detailedParts = tokenParts.map((p, i) => `[${i}]=${p.length}chars`).join(', ');
+    console.error(`[FIREBASE TOKEN ERROR] Expected 3 parts, got ${partCount}. Parts: ${detailedParts}`);
+    throw new AppError(
+      `Invalid Firebase token format. Expected JWT with 3 parts but got ${partCount} parts. ` +
+      `Token length: ${tokenLength}. Ensure the token from getIdToken() is a valid string.`,
+      400
+    );
   }
 
   try {
