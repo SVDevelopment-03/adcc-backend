@@ -75,8 +75,12 @@ export const verifyFirebaseToken = async (
     throw new AppError('Firebase ID token is required', 400);
   }
 
-  // Trim whitespace/newlines that sometimes appear when tokens are pasted
-  const trimmedToken = idToken.trim();
+  // Aggressive whitespace cleanup for Firebase ID tokens
+  const trimmedToken = idToken
+    .trim()
+    .replace(/\r\n/g, '') // Remove Windows line endings
+    .replace(/\n/g, '')   // Remove Unix line endings
+    .replace(/\s+/g, ''); // Remove all whitespace
 
   // Log token details for debugging
   const preview = trimmedToken.slice(0, 50);
@@ -90,9 +94,14 @@ export const verifyFirebaseToken = async (
   if (partCount !== 3) {
     const detailedParts = tokenParts.map((p, i) => `[${i}]=${p.length}chars`).join(', ');
     console.error(`[FIREBASE TOKEN ERROR] Expected 3 parts, got ${partCount}. Parts: ${detailedParts}`);
+    
+    // Provide actionable error message
+    const errorMsg = partCount > 3 
+      ? `Token contains extra characters or formatting issues (${partCount} parts found). Ensure token is extracted cleanly from getIdToken().`
+      : `Token appears incomplete or corrupted (${partCount} parts found instead of 3). Try refreshing the Firebase token.`;
+    
     throw new AppError(
-      `Invalid Firebase token format. Expected JWT with 3 parts but got ${partCount} parts. ` +
-      `Token length: ${tokenLength}. Ensure the token from getIdToken() is a valid string.`,
+      `Invalid Firebase ID token format: ${errorMsg}`,
       400
     );
   }
@@ -130,7 +139,11 @@ export const verifyFirebaseToken = async (
           401
         );
       }
-      throw new AppError('Invalid Firebase token format', 401);
+      throw new AppError(
+        'Invalid Firebase token format or signature. Ensure you are using the correct Firebase project. ' +
+        'Error: ' + (error.message || 'Unknown format error'),
+        401
+      );
     }
     if (error.code === 'auth/id-token-revoked') {
       throw new AppError('Firebase token has been revoked', 401);
@@ -140,7 +153,8 @@ export const verifyFirebaseToken = async (
     }
     
     throw new AppError(
-      `Invalid or expired Firebase token: ${error.message || error.code || 'Unknown error'}`,
+      `Failed to verify Firebase token: ${error.message || error.code || 'Unknown error'}. ` +
+      `Token format is valid but verification failed. Check Firebase configuration.`,
       401
     );
   }
