@@ -73,7 +73,14 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 
 app.get('/health', (_req, res) => {
-  res.json({ status: 'OK', timestamp: new Date().toISOString() });
+  res.json({
+    status: 'OK',
+    timestamp: new Date().toISOString(),
+    version: process.env.npm_package_version || 'unknown',
+    commit: process.env.RENDER_GIT_COMMIT || process.env.COMMIT_SHA || 'unknown',
+    branch: process.env.RENDER_GIT_BRANCH || process.env.BRANCH_NAME || 'unknown',
+    service: process.env.RENDER_SERVICE_NAME || 'local',
+  });
 });
 
 // Routes with explicit language short code: /v1/en/* or /v1/ar/*
