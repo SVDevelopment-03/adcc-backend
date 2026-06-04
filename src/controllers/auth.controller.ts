@@ -70,17 +70,6 @@ export const verifyFirebaseAuth = asyncHandler(
       appBuild?: string;
     };
 
-    // Log incoming token details for debugging (preview only)
-    try {
-      const tokenType = typeof idToken;
-      const tokenStr = String(idToken || '');
-      const tokenPreview = tokenStr.slice(0, 60);
-      const tokenParts = tokenStr.split('.').length;
-      console.log('[INCOMING IDTOKEN]', { tokenType, length: tokenStr.length, parts: tokenParts, preview: tokenPreview });
-    } catch (err) {
-      console.error('Failed to log incoming idToken', err);
-    }
-
     // Verify Firebase token - get UID, phone (for phone auth), email (for email/password auth)
     const { uid, phone, email } = await verifyFirebaseToken(idToken);
 
