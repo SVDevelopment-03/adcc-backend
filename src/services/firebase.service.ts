@@ -28,6 +28,7 @@ const initializeFirebase = () => {
         universeDomain: process.env.FIREBASE_UNIVERSE_DOMAIN || 'googleapis.com',
       } as admin.ServiceAccount;
     }
+    
     // Option 2: Use JSON string environment variable (alternative for cloud deployment)
     else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
       try {
