@@ -26,6 +26,15 @@ const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
   .map((origin) => origin.trim())
   .filter(Boolean);
+const allowAllOrigins = process.env.ALLOW_ALL_ORIGINS === 'true';
+const mobileOrigins = new Set([
+  'capacitor://localhost',
+  'ionic://localhost',
+  'http://localhost',
+  'https://localhost',
+  'http://127.0.0.1',
+  'https://127.0.0.1',
+]);
 
 const corsOptions: cors.CorsOptions = {
   credentials: true,
@@ -36,7 +45,7 @@ const corsOptions: cors.CorsOptions = {
       return;
     }
 
-    if (allowedOrigins.includes(origin)) {
+    if (allowAllOrigins || allowedOrigins.includes(origin) || mobileOrigins.has(origin)) {
       callback(null, true);
       return;
     }
