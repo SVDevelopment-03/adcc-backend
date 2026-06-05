@@ -22,8 +22,8 @@ import { uploadChallengeImageIfMultipart, requireParsedMultipartBody } from '@/m
 
 const router = express.Router();
 
-router.get('/', authenticate, validate(getChallengesQuerySchema), getAllChallenges);
-router.get('/:id', authenticate, getChallengeById);
+router.get('/', validate(getChallengesQuerySchema), getAllChallenges);
+router.get('/:id', getChallengeById);
 router.get('/:id/member-status', authenticate, getChallengeMemberStatus);
 
 // Join a challenge (increment participants)

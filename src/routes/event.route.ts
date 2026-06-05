@@ -42,7 +42,7 @@ const router = express.Router();
 
 // Public routes – guest-accessible (no auth required)
 
-router.get('/', authenticate, validate(getEventsQuerySchema), getAllEvents);
+router.get('/', validate(getEventsQuerySchema), getAllEvents);
 router.get(
   '/completed-stats',
   authenticate,

@@ -128,12 +128,20 @@ export const createTrack = asyncHandler(async (req: AuthRequest, res: Response) 
  * */
     export const getAllTracks = asyncHandler(async (req: Request, res: Response) => {
       const lang = ((req as any).lang || 'en') as SupportedLanguage;
-    const { status, city, type, page = 1, limit = 10 } = req.query;
+    const { status, city, type, difficulty, visibility, publicOnly, page = 1, limit = 10 } = req.query;
     
     const query: any = {};
     if (status) query.status = status;
-    if (city && ['Abu Dhabi', 'Dubai', 'Al Ain', 'Sharjah'].includes(city as string)) query.city = city;
-    if (type && ['loop', 'road', 'mixed', 'out-and-back', 'point-to-point'].includes(type as string)) query.type = type;
+    if (city) query.city = city;
+    if (type && ['circuit', 'road', 'costal', 'coastal', 'desert', 'urban', 'loop', 'mixed', 'out-and-back', 'point-to-point'].includes(type as string)) {
+      query.trackType = type === 'coastal' ? 'costal' : type;
+    }
+    if (difficulty) query.difficulty = difficulty;
+    if (visibility) query.visibility = visibility;
+    if (publicOnly === 'true') {
+      query.status = { $nin: ['archived', 'disabled'] };
+      query.visibility = { $ne: 'private' };
+    }
     // Pagination
     const pageNum = Number(page);
     const limitNum = Number(limit);
@@ -236,7 +244,23 @@ export const createTrack = asyncHandler(async (req: AuthRequest, res: Response) 
 
     // Get total count
     const total = await Track.countDocuments(query);
-    sendSuccess(res, { tracks: tracksWithCounts, total, page: pageNum, limit: limitNum }, t(lang, "track.allTracks"), 200);
+    sendSuccess(
+      res,
+      {
+        tracks: tracksWithCounts,
+        total,
+        page: pageNum,
+        limit: limitNum,
+        pagination: {
+          page: pageNum,
+          limit: limitNum,
+          total,
+          pages: Math.ceil(total / limitNum) || 1,
+        },
+      },
+      t(lang, "track.allTracks"),
+      200
+    );
 });
 
 /**
@@ -744,4 +768,3 @@ export const addTrackGalleryImages = asyncHandler(async (req: AuthRequest, res: 
     201
   );
 });
-

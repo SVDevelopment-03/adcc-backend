@@ -19,7 +19,8 @@ import rbacRoutes from './rbac.route';
 import dashboardRoutes from './dashboard.route';
 import adminNotificationRoutes from './admin-notification.route';
 import appConfigRoutes from './app-config.route';
-
+import newsletterSubscriptionRoutes from './newsletter-subscription.route';
+import publicStatsRoutes from './public-stats.route';
 const router = Router();
 
 // Register all routes
@@ -44,6 +45,8 @@ router.use('/rbac', rbacRoutes);
 router.use('/dashboard', dashboardRoutes);
 router.use('/admin-notifications', adminNotificationRoutes);
 router.use('/app-config', appConfigRoutes);
+router.use('/newsletter-subscriptions', newsletterSubscriptionRoutes);
+router.use('/public', publicStatsRoutes);
 
 // Add more routes here as you create them
 // router.use('/users', userRoutes);

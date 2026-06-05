@@ -187,7 +187,23 @@ export const updateEventSchema = z
   .strip();
 
 export const getEventsQuerySchema = z.object({
-  status: z.enum(['Draft', 'Open', 'Full', 'Closed', 'Disabled', 'Completed', 'Archived']).optional(),
+  status: z
+    .enum([
+      'Draft',
+      'Open',
+      'Full',
+      'Closed',
+      'Disabled',
+      'Completed',
+      'Archived',
+      'Upcoming',
+      'Ongoing',
+    ])
+    .optional(),
+  city: z.string().trim().min(1).optional(),
+  category: z.string().trim().min(1).optional(),
+  level: z.string().trim().min(1).optional(),
+  search: z.string().trim().min(1).optional(),
   page: z.string().regex(/^\d+$/).transform(Number).optional(),
   limit: z.string().regex(/^\d+$/).transform(Number).optional(),
 });

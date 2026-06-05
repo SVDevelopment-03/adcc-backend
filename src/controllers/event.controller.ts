@@ -458,16 +458,52 @@ export const createEvent = asyncHandler(async (req: AuthRequest, res: Response) 
  */
 export const getAllEvents = asyncHandler(async (req: Request, res: Response) => {
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
-  const { status, page = 1, limit = 10 } = req.query;
+  const { status, city, category, level, search, page = 1, limit = 10 } = req.query;
+  const todayStart = dayjs().startOf('day').toDate();
+  const todayEnd = dayjs().endOf('day').toDate();
 
   // Build filter object
   const filter: any = {};
 
-  if (status) filter.status = status;
+  if (status === 'Upcoming') {
+    filter.status = { $in: ['Open', 'Full'] };
+    filter.eventDate = { $gte: todayStart };
+  } else if (status === 'Ongoing') {
+    filter.status = { $in: ['Open', 'Full'] };
+    filter.eventDate = { $gte: todayStart, $lte: todayEnd };
+  } else if (status) {
+    filter.status = status;
+  }
 
   // Past events should not appear as "open" or "full" in listings
   if (status === 'Open' || status === 'Full') {
-    filter.eventDate = { $gte: dayjs().startOf('day').toDate() };
+    filter.eventDate = { $gte: todayStart };
+  }
+
+  if (typeof city === 'string') {
+    filter.city = new RegExp(`^${escapeRegex(city)}$`, 'i');
+  }
+
+  if (typeof category === 'string') {
+    const categoryAliases: Record<string, string> = {
+      Community: 'Community Ride',
+      Challenge: 'Training & Clinics',
+      Leisure: 'Awareness Rides',
+    };
+    filter.category = new RegExp(`^${escapeRegex(categoryAliases[category] || category)}$`, 'i');
+  }
+
+  if (typeof level === 'string') {
+    filter.$or = [
+      { difficulty: new RegExp(`^${escapeRegex(level)}$`, 'i') },
+      { 'eligibility.experienceLevel': new RegExp(`^${escapeRegex(level)}$`, 'i') },
+    ];
+  }
+
+  if (typeof search === 'string') {
+    const searchRegex = new RegExp(escapeRegex(search), 'i');
+    const searchFilter = [{ title: searchRegex }, { description: searchRegex }, { address: searchRegex }];
+    filter.$and = [...(filter.$and || []), { $or: searchFilter }];
   }
 
   // Pagination
@@ -506,9 +542,13 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
         pages: Math.ceil(total / limitNum),
       },
     },
-    t(lang, "event.allEvents"), 201
+    t(lang, "event.allEvents"), 200
   );
 });
+
+function escapeRegex(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
 
 /**
  * Get completed event analytics for graphing in frontend.
