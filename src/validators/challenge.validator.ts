@@ -152,6 +152,7 @@ export const getChallengesQuerySchema = z.object({
   type: z.enum(['Distance', 'Frequency', 'Duration', 'Social', 'Event']).optional(),
   featured: z.string().transform((val) => val === 'true').optional(),
   communityId: optionalObjectIdSchema,
+  search: z.string().trim().min(1).optional(),
   page: z.string().regex(/^\d+$/).transform(Number).optional(),
   limit: z.string().regex(/^\d+$/).transform(Number).optional(),
 });

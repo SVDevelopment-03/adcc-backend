@@ -458,7 +458,7 @@ export const createEvent = asyncHandler(async (req: AuthRequest, res: Response) 
  */
 export const getAllEvents = asyncHandler(async (req: Request, res: Response) => {
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
-  const { status, city, category, level, search, page = 1, limit = 10 } = req.query;
+  const { status, city, category, level, communityId, search, page = 1, limit = 10 } = req.query;
   const todayStart = dayjs().startOf('day').toDate();
   const todayEnd = dayjs().endOf('day').toDate();
 
@@ -498,6 +498,10 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
       { difficulty: new RegExp(`^${escapeRegex(level)}$`, 'i') },
       { 'eligibility.experienceLevel': new RegExp(`^${escapeRegex(level)}$`, 'i') },
     ];
+  }
+
+  if (typeof communityId === 'string' && mongoose.Types.ObjectId.isValid(communityId)) {
+    filter.communityId = communityId;
   }
 
   if (typeof search === 'string') {

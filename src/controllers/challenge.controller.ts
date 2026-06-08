@@ -59,13 +59,21 @@ export const createChallenge = asyncHandler(async (req: AuthRequest, res: Respon
  */
 export const getAllChallenges = asyncHandler(async (req: Request, res: Response) => {
   const lang = ((req as any).lang || 'en') as any;
-  const { status, type, featured, communityId, page = 1, limit = 10 } = req.query as any;
+  const { status, type, featured, communityId, search, page = 1, limit = 10 } = req.query as any;
 
   const filter: any = {};
   if (status) filter.status = status;
   if (type) filter.type = type;
   if (typeof featured === 'boolean') filter.featured = featured;
   if (communityId) filter.communities = communityId;
+  if (search && typeof search === 'string') {
+    const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    filter.$or = [
+      { title: searchRegex },
+      { description: searchRegex },
+      { unit: searchRegex },
+    ];
+  }
 
   const pageNum = Math.max(1, Number(page) || 1);
   const limitNum = Math.min(100, Math.max(1, Number(limit) || 10));

@@ -203,6 +203,12 @@ export const getEventsQuerySchema = z.object({
   city: z.string().trim().min(1).optional(),
   category: z.string().trim().min(1).optional(),
   level: z.string().trim().min(1).optional(),
+  communityId: z
+    .string()
+    .refine((val) => mongoose.Types.ObjectId.isValid(val), {
+      message: 'Invalid MongoDB ObjectId',
+    })
+    .optional(),
   search: z.string().trim().min(1).optional(),
   page: z.string().regex(/^\d+$/).transform(Number).optional(),
   limit: z.string().regex(/^\d+$/).transform(Number).optional(),

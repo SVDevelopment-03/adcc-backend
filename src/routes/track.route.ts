@@ -43,9 +43,9 @@ const normalizeTrackFormData = (req: express.Request, _res: express.Response, ne
   next();
 };
 
-router.get('/', authenticate, getAllTracks);
-router.get('/:trackId', authenticate, getTrackById);
-router.get('/:trackId/events', authenticate, getTrackEvents);
+router.get('/', getAllTracks);
+router.get('/:trackId', getTrackById);
+router.get('/:trackId/events', getTrackEvents);
 router.get('/:trackId/events/results', authenticate, getTrackResults);  // Track-related event results
 router.get('/:trackId/events/:eventId/communities/:Id/photos', authenticate, trackCommunityPhotos); // Track-related event results with photos for a community
 router.get('/:trackId/communities/results', authenticate, trackCommunityResults); // Track-related event results with photos for a community

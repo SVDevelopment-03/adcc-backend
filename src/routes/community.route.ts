@@ -37,8 +37,8 @@ const router = express.Router();
 
 // Public routes
 router.get('/metadata/cities', getAvailableCities);
-router.get('/', authenticate, validate(getCommunitiesQuerySchema), getAllCommunities);
-router.get('/:id', authenticate, getCommunityById);
+router.get('/', validate(getCommunitiesQuerySchema), getAllCommunities);
+router.get('/:id', getCommunityById);
 
 
 // Authenticated routes
@@ -78,4 +78,3 @@ router.patch('/:id/feature', authenticate, requireStaffPermission('manage_commun
 // router.patch('/:id/members/:userId/ban', authenticate, banMember);
 
 export default router;
-

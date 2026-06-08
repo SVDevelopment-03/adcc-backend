@@ -128,7 +128,7 @@ export const createTrack = asyncHandler(async (req: AuthRequest, res: Response) 
  * */
     export const getAllTracks = asyncHandler(async (req: Request, res: Response) => {
       const lang = ((req as any).lang || 'en') as SupportedLanguage;
-    const { status, city, type, difficulty, visibility, publicOnly, page = 1, limit = 10 } = req.query;
+    const { status, city, type, difficulty, visibility, publicOnly, search, page = 1, limit = 10 } = req.query;
     
     const query: any = {};
     if (status) query.status = status;
@@ -141,6 +141,15 @@ export const createTrack = asyncHandler(async (req: AuthRequest, res: Response) 
     if (publicOnly === 'true') {
       query.status = { $nin: ['archived', 'disabled'] };
       query.visibility = { $ne: 'private' };
+    }
+    if (search && typeof search === 'string') {
+      const searchRegex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+      query.$or = [
+        { title: searchRegex },
+        { titleAr: searchRegex },
+        { description: searchRegex },
+        { slug: searchRegex },
+      ];
     }
     // Pagination
     const pageNum = Number(page);
