@@ -21,7 +21,7 @@ import {
   rejectStoreItemSchema,
   featureStoreItemSchema,
 } from '@/validators/store.validator';
-import { authenticate } from '@/middleware/auth.middleware';
+import { authenticate, optionalAuthenticate } from '@/middleware/auth.middleware';
 import { authenticatedOnly, isAdmin } from '@/middleware/role.middleware';
 import { requireParsedMultipartBody, uploadStoreItemImagesIfMultipart } from '@/middleware/upload.middleware';
 
@@ -79,9 +79,9 @@ const normalizeStoreItemFormData = (req: express.Request, _res: express.Response
   next();
 };
 
-// Public (guest-accessible with token)
-router.get('/items', authenticate, validate(storeItemQuerySchema), getStoreItems);
-router.get('/items/:id', authenticate, getStoreItemById);
+// Public (guest-accessible, with optional user context for owner/admin access)
+router.get('/items', optionalAuthenticate, validate(storeItemQuerySchema), getStoreItems);
+router.get('/items/:id', optionalAuthenticate, getStoreItemById);
 
 // Member/Staff
 router.post(
