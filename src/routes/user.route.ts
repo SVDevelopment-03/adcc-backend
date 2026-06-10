@@ -9,6 +9,7 @@ import {
   registerFcmToken,
   unregisterFcmToken,
   updateUserVerified,
+  updateUser,
 } from '@/controllers/user.controller';
 import { getAllUsers, getUserById, deleteUser } from '@/controllers/user.controller';
 import {
@@ -35,6 +36,7 @@ router.get(
   getUserRegistrationStats
 );
 router.get('/:userId', authenticate, getUserById);
+router.patch('/:userId', authenticate, requireStaffPermission('manage_users'), updateUser);
 router.delete('/:userId', authenticate, requireStaffPermission('manage_users'), deleteUser);
 router.patch(
   '/:userId/verified',

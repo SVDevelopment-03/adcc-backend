@@ -55,9 +55,13 @@
     "already_exists": "User already exists",
     "retrieved": "User retrieved successfully",
     "created": "User created successfully",
+    "updated": "User updated successfully",
     "deleted": "User deleted successfully",
     "list_retrieved": "Users retrieved successfully",
     "verified_updated": "User verification status updated successfully"
+  },
+  "common": {
+    "bad_request": "Bad request"
   },
   "dashboard": {
     "landing_retrieved": "Dashboard landing data retrieved successfully"

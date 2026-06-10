@@ -155,6 +155,50 @@ export const deleteUser = asyncHandler(async (req: AuthRequest, res: Response) =
 });
 
 /**
+ * Update user profile fields (fullName, phone, gender, profileImage, role)
+ * PATCH /user/:userId
+ * Admin only.
+ */
+export const updateUser = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as AuthRequest & { lang?: string }).lang || 'en') as string;
+  const userId =
+    typeof req.params.userId === 'string' ? req.params.userId : req.params.userId?.[0] ?? '';
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    throw new AppError(t(lang, 'user.not_found'), 404);
+  }
+
+  const { fullName, phone, gender, profileImage, role } = req.body as {
+    fullName?: string;
+    phone?: string;
+    gender?: 'Male' | 'Female';
+    profileImage?: string;
+    role?: 'Admin' | 'Vendor' | 'Member';
+  };
+
+  const update: Record<string, unknown> = {};
+  if (fullName !== undefined) update.fullName = fullName.trim();
+  if (phone !== undefined) update.phone = phone.trim() || undefined;
+  if (gender !== undefined) update.gender = gender;
+  if (profileImage !== undefined) update.profileImage = profileImage;
+  if (role !== undefined && ['Admin', 'Vendor', 'Member'].includes(role)) update.role = role;
+
+  if (Object.keys(update).length === 0) {
+    throw new AppError(t(lang, 'common.bad_request'), 400);
+  }
+
+  const user = await User.findByIdAndUpdate(userId, update, { new: true, runValidators: true })
+    .select(USER_PROJECTION)
+    .lean();
+
+  if (!user) {
+    throw new AppError(t(lang, 'user.not_found'), 404);
+  }
+
+  sendSuccess(res, user, t(lang, 'user.updated'), 200);
+});
+
+/**
  * Update user's verification status
  * PATCH /user/:userId/verified
  * Admin only.

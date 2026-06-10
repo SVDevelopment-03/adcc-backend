@@ -14,6 +14,7 @@ import {
   markParticipantNoShow,
   removeEventParticipant,
   exportEventResults,
+  adminUpdateParticipantResult,
   checkInAllRegisteredParticipants,
   markAllParticipantsNoShow,
   addToCalendar,
@@ -75,6 +76,7 @@ router.delete(
 );
 router.patch('/:eventId/participants/check-in-all', authenticate, requireStaffPermission('manage_events'), checkInAllRegisteredParticipants);
 router.patch('/:eventId/participants/no-show-all', authenticate, requireStaffPermission('manage_events'), markAllParticipantsNoShow);
+router.patch('/:eventId/participants/:userId/result', authenticate, requireStaffPermission('manage_events'), adminUpdateParticipantResult);
 router.patch('/:eventId/participants/:userId/check-in', authenticate, requireStaffPermission('manage_events'), markParticipantCheckedIn);
 router.patch('/:eventId/participants/:userId/no-show', authenticate, requireStaffPermission('manage_events'), markParticipantNoShow);
 router.delete('/:eventId/participants/:userId', authenticate, requireStaffPermission('manage_events'), removeEventParticipant);

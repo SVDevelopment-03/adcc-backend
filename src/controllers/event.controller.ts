@@ -1108,6 +1108,39 @@ export const markParticipantCheckedIn = asyncHandler(async (req: AuthRequest, re
 });
 
 /**
+ * Admin: update rank / time for a single participant result
+ * PATCH /v1/events/:eventId/participants/:userId/result
+ * Staff only
+ */
+export const adminUpdateParticipantResult = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as SupportedLanguage;
+  const eventId = getRouteParam(req.params.eventId);
+  const userId = getRouteParam(req.params.userId);
+
+  await ensureEventExists(eventId, lang);
+
+  const eventResult = await EventResult.findOne({ eventId, userId });
+  if (!eventResult) {
+    throw new AppError(t(lang, 'event.not_member'), 400);
+  }
+
+  const { rank, time, points } = req.body as { rank?: number; time?: string; points?: number | null };
+  const patch: Record<string, unknown> = {};
+  if (rank !== undefined) patch.rank = rank === null ? null : Number(rank);
+  if (time !== undefined) patch.time = time;
+  if (points !== undefined) patch.pointsEarned = points === null ? null : Number(points);
+
+  if (Object.keys(patch).length === 0) {
+    throw new AppError(t(lang, 'common.bad_request'), 400);
+  }
+
+  eventResult.set(patch);
+  await eventResult.save();
+
+  sendSuccess(res, eventResult, t(lang, 'event.updated'), 200);
+});
+
+/**
  * Mark participant as no-show
  * PATCH /v1/events/:eventId/participants/:userId/no-show
  * Admin only
@@ -1186,10 +1219,10 @@ export const checkInAllRegisteredParticipants = asyncHandler(async (req: AuthReq
 
   const now = new Date();
   const result = await EventResult.updateMany(
-    { eventId, status: 'joined' },
-    { 
+    { eventId, status: { $in: ['joined', 'no_show'] } },
+    {
       $set: { status: 'checked_in', checkedInAt: now, noShowAt: null }
-     }
+    }
   );
 
   let messageKey = "event.participants_checked_in";
@@ -1221,8 +1254,8 @@ export const markAllParticipantsNoShow = asyncHandler(async (req: AuthRequest, r
 
   const now = new Date();
   const result = await EventResult.updateMany(
-    { eventId, status: 'joined' },
-    { 
+    { eventId, status: { $in: ['joined', 'checked_in'] } },
+    {
       $set: { status: 'no_show', noShowAt: now, checkedInAt: null }
     }
   );
