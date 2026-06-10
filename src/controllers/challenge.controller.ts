@@ -376,3 +376,27 @@ export const getChallengeMemberStatus = asyncHandler(async (req: AuthRequest, re
       : null,
   }, t(lang, 'challenge.details'));
 });
+
+/**
+ * Get all joined participants for a challenge (admin).
+ * GET /v1/challenges/:id/participants
+ */
+export const getChallengeParticipants = asyncHandler(async (req: Request, res: Response) => {
+  const { id } = req.params;
+  const challenge = await Challenge.findById(id).lean();
+  if (!challenge) throw new AppError('Challenge not found', 404);
+
+  const joins = await ChallengeJoin.find({ challengeId: id, status: 'joined' })
+    .populate('userId', 'fullName email')
+    .lean();
+
+  const participants = joins.map((j: any) => ({
+    userId: String(j.userId?._id ?? j.userId),
+    fullName: j.userId?.fullName ?? '',
+    email: j.userId?.email ?? '',
+    progressPercent: j.progressPercent ?? 0,
+    joinedAt: j.joinedAt,
+  }));
+
+  sendSuccess(res, { participants, total: participants.length }, 'Challenge participants retrieved');
+});

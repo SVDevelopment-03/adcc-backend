@@ -3,6 +3,7 @@ import AppConfig from '@/models/app-config.model';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AuthRequest } from '@/middleware/auth.middleware';
+import nodemailer from 'nodemailer';
 
 const DEFAULT_APP_CONFIG = {
   appName: 'Abu Dhabi Cycling Club',
@@ -129,7 +130,59 @@ export const updateAppConfig = asyncHandler(async (req: AuthRequest, res: Respon
     { new: true, upsert: true, runValidators: true, setDefaultsOnInsert: true }
   ).lean();
 
-  sendSuccess(res, doc, 'App configuration saved', 200);
+  sendSuccess(res, sanitizeAppConfig(doc), 'App configuration saved', 200);
 });
 
-1
+/**
+ * Test SMTP connection using current saved settings.
+ * POST /v1/app-config/test-email
+ * Admin only
+ */
+export const testSmtpConnection = asyncHandler(async (_req: AuthRequest, res: Response) => {
+  const doc = await AppConfig.findOne({ key: 'default' }).lean();
+  const emailSettings = (doc as any)?.config?.emailSettings ?? {};
+
+  const host = String(emailSettings.smtpHost || process.env.SMTP_HOST || '').trim();
+  const port = Number(emailSettings.smtpPort || process.env.SMTP_PORT || 587);
+  const user = String(emailSettings.smtpUser || process.env.SMTP_USER || '').trim();
+  const pass = String(emailSettings.smtpPassword || process.env.SMTP_PASS || '').trim();
+  const secure: boolean =
+    typeof emailSettings.smtpSecure === 'boolean'
+      ? emailSettings.smtpSecure
+      : (process.env.SMTP_SECURE || 'false') === 'true';
+
+  if (!host || !user || !pass) {
+    sendSuccess(
+      res,
+      { ok: false, message: 'SMTP not configured. Fill in Host, Username, and Password then save.' },
+      'SMTP test failed',
+      200
+    );
+    return;
+  }
+
+  const transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
+
+  try {
+    await transporter.verify();
+    sendSuccess(res, { ok: true, message: `Connected to ${host}:${port} successfully.` }, 'SMTP connection OK', 200);
+  } catch (err: any) {
+    const raw: string = err?.message || 'Unknown error';
+    let hint = '';
+    if (raw.includes('Greeting never received')) {
+      hint = ' → Port/TLS mismatch: try port 465 with TLS ON, or port 587 with TLS OFF.';
+    } else if (raw.includes('Invalid login') || raw.includes('authentication')) {
+      hint = ' → Check your username/password. For Gmail use an App Password.';
+    } else if (raw.includes('ECONNREFUSED')) {
+      hint = ` → Connection refused on port ${port}. Check host and port.`;
+    } else if (raw.includes('ENOTFOUND')) {
+      hint = ' → Host not found. Check the SMTP host address.';
+    }
+    sendSuccess(
+      res,
+      { ok: false, message: `${raw}${hint}` },
+      'SMTP test failed',
+      200
+    );
+  }
+});

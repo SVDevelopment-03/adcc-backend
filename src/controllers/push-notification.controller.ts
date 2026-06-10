@@ -267,6 +267,7 @@ export const sendTestBroadcast = asyncHandler(
     }
 
     // If deliveryType includes email, handle email sending first (externalEmails or audience-based)
+    let emailsSentCount = 0;
     if (deliveryType === 'email' || deliveryType === 'both') {
       let emailTargets: string[] = [];
 
@@ -283,23 +284,30 @@ export const sendTestBroadcast = asyncHandler(
 
       emailTargets = Array.from(new Set([...emailTargets, ...externalEmailList]));
 
-      if (emailTargets.length === 0) {
+      if (emailTargets.length === 0 && deliveryType === 'email') {
         sendSuccess(res, { sentTo: 0 }, 'No email recipients found');
-        if (deliveryType === 'email') {
-          return;
-        }
-      } else {
+        return;
+      }
+
+      if (emailTargets.length > 0) {
         try {
           await emailService.sendEmail({ to: emailTargets, subject: title, text: body });
-        } catch (err) {
+          emailsSentCount = emailTargets.length;
+        } catch (err: any) {
+          const reason = err?.message || 'Unknown error';
           console.error('[push] failed to send email recipients', err);
-          throw new AppError('Failed to send email recipients', 500);
+          const hint = reason.includes('Greeting never received')
+            ? ' (Port/TLS mismatch — try port 465 with TLS ON, or port 587 with TLS OFF)'
+            : reason.includes('Invalid login') || reason.includes('authentication')
+              ? ' (Check username/password — Gmail requires an App Password)'
+              : '';
+          throw new AppError(`Failed to send emails: ${reason}${hint}`, 422);
         }
+      }
 
-        if (deliveryType === 'email') {
-          sendSuccess(res, { sentTo: emailTargets.length }, 'Test broadcast emails sent');
-          return;
-        }
+      if (deliveryType === 'email') {
+        sendSuccess(res, { sentTo: emailsSentCount }, 'Test broadcast emails sent');
+        return;
       }
     }
 

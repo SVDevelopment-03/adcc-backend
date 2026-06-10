@@ -247,7 +247,12 @@ export const sendWebPushNotification = async (
   tokens: string[],
   payload: WebPushPayload
 ): Promise<admin.messaging.BatchResponse> => {
-  initializeFirebase();
+  try {
+    initializeFirebase();
+  } catch {
+    // Firebase not configured — skip FCM silently
+    return { successCount: 0, failureCount: 0, responses: [] };
+  }
 
   if (!tokens.length) {
     return {

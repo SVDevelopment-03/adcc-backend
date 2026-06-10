@@ -23,11 +23,24 @@ const securitySchema = z.object({
   forceLogoutOnPasswordChange: z.boolean(),
 });
 
+const emailSettingsSchema = z.object({
+  enabled: z.boolean(),
+  smtpHost: z.string().trim(),
+  smtpPort: z.number().int().positive(),
+  smtpUser: z.string().trim(),
+  smtpPassword: z.string(),
+  smtpSecure: z.boolean(),
+  fromEmail: z.string().trim(),
+  fromName: z.string().trim(),
+  replyTo: z.string().trim(),
+});
+
 export const appConfigSchema = z.object({
   appName: z.string().trim().min(1),
   supportEmail: z.string().trim().email(),
   contactPhone: z.string().trim().min(3),
   defaultLanguage: z.enum(['English', 'Arabic']),
+  emailSettings: emailSettingsSchema.optional(),
   features: featuresSchema,
   notifications: notificationsSchema,
   security: securitySchema,
