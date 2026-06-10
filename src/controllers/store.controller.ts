@@ -1,4 +1,4 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import mongoose from 'mongoose';
 import StoreItem from '@/models/store-item.model';
 import { sendSuccess } from '@/utils/response';
@@ -177,12 +177,12 @@ export const createStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
  * List approved store items (public)
  * GET /v1/store/items
  */
-export const getStoreItems = asyncHandler(async (req: Request, res: Response) => {
+export const getStoreItems = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as string;
   const { page = 1, limit = 10, status, category, condition, city, minPrice, maxPrice, q } = req.query as any;
 
   const filter: any = {};
-  if (status) filter.status = status;
+  filter.status = isAdmin(req) && status ? status : 'Approved';
   if (category) filter.category = category;
   if (condition) filter.condition = condition;
   if (city) filter.city = city;
