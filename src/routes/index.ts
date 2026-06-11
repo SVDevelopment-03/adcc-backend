@@ -20,7 +20,7 @@ import dashboardRoutes from './dashboard.route';
 import adminNotificationRoutes from './admin-notification.route';
 import appConfigRoutes from './app-config.route';
 import newsletterSubscriptionRoutes from './newsletter-subscription.route';
-import publicStatsRoutes from './public-stats.route';
+// import publicStatsRoutes from './public-stats.route';
 const router = Router();
 
 // Register all routes
