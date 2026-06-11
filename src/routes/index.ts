@@ -46,7 +46,10 @@ router.use('/dashboard', dashboardRoutes);
 router.use('/admin-notifications', adminNotificationRoutes);
 router.use('/app-config', appConfigRoutes);
 router.use('/newsletter-subscriptions', newsletterSubscriptionRoutes);
+<<<<<<< Updated upstream
 router.use('/public', publicStatsRoutes);
+=======
+>>>>>>> Stashed changes
 
 // Add more routes here as you create them
 // router.use('/users', userRoutes);

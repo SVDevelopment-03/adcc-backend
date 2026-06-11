@@ -229,7 +229,7 @@ export const featureCommunitySchema = z
 
 export const getCommunitiesQuerySchema = z.object({
   type: z.enum(['Family Rides', 'Racing & Performance', 'Women (SheRides)', 'Youth Cycling', 'Weekend Social', 'Night Riders', 'MTB/Trail', 'Training & Clinics']).optional(),
-  location: z.enum(['Abu Dhabi', 'Dubai', 'Al Ain', 'Sharjah']).optional(),
+  location: z.enum(['Abu Dhabi', 'Dubai', 'Al Ain', 'Sharjah', 'Al Dhafra']).optional(),
   category: z.string().optional(),
   search: z.string().optional(),
   page: z.string().regex(/^\d+$/).transform(Number).optional(),

@@ -25,7 +25,7 @@ import {
   featureCommunitySchema,
   removeGalleryImagesSchema,
 } from '@/validators/community.validator';
-import { authenticate } from '@/middleware/auth.middleware';
+import { authenticate, optionalAuthenticate } from '@/middleware/auth.middleware';
 import { requireStaffPermission } from '@/middleware/rbac.middleware';
 import { requireMultipartFormData, uploadCommunityImages, requireParsedMultipartBody, uploadCommunityGalleryImages } from '@/middleware/upload.middleware';
 
@@ -39,6 +39,7 @@ const router = express.Router();
 router.get('/metadata/cities', getAvailableCities);
 router.get('/', validate(getCommunitiesQuerySchema), getAllCommunities);
 router.get('/:id', getCommunityById);
+router.get('/', optionalAuthenticate, validate(getCommunitiesQuerySchema), getAllCommunities);
 
 
 // Authenticated routes
