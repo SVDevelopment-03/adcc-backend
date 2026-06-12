@@ -231,7 +231,7 @@ export const testSmtpConnection = asyncHandler(async (_req: AuthRequest, res: Re
 
     let hint = '';
     if (raw.includes('ETIMEDOUT') || raw.includes('timeout') || raw.includes('Timed out')) {
-      hint = ` → Connection timed out after ${ms}ms. The hosting platform (Render/Vercel) may be blocking outbound port ${port}. Try port 465 with TLS ON, or contact your host.`;
+      hint = ` → Connection timed out after ${ms}ms. Port ${port} is blocked by the hosting platform. For Gmail use port 465 with TLS ON (already the default preset). For Outlook use port 587.`;
     } else if (raw.includes('ENETUNREACH')) {
       hint = ' → Network unreachable. Platform is blocking IPv6 SMTP — ensure family:4 fix is deployed.';
     } else if (raw.includes('Greeting never received')) {
