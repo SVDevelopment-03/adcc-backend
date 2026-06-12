@@ -1,3 +1,9 @@
+import dns from 'dns';
+
+// Force IPv4 for all outbound connections (SMTP, etc.) — required on Render/Vercel
+// where IPv6 SMTP connections are blocked by the platform.
+dns.setDefaultResultOrder('ipv4first');
+
 import dotenv from 'dotenv';
 
 // Load environment variables FIRST, before any other imports
