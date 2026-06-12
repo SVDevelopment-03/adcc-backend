@@ -41,31 +41,39 @@ async function resolveSmtpConfig(): Promise<SmtpConfig> {
   return { host, port, user, pass, secure, from };
 }
 
+async function resolveIPv4(hostname: string): Promise<string> {
+  try {
+    const addresses = await dns.resolve4(hostname);
+    if (addresses.length > 0) {
+      console.log(`[EMAIL] resolved ${hostname} → IPv4 ${addresses[0]} (bypassing nodemailer DNS)`);
+      return addresses[0];
+    }
+  } catch (e: any) {
+    console.log(`[EMAIL] IPv4 resolve failed for ${hostname}:`, e?.message, '— falling back to hostname');
+  }
+  return hostname;
+}
+
 async function getTransporter() {
   const smtp = await resolveSmtpConfig();
 
-  // DNS debug — log which IP the host resolves to
-  try {
-    const [v4, v6] = await Promise.allSettled([dns.resolve4(smtp.host), dns.resolve6(smtp.host)]);
-    if (v4.status === 'fulfilled') console.log('[EMAIL] DNS IPv4:', v4.value.join(', '));
-    else console.log('[EMAIL] DNS IPv4: failed —', (v4 as any).reason?.message);
-    if (v6.status === 'fulfilled') console.log('[EMAIL] DNS IPv6:', v6.value.join(', '));
-    else console.log('[EMAIL] DNS IPv6: failed —', (v6 as any).reason?.message);
-  } catch (e: any) {
-    console.log('[EMAIL] DNS lookup error:', e?.message);
-  }
+  // Pre-resolve to IPv4 and pass the IP directly so nodemailer never does its own
+  // DNS lookup (which picks IPv6 on Render/Vercel and hits ENETUNREACH).
+  const host = await resolveIPv4(smtp.host);
 
-  console.log('[EMAIL] creating transporter (family:4) …');
+  console.log('[EMAIL] creating transporter → host:', host, 'port:', smtp.port, 'secure:', smtp.secure);
   return nodemailer.createTransport({
-    host: smtp.host,
+    host,
     port: smtp.port,
     secure: smtp.secure,
     auth: { user: smtp.user, pass: smtp.pass },
-    family: 4,
-    tls: { rejectUnauthorized: false },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
+    tls: {
+      rejectUnauthorized: false,
+      servername: smtp.host, // keep original hostname for TLS SNI
+    },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 15000,
   } as any);
 }
 

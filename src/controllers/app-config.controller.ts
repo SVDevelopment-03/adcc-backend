@@ -185,17 +185,33 @@ export const testSmtpConnection = asyncHandler(async (_req: AuthRequest, res: Re
     console.log('[SMTP-TEST] DNS lookup error:', dnsErr?.message);
   }
 
-  console.log('[SMTP-TEST] creating transporter (family:4 forced) …');
+  // Pre-resolve hostname to IPv4 — nodemailer ignores family:4 on Render and
+  // connects to the IPv6 address which is blocked. Passing the IP directly
+  // bypasses nodemailer's internal DNS resolution entirely.
+  let connectHost = host;
+  try {
+    const v4addrs = await dns.resolve4(host);
+    if (v4addrs.length > 0) {
+      connectHost = v4addrs[0];
+      console.log(`[SMTP-TEST] pre-resolved ${host} → ${connectHost} (IPv4 direct)`);
+    }
+  } catch (e: any) {
+    console.log('[SMTP-TEST] IPv4 pre-resolve failed:', e?.message, '— using hostname');
+  }
+
+  console.log('[SMTP-TEST] creating transporter → host:', connectHost, 'port:', port, 'secure:', secure);
   const transporter = nodemailer.createTransport({
-    host,
+    host: connectHost,
     port,
     secure,
     auth: { user, pass },
-    family: 4,
-    tls: { rejectUnauthorized: false },
-    connectionTimeout: 10000,
-    greetingTimeout: 10000,
-    socketTimeout: 10000,
+    tls: {
+      rejectUnauthorized: false,
+      servername: host, // original hostname for TLS SNI
+    },
+    connectionTimeout: 15000,
+    greetingTimeout: 15000,
+    socketTimeout: 15000,
   } as any);
 
   const t0 = Date.now();
