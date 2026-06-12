@@ -19,6 +19,7 @@ import {
   addFeedComment,
   createFeedPost,
   deleteFeedComment,
+  deleteFeedPost,
   getMyFeedPosts,
   getPublicFeedPostById,
   getPublicFeedPosts,
@@ -44,6 +45,8 @@ router.post(
   validate(createFeedPostSchema),
   createFeedPost
 );
+
+router.delete('/:id', authenticate, isAdmin, deleteFeedPost);
 
 router.patch(
   '/:id/moderation',

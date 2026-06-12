@@ -529,3 +529,22 @@ export const updateUserFeedPostBan = asyncHandler(async (req: AuthRequest, res: 
 
   sendSuccess(res, user, t(lang, 'feedPost.user_ban_updated'));
 });
+
+/**
+ * Admin hard-delete a feed post.
+ * DELETE /v1/feed-posts/:id
+ */
+export const deleteFeedPost = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = getLang(req);
+  const { id } = req.params;
+
+  const deleted = await FeedPost.findByIdAndDelete(
+    ensureObjectId(id, 'Invalid post ID')
+  );
+
+  if (!deleted) {
+    throw new AppError(t(lang, 'feedPost.not_found'), 404);
+  }
+
+  sendSuccess(res, { id }, 'Feed post deleted successfully');
+});
