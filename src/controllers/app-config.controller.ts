@@ -4,6 +4,7 @@ import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import nodemailer from 'nodemailer';
+import dns from 'dns/promises';
 
 const DEFAULT_APP_CONFIG = {
   appName: 'Abu Dhabi Cycling Club',
@@ -151,7 +152,16 @@ export const testSmtpConnection = asyncHandler(async (_req: AuthRequest, res: Re
       ? emailSettings.smtpSecure
       : (process.env.SMTP_SECURE || 'false') === 'true';
 
+  console.log('[SMTP-TEST] ── starting SMTP test ──────────────────────');
+  console.log('[SMTP-TEST] host    :', host || '(empty)');
+  console.log('[SMTP-TEST] port    :', port);
+  console.log('[SMTP-TEST] user    :', user || '(empty)');
+  console.log('[SMTP-TEST] pass    :', pass ? `(set, ${pass.length} chars)` : '(empty)');
+  console.log('[SMTP-TEST] secure  :', secure);
+  console.log('[SMTP-TEST] NODE_ENV:', process.env.NODE_ENV ?? '(not set)');
+
   if (!host || !user || !pass) {
+    console.log('[SMTP-TEST] ✗ missing required fields — aborting');
     sendSuccess(
       res,
       { ok: false, message: 'SMTP not configured. Fill in Host, Username, and Password then save.' },
@@ -161,23 +171,63 @@ export const testSmtpConnection = asyncHandler(async (_req: AuthRequest, res: Re
     return;
   }
 
-  const transporter = nodemailer.createTransport({ host, port, secure, auth: { user, pass } });
-
+  // DNS lookup — log which IP address the host resolves to
   try {
+    const [ipv4, ipv6] = await Promise.allSettled([
+      dns.resolve4(host),
+      dns.resolve6(host),
+    ]);
+    if (ipv4.status === 'fulfilled') console.log('[SMTP-TEST] DNS IPv4 :', ipv4.value.join(', '));
+    else console.log('[SMTP-TEST] DNS IPv4 : failed —', (ipv4 as any).reason?.message);
+    if (ipv6.status === 'fulfilled') console.log('[SMTP-TEST] DNS IPv6 :', ipv6.value.join(', '));
+    else console.log('[SMTP-TEST] DNS IPv6 : failed —', (ipv6 as any).reason?.message);
+  } catch (dnsErr: any) {
+    console.log('[SMTP-TEST] DNS lookup error:', dnsErr?.message);
+  }
+
+  console.log('[SMTP-TEST] creating transporter (family:4 forced) …');
+  const transporter = nodemailer.createTransport({
+    host,
+    port,
+    secure,
+    auth: { user, pass },
+    family: 4,
+    tls: { rejectUnauthorized: false },
+    connectionTimeout: 10000,
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
+  } as any);
+
+  const t0 = Date.now();
+  try {
+    console.log('[SMTP-TEST] calling transporter.verify() …');
     await transporter.verify();
-    sendSuccess(res, { ok: true, message: `Connected to ${host}:${port} successfully.` }, 'SMTP connection OK', 200);
+    const ms = Date.now() - t0;
+    console.log(`[SMTP-TEST] ✓ verify() succeeded in ${ms}ms`);
+    sendSuccess(res, { ok: true, message: `Connected to ${host}:${port} successfully (${ms}ms).` }, 'SMTP connection OK', 200);
   } catch (err: any) {
+    const ms = Date.now() - t0;
     const raw: string = err?.message || 'Unknown error';
+    console.log(`[SMTP-TEST] ✗ verify() failed after ${ms}ms`);
+    console.log('[SMTP-TEST] error code   :', err?.code ?? '(none)');
+    console.log('[SMTP-TEST] error message:', raw);
+    console.log('[SMTP-TEST] error stack  :', err?.stack ?? '(none)');
+
     let hint = '';
-    if (raw.includes('Greeting never received')) {
+    if (raw.includes('ETIMEDOUT') || raw.includes('timeout') || raw.includes('Timed out')) {
+      hint = ` → Connection timed out after ${ms}ms. The hosting platform (Render/Vercel) may be blocking outbound port ${port}. Try port 465 with TLS ON, or contact your host.`;
+    } else if (raw.includes('ENETUNREACH')) {
+      hint = ' → Network unreachable. Platform is blocking IPv6 SMTP — ensure family:4 fix is deployed.';
+    } else if (raw.includes('Greeting never received')) {
       hint = ' → Port/TLS mismatch: try port 465 with TLS ON, or port 587 with TLS OFF.';
-    } else if (raw.includes('Invalid login') || raw.includes('authentication')) {
-      hint = ' → Check your username/password. For Gmail use an App Password.';
+    } else if (raw.includes('Invalid login') || raw.includes('authentication') || raw.includes('Username and Password')) {
+      hint = ' → Authentication failed. For Gmail use a 16-character App Password (not your regular password).';
     } else if (raw.includes('ECONNREFUSED')) {
       hint = ` → Connection refused on port ${port}. Check host and port.`;
     } else if (raw.includes('ENOTFOUND')) {
       hint = ' → Host not found. Check the SMTP host address.';
     }
+
     sendSuccess(
       res,
       { ok: false, message: `${raw}${hint}` },
