@@ -308,14 +308,26 @@ export const getAllCommunities = asyncHandler(async (req: Request, res: Response
 
   const query: any = {};
 
-  // Filter by type
-  if (type && ['Club', 'Shop', 'Women', 'Youth', 'Family', 'Corporate'].includes(type as string)) {
-    query.type = type;
+  const VALID_TYPES = [
+    'Family Rides',
+    'Racing & Performance',
+    'Women (SheRides)',
+    'Youth Cycling',
+    'Weekend Social',
+    'Night Riders',
+    'MTB/Trail',
+    'Training & Clinics',
+  ];
+  const VALID_LOCATIONS = ['Abu Dhabi', 'Dubai', 'Al Ain', 'Sharjah', 'Al Dhafra'];
+
+  // Filter by type (stored as string array on the model)
+  if (type && VALID_TYPES.includes(type as string)) {
+    query.type = { $in: [type] };
   }
 
   // Filter by location
-  if (location && ['Abu Dhabi', 'Dubai', 'Al Ain', 'Sharjah'].includes(location as string)) {
-    query.location = location;
+  if (location && VALID_LOCATIONS.includes(location as string)) {
+    query.$or = [{ location }, { city: location }];
   }
 
   // Filter by category (check if category array contains the query value)

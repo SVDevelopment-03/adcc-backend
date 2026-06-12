@@ -79,7 +79,6 @@ const normalizeStoreItemFormData = (req: express.Request, _res: express.Response
   next();
 };
 
-// Public (guest-accessible, with optional user context for owner/admin access)
 router.get('/items', optionalAuthenticate, validate(storeItemQuerySchema), getStoreItems);
 router.get('/items/:id', optionalAuthenticate, getStoreItemById);
 
