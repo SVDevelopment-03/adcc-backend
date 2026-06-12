@@ -46,10 +46,9 @@ async function getTransporter() {
     port: smtp.port,
     secure: smtp.secure,
     auth: { user: smtp.user, pass: smtp.pass },
-    // Force IPv4 — Vercel serverless blocks outbound IPv6 SMTP connections
     family: 4,
     tls: { rejectUnauthorized: false },
-  });
+  } as any);
 }
 
 export async function sendEmail(options: EmailOptions) {
