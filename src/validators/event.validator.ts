@@ -27,6 +27,17 @@ const jsonOrValue = (val: unknown) => {
   return raw;
 };
 
+const rewardsSchema = z.preprocess(
+  jsonOrValue,
+  z
+    .object({
+      points: z.preprocess(firstValue, z.coerce.number().min(0, 'Reward points cannot be negative')).default(0),
+      badgeName: z.preprocess(firstValue, z.string()).optional().or(z.literal('')).default(''),
+      badgeImage: z.preprocess(firstValue, z.string()).optional().or(z.literal('')).default(''),
+    })
+    .strip()
+).optional();
+
 const objectIdSchema = z.string().refine(
   (val) => mongoose.Types.ObjectId.isValid(val),
   { message: 'Invalid MongoDB ObjectId' }
@@ -112,6 +123,7 @@ export const createEventSchema = z
     category: z.preprocess(firstValue, z.string()).optional(),
     isFeatured: z.preprocess(firstValue, z.coerce.boolean()).default(false),
     allowCancellation: z.preprocess(firstValue, z.coerce.boolean()).default(false),
+    rewards: rewardsSchema,
     galleryImages: z.preprocess(jsonOrValue, z.array(z.string().url('Invalid image URL'))).optional().default([])
   })
   .strip();
@@ -179,6 +191,7 @@ export const updateEventSchema = z
     difficulty: z.preprocess(firstValue, z.string()).optional(),
     endTime: z.preprocess(firstValue, z.string()).optional(),
     category: z.preprocess(firstValue, z.string()).optional(),
+    rewards: rewardsSchema,
     isFeatured: z.preprocess(firstValue, z.coerce.boolean()).default(false),
     allowCancellation: z.preprocess(firstValue, z.coerce.boolean()).default(false),
     galleryImages: z.preprocess(jsonOrValue, z.array(z.string().url('Invalid image URL'))).optional()

@@ -281,6 +281,23 @@ const EventSchema = new Schema(
       type: Boolean,
       trim: true,
     },
+    rewards: {
+      points: {
+        type: Number,
+        default: 0,
+        min: [0, 'Reward points cannot be negative'],
+      },
+      badgeName: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+      badgeImage: {
+        type: String,
+        trim: true,
+        default: '',
+      },
+    },
     createdBy: {
       type: Schema.Types.ObjectId,
       ref: 'users',

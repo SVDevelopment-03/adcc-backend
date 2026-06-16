@@ -17,14 +17,14 @@ import {
   updateChallengeProgressSchema,
   getChallengesQuerySchema,
 } from '@/validators/challenge.validator';
-import { authenticate } from '@/middleware/auth.middleware';
+import { authenticate, optionalAuthenticate } from '@/middleware/auth.middleware';
 import { isAdmin } from '@/middleware/role.middleware';
 import { uploadChallengeImageIfMultipart, requireParsedMultipartBody } from '@/middleware/upload.middleware';
 
 const router = express.Router();
 
 router.get('/', validate(getChallengesQuerySchema), getAllChallenges);
-router.get('/:id', getChallengeById);
+router.get('/:id', optionalAuthenticate, getChallengeById);
 router.get('/:id/participants', authenticate, isAdmin, getChallengeParticipants);
 router.get('/:id/member-status', authenticate, getChallengeMemberStatus);
 

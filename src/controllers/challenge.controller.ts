@@ -135,6 +135,9 @@ export const getChallengeById = asyncHandler(async (req: AuthRequest, res: Respo
     ...challenge.toObject(),
     isJoined: joinRecord?.status === 'joined',
     joinedAt: joinRecord?.joinedAt ?? null,
+    progress: joinRecord?.progressValue ?? 0,
+    progressValue: joinRecord?.progressValue ?? 0,
+    progressPercent: joinRecord?.progressPercent ?? 0,
   };
 
   sendSuccess(res, payload, t(lang, 'challenge.details'));

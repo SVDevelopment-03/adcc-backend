@@ -115,6 +115,40 @@ const normalizeGalleryImagesInput = (value: unknown): string[] => {
   return [];
 };
 
+const parseJsonField = (value: unknown): unknown => {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
+
+const normalizeRewardsInput = (body: any, existingRewards: Record<string, any> = {}) => {
+  const rawRewards = parseJsonField(body.rewards ?? {});
+  let rewards: Record<string, any> = {};
+
+  if (typeof rawRewards === 'object' && rawRewards !== null) {
+    rewards = { ...rawRewards };
+  }
+
+  if (body.rewardPoints !== undefined) {
+    rewards.points = Number(body.rewardPoints ?? rewards.points ?? 0);
+  }
+
+  if (body.rewardBadge !== undefined) {
+    rewards.badgeName = String(body.rewardBadge ?? rewards.badgeName ?? '');
+  }
+
+  rewards.points = Number(rewards.points ?? 0);
+  rewards.badgeName = String(rewards.badgeName ?? '');
+  if (existingRewards.badgeImage) {
+    rewards.badgeImage = existingRewards.badgeImage;
+  }
+
+  return rewards;
+};
+
 const attachEventImages = async (req: AuthRequest, data: Record<string, any>) => {
   const files = req.files as {
     [fieldname: string]: Express.Multer.File[];
@@ -162,9 +196,12 @@ const attachEventImages = async (req: AuthRequest, data: Record<string, any>) =>
       files.badgeImage[0].mimetype,
       files.badgeImage[0].originalname,
       "badge-images"
-    )
+    );
 
-     data.badgeImage = uploadResult.url
+    data.rewards = {
+      ...(data.rewards || {}),
+      badgeImage: uploadResult.url,
+    };
   }
 
   if (files.galleryImage?.length) {
@@ -411,6 +448,7 @@ export const createEvent = asyncHandler(async (req: AuthRequest, res: Response) 
         }))
       : req.body.schedule,
     eventDate: req.body.eventDate ? new Date(req.body.eventDate) : undefined,
+    rewards: normalizeRewardsInput(req.body),
     createdBy: userId,
   };
 
@@ -664,8 +702,9 @@ export const getEventById = asyncHandler(async (req: Request, res: Response) => 
 export const updateEvent = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
   const { id } = req.params;
-  const previousEvent = await Event.findById(id).select('status publishedNotificationSentAt resultsNotificationSentAt cancelledNotificationSentAt').lean();
+  const previousEvent = await Event.findById(id).select('status publishedNotificationSentAt resultsNotificationSentAt cancelledNotificationSentAt rewards').lean();
   const updateData = { ...req.body };
+  updateData.rewards = normalizeRewardsInput(req.body, updateData.rewards || previousEvent?.rewards || {});
   if ('registrationFeeType' in updateData || 'registrationFeeAmount' in updateData) {
     normalizeRegistrationFee(updateData);
   }
