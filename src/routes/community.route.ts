@@ -11,9 +11,9 @@ import {
   getCommunityMembers,
   getBannedUsersInCommunity,
   isMemberOfCommunity,
+  getGalleryImages,
   addGalleryImages,
   removeGalleryImages,
-  // getGalleryImages,
   featureCommunity,
   // getFeaturedCommunities,
 } from '@/controllers/community.controller';
@@ -38,6 +38,7 @@ const router = express.Router();
 // Public routes
 router.get('/metadata/cities', getAvailableCities);
 router.get('/', validate(getCommunitiesQuerySchema), getAllCommunities);
+router.get('/:id/gallery', getGalleryImages);
 router.get('/:id', getCommunityById);
 router.get('/', optionalAuthenticate, validate(getCommunitiesQuerySchema), getAllCommunities);
 

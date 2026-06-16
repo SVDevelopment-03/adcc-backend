@@ -766,7 +766,7 @@ export const getBannedUsersInCommunity = asyncHandler(async (req: AuthRequest, r
 */
 export const isMemberOfCommunity = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
-  const { communityId } = req.params;
+  const { id: communityId } = req.params;
   const userId = req.user?.id;
 
   if (!userId) {
@@ -774,7 +774,6 @@ export const isMemberOfCommunity = asyncHandler(async (req: AuthRequest, res: Re
   }
   const memberships = await communityMembershipService.isMember(userId, communityId);
   sendSuccess(res, { isMember: memberships }, t(lang, "community.status_retrieved"), 201);
-  
 });
 
 /**
@@ -949,6 +948,6 @@ export const getGalleryImages = asyncHandler(async (req: Request, res: Response)
       imageCount: community.gallery?.length || 0,
     },
     t(lang, "community.gallery_retrieved"),
-    201
+    200
   );
 });
