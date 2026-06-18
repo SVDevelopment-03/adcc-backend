@@ -7,6 +7,11 @@ export interface IFeedPost extends Document {
   description: string;
   status: FeedPostStatus;
   image?: string;
+  eventId?: string;
+  eventTitle?: string;
+  trackId?: string;
+  trackTitle?: string;
+  location?: string;
   likes: mongoose.Types.ObjectId[];
   comments: {
     user?: mongoose.Types.ObjectId;
@@ -42,6 +47,26 @@ const FeedPostSchema = new Schema(
       index: true,
     },
     image: {
+      type: String,
+      trim: true,
+    },
+    eventId: {
+      type: String,
+      trim: true,
+    },
+    eventTitle: {
+      type: String,
+      trim: true,
+    },
+    trackId: {
+      type: String,
+      trim: true,
+    },
+    trackTitle: {
+      type: String,
+      trim: true,
+    },
+    location: {
       type: String,
       trim: true,
     },

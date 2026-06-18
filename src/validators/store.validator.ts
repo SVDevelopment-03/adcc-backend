@@ -14,7 +14,8 @@ export const createStoreItemSchema = z
     condition: z.string().min(1, 'Item condition is required'),
     currency: z.string().min(1, 'Currency is required').default('AED'),
     price: z.number().min(0, 'Price cannot be negative'),
-    photos: z.array(z.string().min(1)).optional(),
+    photos: z.array(z.string().min(1)).max(5, 'Up to 5 photos are allowed').optional(),
+    video: z.string().url('Invalid video URL').optional(),
     coverImage: z.string().min(1).optional(),
     contactMethod: z.enum(['Call', 'WhatsApp', 'InApp']),
     phoneNumber: z.string().min(5, 'Phone number is required').optional(),
@@ -29,6 +30,13 @@ export const createStoreItemSchema = z
         path: ['phoneNumber'],
       });
     }
+    if ((val.photos == null || val.photos.length === 0) && !val.video) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'At least one photo or a video is required',
+        path: ['photos'],
+      });
+    }
   });
 
 export const updateStoreItemSchema = z
@@ -39,7 +47,8 @@ export const updateStoreItemSchema = z
     condition: z.string().min(1, 'Item condition is required').optional(),
     currency: z.string().min(1, 'Currency is required').optional(),
     price: z.number().min(0, 'Price cannot be negative').optional(),
-    photos: z.array(z.string().min(1)).min(1, 'At least one photo is required').optional(),
+    photos: z.array(z.string().min(1)).max(5, 'Up to 5 photos are allowed').optional(),
+    video: z.string().url('Invalid video URL').optional(),
     coverImage: z.string().min(1).optional(),
     contactMethod: z.enum(['Call', 'WhatsApp', 'InApp']).optional(),
     phoneNumber: z.string().min(5, 'Phone number is required').optional(),

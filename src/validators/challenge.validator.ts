@@ -99,6 +99,10 @@ export const createChallengeSchema = z
       arrayFromStringOrJson,
       z.array(objectIdSchema)
     ).optional(),
+    rules: z.preprocess(
+      arrayFromStringOrJson,
+      z.array(z.string().min(1, 'Each rule must be a non-empty string'))
+    ).optional(),
   })
   .superRefine((data, ctx) => {
     const start = data.startDate instanceof Date ? data.startDate : new Date(data.startDate);
@@ -131,6 +135,10 @@ export const updateChallengeSchema = z
     communities: z.preprocess(
       arrayFromStringOrJson,
       z.array(objectIdSchema)
+    ).optional(),
+    rules: z.preprocess(
+      arrayFromStringOrJson,
+      z.array(z.string().min(1, 'Each rule must be a non-empty string'))
     ).optional(),
   })
   .superRefine((data, ctx) => {

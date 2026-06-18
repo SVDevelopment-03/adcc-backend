@@ -3,6 +3,7 @@ import {
   createChallenge,
   getAllChallenges,
   getChallengeById,
+  getChallengeLeaderboard,
   updateChallenge,
   deleteChallenge,
   joinChallenge,
@@ -23,6 +24,7 @@ import { uploadChallengeImageIfMultipart, requireParsedMultipartBody } from '@/m
 
 const router = express.Router();
 
+router.get('/leaderboard', getChallengeLeaderboard);
 router.get('/', validate(getChallengesQuerySchema), getAllChallenges);
 router.get('/:id', optionalAuthenticate, getChallengeById);
 router.get('/:id/participants', authenticate, isAdmin, getChallengeParticipants);

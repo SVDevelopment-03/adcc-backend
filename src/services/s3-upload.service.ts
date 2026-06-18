@@ -98,6 +98,12 @@ const getExtension = (originalName: string, mimeType: string) => {
     'image/svg+xml': '.svg',
     'image/heic': '.heic',
     'image/heif': '.heif',
+    'video/mp4': '.mp4',
+    'video/quicktime': '.mov',
+    'video/x-msvideo': '.avi',
+    'video/x-matroska': '.mkv',
+    'video/webm': '.webm',
+    'video/mpeg': '.mpeg',
   };
 
   return mimeExtMap[mimeType] || '.jpg';

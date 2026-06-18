@@ -35,6 +35,16 @@ const normalizeStoreItemFormData = (req: express.Request, _res: express.Response
       body.photos = body['photos[]'];
     }
 
+    const files = (req as any).files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+    if (body.photos === undefined && files) {
+      if ((files.photos?.length || 0) > 0 || (files['photos[]']?.length || 0) > 0) {
+        body.photos = ['__uploaded_photos__'];
+      }
+    }
+    if (body.video === undefined && files?.video?.length) {
+      body.video = '__uploaded_video__';
+    }
+
     if (body.price !== undefined && typeof body.price === 'string') {
       const trimmed = body.price.trim();
       if (trimmed !== '') {

@@ -2,6 +2,7 @@ import express from 'express';
 import {
   createEvent,
   getAllEvents,
+  getHomeEvents,
   getCompletedEventStats,
   getEventById,
   updateEvent,
@@ -10,6 +11,7 @@ import {
   cancelRegistration,
   getEventResults,
   getEventResultsList,
+  getEventCompletedSummary,
   markParticipantCheckedIn,
   markParticipantNoShow,
   removeEventParticipant,
@@ -44,14 +46,16 @@ const router = express.Router();
 // Public routes – guest-accessible (no auth required)
 
 router.get('/', validate(getEventsQuerySchema), getAllEvents);
+router.get('/home', getHomeEvents);
 router.get(
   '/completed-stats',
   authenticate,
   // requireStaffPermission('manage_events'),
   getCompletedEventStats
 );
-router.get('/:id', authenticate, getEventById);
+router.get('/:id', getEventById);
 router.post('/:eventId/results', authenticate, getEventResults);
+router.get('/:eventId/completed-summary', authenticate, getEventCompletedSummary);
 router.get('/:eventId/results',  authenticate, getEventResultsList);
 router.get('/:eventId/results/export', authenticate, requireStaffPermission('manage_events'), exportEventResults);
 router.post('/:eventId/joinEvent', authenticate, validateParams(joinEventSchema), joinEvent);

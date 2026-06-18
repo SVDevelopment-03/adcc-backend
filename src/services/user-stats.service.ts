@@ -52,3 +52,19 @@ export async function addPointsOnComplete(userId: string, points: number): Promi
     });
   }
 }
+
+export async function adjustPointsOnComplete(userId: string, points: number): Promise<void> {
+  if (points !== 0) {
+    await User.findByIdAndUpdate(userId, {
+      $inc: { 'stats.totalPoints': points },
+    });
+  }
+}
+
+export async function adjustDistanceOnComplete(userId: string, kilometers: number): Promise<void> {
+  if (kilometers !== 0) {
+    await User.findByIdAndUpdate(userId, {
+      $inc: { 'stats.totalDistanceKm': kilometers },
+    });
+  }
+}

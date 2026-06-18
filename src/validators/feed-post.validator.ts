@@ -27,6 +27,11 @@ export const createFeedPostSchema = z
     description: z.preprocess(firstValue, z.string().min(1, 'Post description is required')),
     status: z.preprocess(normalizedString, feedPostStatusEnum).optional().default('pending'),
     reported: z.preprocess(parseBooleanFromFormData, z.boolean()).optional().default(false),
+    eventId: z.preprocess(firstValue, z.string()).optional(),
+    eventTitle: z.preprocess(firstValue, z.string()).optional(),
+    trackId: z.preprocess(firstValue, z.string()).optional(),
+    trackTitle: z.preprocess(firstValue, z.string()).optional(),
+    location: z.preprocess(firstValue, z.string()).optional(),
   })
   .strict();
 

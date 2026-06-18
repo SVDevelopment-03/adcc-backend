@@ -1,7 +1,7 @@
 import multer from 'multer';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
-const ALLOWED_MIME_TYPES = new Set([
+const IMAGE_MIME_TYPES = new Set([
   'image/jpeg',
   'image/png',
   'image/webp',
@@ -11,10 +11,19 @@ const ALLOWED_MIME_TYPES = new Set([
   'image/heif',
 ]);
 
+const VIDEO_MIME_TYPES = new Set([
+  'video/mp4',
+  'video/quicktime',
+  'video/x-msvideo',
+  'video/x-matroska',
+  'video/webm',
+  'video/mpeg',
+]);
+
 const storage = multer.memoryStorage();
 
 const fileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
-  if (!ALLOWED_MIME_TYPES.has(file.mimetype)) {
+  if (!IMAGE_MIME_TYPES.has(file.mimetype)) {
     cb(new Error('Only image files are allowed'));
     return;
   }
@@ -27,14 +36,39 @@ const upload = multer({
   fileFilter,
 });
 
+const storeItemFileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  if (file.fieldname === 'video') {
+    if (!VIDEO_MIME_TYPES.has(file.mimetype)) {
+      cb(new Error('Only video files are allowed for the video field'));
+      return;
+    }
+    cb(null, true);
+    return;
+  }
+
+  if (!IMAGE_MIME_TYPES.has(file.mimetype)) {
+    cb(new Error('Only image files are allowed for store item photos'));
+    return;
+  }
+
+  cb(null, true);
+};
+
+const uploadStoreItemMedia = multer({
+  storage,
+  limits: { fileSize: MAX_FILE_SIZE_BYTES },
+  fileFilter: storeItemFileFilter,
+});
+
 export const uploadSingleImage = upload.single('image');
 export const uploadMultipleImages = upload.array('images', 10);
 const uploadStoreItemBody = upload.none();
 
-const uploadStoreItemImages = upload.fields([
+const uploadStoreItemImages = uploadStoreItemMedia.fields([
   { name: 'coverImage', maxCount: 1 },
   { name: 'photos', maxCount: 10 },
   { name: 'photos[]', maxCount: 10 },
+  { name: 'video', maxCount: 1 },
 ]);
 
 export const uploadEventImages = upload.fields([

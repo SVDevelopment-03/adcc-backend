@@ -15,6 +15,8 @@ import {
   decrementStatsOnCancel,
   addDistanceOnComplete,
   addPointsOnComplete,
+  adjustPointsOnComplete,
+  adjustDistanceOnComplete,
 } from '@/services/user-stats.service';
 import dayjs from 'dayjs';
 import { getEffectiveEventStatus, isEventCalendarDateInPast } from '@/utils/event-date';
@@ -306,7 +308,14 @@ const buildEventResultsPipeline = (eventId: string, statuses?: string[]): Pipeli
     eventId: new mongoose.Types.ObjectId(eventId),
   };
   if (statuses && statuses.length > 0) {
-    matchStage.status = { $in: statuses };
+    if (statuses.length == 1 && statuses[0] === 'completed') {
+      matchStage.$or = [
+        { status: { $in: statuses } },
+        { time: { $nin: [null, ''] } },
+      ];
+    } else {
+      matchStage.status = { $in: statuses };
+    }
   }
 
   return [
@@ -585,6 +594,66 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
       },
     },
     t(lang, "event.allEvents"), 200
+  );
+});
+
+export const getHomeEvents = asyncHandler(async (req: Request, res: Response) => {
+  const lang = ((req as any).lang || 'en') as SupportedLanguage;
+  const pageNum = Math.max(1, Number(req.query.page) || 1);
+  const limitNum = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
+  const skip = (pageNum - 1) * limitNum;
+  const todayStart = dayjs().startOf('day').toDate();
+
+  const openFilter: any = {
+    status: { $in: ['Open', 'Full'] },
+    eventDate: { $gte: todayStart },
+  };
+
+  let events = await Event.find(openFilter)
+    .populate('createdBy', 'fullName email')
+    .populate('trackId', 'title titleAr')
+    .populate('communityId', 'title titleAr')
+    .sort({ eventDate: 1, createdAt: -1 })
+    .skip(skip)
+    .limit(limitNum)
+    .lean();
+
+  let total = await Event.countDocuments(openFilter);
+
+  if (events.length == 0) {
+    const allFilter: any = {};
+    events = await Event.find(allFilter)
+      .populate('createdBy', 'fullName email')
+      .populate('trackId', 'title titleAr')
+      .populate('communityId', 'title titleAr')
+      .sort({ eventDate: 1, createdAt: -1 })
+      .skip(skip)
+      .limit(limitNum)
+      .lean();
+    total = await Event.countDocuments(allFilter);
+  }
+
+  const localizedEvents = await Promise.all(
+    events.map(async (event) => {
+      const localizedEvent = localizeEventPayload(event as Record<string, any>, lang);
+      localizedEvent.currentParticipants = await getRegisteredParticipantCount(String(event._id));
+      return localizedEvent;
+    })
+  );
+
+  sendSuccess(
+    res,
+    {
+      events: localizedEvents,
+      pagination: {
+        page: pageNum,
+        limit: limitNum,
+        total,
+        pages: Math.ceil(total / limitNum),
+      },
+    },
+    t(lang, "event.allEvents"),
+    200
   );
 });
 
@@ -934,17 +1003,43 @@ export const getEventResults = asyncHandler(async (req: AuthRequest, res: Respon
     throw new AppError(t(lang, 'event.already_submitted'), 400);
   }
 
-  const eventDoc = await Event.findById(eventId).select('trackId title').lean();
+  const eventDoc = await Event.findById(eventId).select('trackId title distance').lean();
   const hasTrack = !!eventDoc?.trackId;
 
-  const distanceKm = Number(req.body.distance) || 0;
+  const submittedDistanceKm = req.body.distance != null && req.body.distance !== ''
+    ? Number(req.body.distance)
+    : undefined;
+
+  let resultDistance = submittedDistanceKm;
+  if (resultDistance === undefined || !Number.isFinite(resultDistance)) {
+    resultDistance = eventDoc?.distance && eventDoc.distance > 0 ? eventDoc.distance : undefined;
+  }
+  if ((resultDistance === undefined || resultDistance <= 0) && eventDoc?.trackId) {
+    const trackDoc = await Track.findById(eventDoc.trackId).select('distance').lean();
+    if (trackDoc?.distance != null && trackDoc.distance > 0) {
+      resultDistance = trackDoc.distance;
+    }
+  }
   const defaultCompletionPoints = 30;
+  const pointsFromBody = req.body.pointsEarned ?? req.body.points ?? req.body.pts;
+  const badgeFromBody = req.body.badge;
+
+  const pointsEarnedValue = pointsFromBody != null ? Number(pointsFromBody) : NaN;
+  const pointsEarned = Number.isFinite(pointsEarnedValue)
+    ? pointsEarnedValue
+    : defaultCompletionPoints;
+
   const updates: Record<string, unknown> = {
-    distance: distanceKm,
     time: req.body.time,
     status: 'completed',
-    pointsEarned: defaultCompletionPoints,
+    pointsEarned,
   };
+  if (resultDistance !== undefined && Number.isFinite(resultDistance)) {
+    updates.distance = resultDistance;
+  }
+  if (badgeFromBody != null) {
+    updates.badge = badgeFromBody === '' ? null : String(badgeFromBody).trim();
+  }
   if (eventResults.status === 'no_show') updates.noShowAt = null;
   if (req.body.calories != null) updates.calories = req.body.calories;
   if (req.body.elevationGain != null) updates.elevationGain = String(req.body.elevationGain).trim() || null;
@@ -954,8 +1049,8 @@ export const getEventResults = asyncHandler(async (req: AuthRequest, res: Respon
 
   await eventResults.save();
 
-  await addDistanceOnComplete(userId, distanceKm, hasTrack);
-  await addPointsOnComplete(userId, defaultCompletionPoints);
+  await addDistanceOnComplete(userId, submittedDistanceKm ?? 0, hasTrack);
+  await addPointsOnComplete(userId, pointsEarned);
 
   const userDoc = await User.findById(userId).select('fullName').lean();
   void notifyAdminTrackRideCompleted({
@@ -1096,6 +1191,7 @@ export const getEventResultsList = asyncHandler(async (req: Request, res: Respon
         noShowAt: 1,
         reason: 1,
         pointsEarned: 1,
+        badge: 1,
         'user._id': 1,
         'user.fullName': 1,
         'user.email': 1,
@@ -1163,11 +1259,54 @@ export const adminUpdateParticipantResult = asyncHandler(async (req: AuthRequest
     throw new AppError(t(lang, 'event.not_member'), 400);
   }
 
-  const { rank, time, points } = req.body as { rank?: number; time?: string; points?: number | null };
+  const eventDoc = await Event.findById(eventId).select('trackId distance').lean();
+  const hasTrack = !!eventDoc?.trackId;
+  const eventDistance = typeof eventDoc?.distance === 'number' && eventDoc.distance > 0 ? eventDoc.distance : 0;
+  let trackDistance = 0;
+  if (eventDistance <= 0 && eventDoc?.trackId) {
+    const trackDoc = await Track.findById(eventDoc.trackId).select('distance').lean();
+    if (trackDoc?.distance != null && trackDoc.distance > 0) {
+      trackDistance = trackDoc.distance;
+    }
+  }
+
+  const previousStatus = eventResult.status;
+  const previousPoints = eventResult.pointsEarned ?? 0;
+  const previousDistance = eventResult.distance ?? 0;
+  const wasCompleted = previousStatus === 'completed';
+
+  const { rank, time, points, pointsEarned, pts, badge, distance } = req.body as {
+    rank?: number;
+    time?: string;
+    points?: number | null;
+    pointsEarned?: number | null;
+    pts?: number | null;
+    badge?: string | null;
+    distance?: number | null;
+  };
+
   const patch: Record<string, unknown> = {};
   if (rank !== undefined) patch.rank = rank === null ? null : Number(rank);
   if (time !== undefined) patch.time = time;
   if (points !== undefined) patch.pointsEarned = points === null ? null : Number(points);
+  if (pointsEarned !== undefined) patch.pointsEarned = pointsEarned === null ? null : Number(pointsEarned);
+  if (pts !== undefined) patch.pointsEarned = pts === null ? null : Number(pts);
+  if (distance !== undefined) patch.distance = distance === null ? null : Number(distance);
+  if (badge !== undefined) patch.badge = badge === null ? null : String(badge);
+
+  const hasResultTime = time !== undefined && String(time).trim() !== '';
+  const hasResultPoints = points !== undefined || pointsEarned !== undefined || pts !== undefined;
+  const shouldComplete = !wasCompleted && (hasResultTime || hasResultPoints || distance !== undefined);
+  if (shouldComplete) {
+    patch.status = 'completed';
+    patch.noShowAt = null;
+    if (distance === undefined && previousDistance <= 0) {
+      const fallbackDistance = eventDistance > 0 ? eventDistance : trackDistance;
+      if (fallbackDistance > 0) {
+        patch.distance = fallbackDistance;
+      }
+    }
+  }
 
   if (Object.keys(patch).length === 0) {
     throw new AppError(t(lang, 'common.bad_request'), 400);
@@ -1175,6 +1314,29 @@ export const adminUpdateParticipantResult = asyncHandler(async (req: AuthRequest
 
   eventResult.set(patch);
   await eventResult.save();
+
+  const effectivePoints = patch.pointsEarned !== undefined
+    ? Number(patch.pointsEarned)
+    : previousPoints;
+  const pointsDelta = effectivePoints - previousPoints;
+  const newDistance = patch.distance !== undefined
+    ? Number(patch.distance)
+    : previousDistance > 0
+      ? previousDistance
+      : (eventDistance > 0 ? eventDistance : trackDistance);
+
+  if (shouldComplete) {
+    await addDistanceOnComplete(userId, newDistance, hasTrack);
+    await addPointsOnComplete(userId, effectivePoints);
+  } else if (wasCompleted) {
+    if (pointsDelta !== 0) {
+      await adjustPointsOnComplete(userId, pointsDelta);
+    }
+    const distanceDelta = newDistance - previousDistance;
+    if (distanceDelta !== 0) {
+      await adjustDistanceOnComplete(userId, distanceDelta);
+    }
+  }
 
   sendSuccess(res, eventResult, t(lang, 'event.updated'), 200);
 });
@@ -1341,6 +1503,7 @@ export const exportEventResults = asyncHandler(async (req: AuthRequest, res: Res
         noShowAt: 1,
         reason: 1,
         pointsEarned: 1,
+        badge: 1,
         'user.fullName': 1,
         'user.email': 1,
         'event.title': 1,
@@ -1679,7 +1842,10 @@ export const getEventCompletedSummary = asyncHandler(async (req: AuthRequest, re
   const eventResult = await EventResult.findOne({
     eventId: eventIdParam,
     userId,
-    status: 'completed',
+    $or: [
+      { status: 'completed' },
+      { time: { $nin: [null, ''] } },
+    ],
   }).lean();
 
   if (!eventResult || !eventResult.time) {
@@ -1687,7 +1853,7 @@ export const getEventCompletedSummary = asyncHandler(async (req: AuthRequest, re
   }
 
   const event = await Event.findById(eventIdParam)
-    .select('title titleAr eventDate trackId')
+    .select('title titleAr eventDate trackId mainImage eventImage distance rewards.badgeName')
     .lean();
 
   if (!event) {
@@ -1702,7 +1868,14 @@ export const getEventCompletedSummary = asyncHandler(async (req: AuthRequest, re
     }
   }
 
-  const distanceKm = eventResult.distance ?? 0;
+  const eventTitle =
+    lang === 'ar' ? (event.titleAr || event.title) : event.title;
+
+  const badgeName = String(eventResult.badge ?? event?.rewards?.badgeName ?? '').trim() || null;
+
+  const resultDistance = eventResult.distance ?? 0;
+  const eventDistance = typeof event.distance === 'number' && event.distance > 0 ? event.distance : 0;
+  const distanceKm = resultDistance > 0 ? resultDistance : eventDistance;
   const duration = eventResult.time;
   const seconds = parseTimeToSeconds(eventResult.time);
   const avgSpeedKmh =
@@ -1710,16 +1883,13 @@ export const getEventCompletedSummary = asyncHandler(async (req: AuthRequest, re
       ? Math.round((distanceKm / (seconds / 3600)) * 10) / 10
       : null;
 
-  const eventTitle =
-    lang === 'ar' ? (event.titleAr || event.title) : event.title;
-
   const summary = {
     distance: distanceKm,
     duration,
     avgSpeedKmh,
     calories: eventResult.calories ?? null,
     elevationGain,
-    badge: eventResult.badge ?? null,
+    badge: badgeName,
     pointsEarned: eventResult.pointsEarned ?? null,
     rank: eventResult.rank ?? null,
     rating: eventResult.rating ?? null,
@@ -1728,6 +1898,8 @@ export const getEventCompletedSummary = asyncHandler(async (req: AuthRequest, re
     event: {
       title: eventTitle,
       eventDate: event.eventDate,
+      mainImage: event.mainImage ?? null,
+      eventImage: event.eventImage ?? null,
     },
   };
 

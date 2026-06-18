@@ -33,7 +33,8 @@ const normalizePhotosInput = (value: unknown): string[] => {
     return value
       .filter((item): item is string => typeof item === 'string')
       .map((item) => item.trim())
-      .filter(Boolean);
+      .filter(Boolean)
+      .filter((item) => item !== '__uploaded_photos__');
   }
 
   if (typeof value === 'string') {
@@ -123,6 +124,16 @@ const attachStoreItemImages = async (req: AuthRequest, data: Record<string, any>
     data.photos = [...(data.photos || []), ...uploaded];
   }
 
+  if (files.video?.length) {
+    const uploadResult = await uploadImageBufferToS3(
+      files.video[0].buffer,
+      files.video[0].mimetype,
+      files.video[0].originalname,
+      'store-items'
+    );
+    data.video = uploadResult.url;
+  }
+
   return data;
 };
 
@@ -144,8 +155,11 @@ export const createStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
   if (!data.coverImage && Array.isArray(data.photos) && data.photos.length > 0) {
     data.coverImage = data.photos[0];
   }
-  if (!data.photos || data.photos.length === 0) {
-    throw new AppError(t(lang, 'store.photos_required'), 400);
+  if ((data.photos == null || data.photos.length === 0) && !data.video) {
+    throw new AppError('At least one photo or a video is required', 400);
+  }
+  if (Array.isArray(data.photos) && data.photos.length > 5) {
+    throw new AppError('Up to 5 photos are allowed', 400);
   }
 
   const seller = await User.findById(userId).select('fullName').lean();
@@ -379,6 +393,9 @@ export const updateStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
     updates.photos = normalizePhotosInput(updates.photos);
   }
   await attachStoreItemImages(req, updates);
+  if (updates.photos && updates.photos.length > 5) {
+    throw new AppError('Up to 5 photos are allowed', 400);
+  }
   if (updates.photos && !updates.coverImage) {
     updates.coverImage = updates.photos[0];
   }

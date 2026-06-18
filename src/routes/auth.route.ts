@@ -7,6 +7,7 @@ import {
   deleteMyAccount,
   getCurrentUser,
   getCurrentUserStats,
+  getCurrentUserMonthlyStats,
   getMyJoinedCommunities,
   getMyJoinedEvents,
   getMyActiveParticipations,
@@ -45,6 +46,7 @@ router.post('/guestLogin', guestLogin);
 router.post('/logout', authenticate, validate(logoutSchema), logout);
 router.delete('/delete-account', authenticate, deleteMyAccount);
 router.get('/me/stats', authenticate, getCurrentUserStats);
+router.get('/me/monthly-stats', authenticate, getCurrentUserMonthlyStats);
 router.get('/me/performance-insights', authenticate, getPerformanceInsights);
 router.get('/me/joined-communities', authenticate, getMyJoinedCommunities);
 router.get('/me/joined-events', authenticate, getMyJoinedEvents);

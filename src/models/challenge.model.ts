@@ -21,6 +21,7 @@ export interface IChallenge extends Document {
   startDate: Date;
   endDate: Date;
   rewardBadge?: mongoose.Types.ObjectId;
+  rules?: string[];
   featured: boolean;
   status: ChallengeStatus;
   participants: number;
@@ -76,6 +77,10 @@ const ChallengeSchema = new Schema(
     rewardBadge: {
       type: Schema.Types.ObjectId,
       ref: 'badges',
+    },
+    rules: {
+      type: [String],
+      default: [],
     },
     featured: {
       type: Boolean,

@@ -110,6 +110,36 @@ export const getAllChallenges = asyncHandler(async (req: Request, res: Response)
 });
 
 /**
+ * Get top challenge leaderboard
+ * GET /v1/challenges/leaderboard
+ */
+export const getChallengeLeaderboard = asyncHandler(async (req: Request, res: Response) => {
+  const pageNum = Math.max(1, Number(req.query.page) || 1);
+  const limitNum = Math.min(100, Math.max(1, Number(req.query.limit) || 10));
+  const skip = (pageNum - 1) * limitNum;
+  const now = new Date();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+  const joins = await ChallengeJoin.find({
+    status: 'joined',
+    joinedAt: { $gte: startOfMonth },
+  })
+    .populate('userId', 'fullName')
+    .sort({ progressPercent: -1, progressValue: -1, joinedAt: -1 })
+    .skip(skip)
+    .limit(limitNum)
+    .lean();
+
+  const riders = joins.map((j: any) => ({
+    name: String(j.userId?.fullName ?? 'Rider'),
+    team: '',
+    time: String(j.progressPercent ?? j.progressValue ?? 0),
+  }));
+
+  sendSuccess(res, { riders }, 'Challenge leaderboard retrieved');
+});
+
+/**
  * Get challenge by ID
  * GET /v1/challenges/:id
  */

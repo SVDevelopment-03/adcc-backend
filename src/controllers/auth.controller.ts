@@ -630,20 +630,6 @@ export const getCurrentUserStats = asyncHandler(
       throw new AppError(t(lang, 'auth.user_not_found'), 404);
     }
 
-    const s = user.stats;
-    const hasMaterializedStats =
-      s &&
-      typeof s.totalDistanceKm === 'number' &&
-      typeof s.totalRides === 'number' &&
-      typeof s.totalEventsParticipated === 'number' &&
-      typeof s.totalPoints === 'number' &&
-      typeof s.completedCount === 'number';
-
-    if (hasMaterializedStats) {
-      sendSuccess(res, { ...s }, t(lang, 'auth.stats_retrieved'));
-      return;
-    }
-
     const objectIdUserId = new mongoose.Types.ObjectId(userId);
     const results = await EventResult.aggregate([
       {
@@ -662,13 +648,33 @@ export const getCurrentUserStats = asyncHandler(
       },
       { $unwind: { path: '$event', preserveNullAndEmptyArrays: false } },
       {
+        $lookup: {
+          from: 'tracks',
+          localField: 'event.trackId',
+          foreignField: '_id',
+          as: 'track',
+        },
+      },
+      { $unwind: { path: '$track', preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          isCompleted: {
+            $or: [
+              { $eq: ['$status', 'completed'] },
+              { $and: [ { $ne: ['$time', null] }, { $ne: ['$time', ''] } ] },
+              { $ne: ['$pointsEarned', null] },
+            ],
+          },
+        },
+      },
+      {
         $group: {
           _id: null,
           totalDistanceKm: {
             $sum: {
               $cond: [
-                { $eq: ['$status', 'completed'] },
-                { $ifNull: ['$distance', 0] },
+                '$isCompleted',
+                { $ifNull: ['$distance', { $ifNull: ['$event.distance', '$track.distance'] }] },
                 0,
               ],
             },
@@ -679,7 +685,7 @@ export const getCurrentUserStats = asyncHandler(
               $cond: [
                 {
                   $and: [
-                    { $eq: ['$status', 'completed'] },
+                    '$isCompleted',
                     { $ne: ['$event.trackId', null] },
                   ],
                 },
@@ -691,7 +697,7 @@ export const getCurrentUserStats = asyncHandler(
           totalPoints: {
             $sum: {
               $cond: [
-                { $eq: ['$status', 'completed'] },
+                '$isCompleted',
                 { $ifNull: ['$pointsEarned', 0] },
                 0,
               ],
@@ -699,7 +705,7 @@ export const getCurrentUserStats = asyncHandler(
           },
           completedCount: {
             $sum: {
-              $cond: [{ $eq: ['$status', 'completed'] }, 1, 0],
+              $cond: ['$isCompleted', 1, 0],
             },
           },
         },
@@ -725,6 +731,161 @@ export const getCurrentUserStats = asyncHandler(
     await User.findByIdAndUpdate(userId, { $set: { stats } });
 
     sendSuccess(res, stats, t(lang, 'auth.stats_retrieved'));
+  }
+);
+
+/**
+ * Get current user monthly stats (distance, rides, rank change)
+ * GET /v1/auth/me/monthly-stats
+ */
+export const getCurrentUserMonthlyStats = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const lang = resolveRequestLanguage(req);
+    const userId = req.user?.id;
+    if (!userId) {
+      throw new AppError(t(lang, 'auth.unauthorized'), 401);
+    }
+
+    const objectIdUserId = new mongoose.Types.ObjectId(userId);
+    const now = new Date();
+    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+    const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+    const previousMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const previousMonthEnd = currentMonthStart;
+
+    const currentStatsResults = await EventResult.aggregate([
+      {
+        $match: {
+          userId: objectIdUserId,
+          status: { $in: ['joined', 'checked_in', 'no_show', 'completed'] },
+          updatedAt: { $gte: currentMonthStart, $lt: nextMonthStart },
+        },
+      },
+      {
+        $lookup: {
+          from: 'events',
+          localField: 'eventId',
+          foreignField: '_id',
+          as: 'event',
+        },
+      },
+      { $unwind: { path: '$event', preserveNullAndEmptyArrays: false } },
+      {
+        $lookup: {
+          from: 'tracks',
+          localField: 'event.trackId',
+          foreignField: '_id',
+          as: 'track',
+        },
+      },
+      { $unwind: { path: '$track', preserveNullAndEmptyArrays: true } },
+      {
+        $addFields: {
+          isCompleted: {
+            $or: [
+              { $eq: ['$status', 'completed'] },
+              { $and: [ { $ne: ['$time', null] }, { $ne: ['$time', ''] } ] },
+              { $ne: ['$pointsEarned', null] },
+            ],
+          },
+        },
+      },
+      {
+        $group: {
+          _id: null,
+          totalDistanceKm: {
+            $sum: {
+              $cond: [
+                '$isCompleted',
+                { $ifNull: ['$distance', { $ifNull: ['$event.distance', '$track.distance'] }] },
+                0,
+              ],
+            },
+          },
+          totalRides: {
+            $sum: {
+              $cond: [
+                {
+                  $and: [
+                    '$isCompleted',
+                    { $ne: ['$event.trackId', null] },
+                  ],
+                },
+                1,
+                0,
+              ],
+            },
+          },
+          totalPoints: {
+            $sum: {
+              $cond: ['$isCompleted', { $ifNull: ['$pointsEarned', 0] }, 0],
+            },
+          },
+        },
+      },
+    ]);
+
+    const currentStats = currentStatsResults[0]
+      ? {
+          totalDistanceKm: Number(currentStatsResults[0].totalDistanceKm ?? 0),
+          totalRides: Number(currentStatsResults[0].totalRides ?? 0),
+          totalPoints: Number(currentStatsResults[0].totalPoints ?? 0),
+        }
+      : { totalDistanceKm: 0, totalRides: 0, totalPoints: 0 };
+
+    const currentRanking = await EventResult.aggregate([
+      {
+        $match: {
+          status: { $in: ['joined', 'checked_in', 'no_show', 'completed'] },
+          updatedAt: { $gte: currentMonthStart, $lt: nextMonthStart },
+        },
+      },
+      {
+        $group: {
+          _id: '$userId',
+          totalPoints: { $sum: { $ifNull: ['$pointsEarned', 0] } },
+        },
+      },
+      { $sort: { totalPoints: -1 } },
+    ]);
+
+    const previousRanking = await EventResult.aggregate([
+      {
+        $match: {
+          status: { $in: ['joined', 'checked_in', 'no_show', 'completed'] },
+          updatedAt: { $gte: previousMonthStart, $lt: previousMonthEnd },
+        },
+      },
+      {
+        $group: {
+          _id: '$userId',
+          totalPoints: { $sum: { $ifNull: ['$pointsEarned', 0] } },
+        },
+      },
+      { $sort: { totalPoints: -1 } },
+    ]);
+
+    const currentRank = currentRanking.findIndex(
+      (item: any) => String(item._id) === String(objectIdUserId)
+    );
+    const previousRank = previousRanking.findIndex(
+      (item: any) => String(item._id) === String(objectIdUserId)
+    );
+
+    const rankChange =
+      currentRank >= 0 && previousRank >= 0
+        ? previousRank - currentRank
+        : 0;
+
+    sendSuccess(
+      res,
+      {
+        totalDistanceKm: currentStats.totalDistanceKm,
+        totalRides: currentStats.totalRides,
+        rankChange,
+      },
+      t(lang, 'auth.stats_retrieved')
+    );
   }
 );
 
@@ -1144,12 +1305,22 @@ export const getMyCompletedEvents = asyncHandler(
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 10));
     const skip = (page - 1) * limit;
-    const filter = { userId, status: 'completed' };
+    const filter = {
+      userId,
+      $or: [
+        { status: 'completed' },
+        { time: { $nin: [null, ''] } },
+        { pointsEarned: { $ne: null } },
+      ],
+    };
 
     const [results, total] = await Promise.all([
       EventResult.find(filter as any)
         .select('eventId distance time updatedAt')
-        .populate('eventId', 'title titleAr address addressAr eventDate eventTime city status mainImage communityId trackId category badgeName badgeImage')
+        .populate(
+          'eventId',
+          'title titleAr address addressAr eventDate eventTime city status mainImage communityId trackId category rewards.badgeName rewards.badgeImage'
+        )
         .sort({ updatedAt: -1 })
         .skip(skip)
         .limit(limit)
@@ -1164,7 +1335,7 @@ export const getMyCompletedEvents = asyncHandler(
       const item: any = {
         event: r.eventId,
         completedAt: r.updatedAt,
-        distance: r.distance ?? null,
+        distance: r.distance ?? r.eventId?.distance ?? null,
         time: r.time ?? null,
       };
       if (r.eventId?.trackId) {

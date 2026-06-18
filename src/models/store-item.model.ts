@@ -12,6 +12,7 @@ export interface IStoreItem extends Document {
   price: number;
   photos: string[];
   coverImage?: string;
+  video?: string;
   contactMethod: 'Call' | 'WhatsApp' | 'InApp';
   phoneNumber?: string;
   city: string;
@@ -69,10 +70,27 @@ const StoreItemSchema = new Schema(
     },
     photos: {
       type: [String],
-      required: [true, 'At least one photo is required'],
       default: [],
+      validate: [
+        {
+          validator: function (this: any, value: string[]) {
+            return Array.isArray(value) && value.length <= 5;
+          },
+          message: 'Up to 5 photos are allowed',
+        },
+        {
+          validator: function (this: any, value: string[]) {
+            return (Array.isArray(value) && value.length > 0) || Boolean(this.video);
+          },
+          message: 'At least one photo or a video is required',
+        },
+      ],
     },
     coverImage: {
+      type: String,
+      trim: true,
+    },
+    video: {
       type: String,
       trim: true,
     },
