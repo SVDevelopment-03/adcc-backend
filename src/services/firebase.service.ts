@@ -1,14 +1,35 @@
 import admin from 'firebase-admin';
 import { AppError } from '@/utils/app-error';
+import fs from 'fs';
 import path from 'path';
 
 // Lazy initialization - only initialize when needed
 const initializeFirebase = () => {
   if (!admin.apps.length) {
-    let serviceAccount: admin.ServiceAccount;
+    let serviceAccount: admin.ServiceAccount | undefined;
 
-    // Option 1: Use individual environment variables (preferred for cloud deployment)
-    if (
+    // Option 1: Use service account JSON file path (preferred when provided)
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+      const absolutePath = path.resolve(process.cwd(), process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
+      try {
+        const json = fs.readFileSync(absolutePath, 'utf8');
+        serviceAccount = JSON.parse(json) as admin.ServiceAccount;
+        console.log('[FIREBASE] Loaded service account from path:', absolutePath);
+      } catch (error) {
+        throw new Error(`Failed to load service account from ${absolutePath}. File may not exist or is invalid JSON.`);
+      }
+    }
+    // Option 2: Use JSON string environment variable (alternative for cloud deployment)
+    else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+      try {
+        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        console.log('[FIREBASE] Loaded service account from FIREBASE_SERVICE_ACCOUNT env');
+      } catch (error) {
+        throw new Error('FIREBASE_SERVICE_ACCOUNT is not valid JSON');
+      }
+    }
+    // Option 3: Use individual environment variables (preferred for cloud deployment)
+    else if (
       process.env.FIREBASE_PROJECT_ID &&
       process.env.FIREBASE_PRIVATE_KEY &&
       process.env.FIREBASE_CLIENT_EMAIL
@@ -28,29 +49,32 @@ const initializeFirebase = () => {
         universeDomain: process.env.FIREBASE_UNIVERSE_DOMAIN || 'googleapis.com',
       } as admin.ServiceAccount;
     }
-    
-    // Option 2: Use JSON string environment variable (alternative for cloud deployment)
-    else if (process.env.FIREBASE_SERVICE_ACCOUNT) {
+    // Local fallback for development when serviceAccountKey.json exists in backend root.
+    else if (process.env.NODE_ENV !== 'production') {
+      const fallbackPath = path.resolve(process.cwd(), 'serviceAccountKey.json');
       try {
-        serviceAccount = JSON.parse(process.env.FIREBASE_SERVICE_ACCOUNT);
+        if (!fs.existsSync(fallbackPath)) {
+          throw new Error(`Local Firebase service account file not found at ${fallbackPath}`);
+        }
+        console.log('[FIREBASE] Loading local service account from', fallbackPath);
+        const json = fs.readFileSync(fallbackPath, 'utf8');
+        serviceAccount = JSON.parse(json) as admin.ServiceAccount;
       } catch (error) {
-        throw new Error('FIREBASE_SERVICE_ACCOUNT is not valid JSON');
+        throw new Error(`Failed to load local service account from ${fallbackPath}. File may not exist or is invalid JSON.`);
       }
     }
-    // Option 3: Use file path (for local development - deprecated, use env vars instead)
-    else if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
-      const absolutePath = path.resolve(process.cwd(), process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
-      try {
-        serviceAccount = require(absolutePath) as admin.ServiceAccount;
-      } catch (error) {
-        throw new Error(`Failed to load service account from ${absolutePath}. File may not exist or is invalid JSON.`);
-      }
-    } else {
+    else {
       throw new Error(
-        'Firebase service account not configured. Set FIREBASE_PROJECT_ID, FIREBASE_PRIVATE_KEY, and FIREBASE_CLIENT_EMAIL environment variables.'
+        'Firebase service account not configured. Set FIREBASE_SERVICE_ACCOUNT_PATH, FIREBASE_SERVICE_ACCOUNT, or Firebase service account env vars.'
       );
     }
 
+    if (!serviceAccount) {
+      throw new Error('Firebase service account could not be loaded. Check configuration.');
+    }
+
+    const projectId = (serviceAccount as any).project_id || serviceAccount.projectId || 'unknown';
+    console.log('[FIREBASE] Initializing admin with service account for project:', projectId);
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
@@ -249,7 +273,8 @@ export const sendWebPushNotification = async (
 ): Promise<admin.messaging.BatchResponse> => {
   try {
     initializeFirebase();
-  } catch {
+  } catch (error: any) {
+    console.error('[PUSH] Firebase initialization failed:', error?.message ?? error);
     // Firebase not configured — skip FCM silently
     return { successCount: 0, failureCount: 0, responses: [] };
   }
