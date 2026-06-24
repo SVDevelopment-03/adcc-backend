@@ -347,6 +347,114 @@ export const sendTestBroadcast = asyncHandler(
   }
 );
 
+export const sendCampaignBroadcast = asyncHandler(
+  async (req: AuthRequest, res: Response) => {
+    const { message, url, audienceType, deliveryType, externalEmails, selectedUserIds } = req.body as {
+      message: string;
+      url?: string;
+      audienceType?: string;
+      deliveryType?: 'app' | 'email' | 'both';
+      externalEmails?: string; // comma separated
+      selectedUserIds?: string; // comma separated
+    };
+
+    const parseIdList = (value?: string) =>
+      value
+        ? Array.from(
+            new Set(
+              value
+                .split(',')
+                .map((item) => item.trim())
+                .filter(Boolean)
+            )
+          )
+        : [];
+
+    const selectedIds = audienceType === 'selected_users' ? parseIdList(selectedUserIds) : [];
+    const externalEmailList = parseIdList(externalEmails);
+
+    const title = 'Admin broadcast';
+    const body = `Exciting update from ADCC: ${message?.trim()}`;
+
+    if (!message || !message.trim()) {
+      throw new AppError('Campaign message is required', 400);
+    }
+
+    let emailsSentCount = 0;
+    if (deliveryType === 'email' || deliveryType === 'both') {
+      let emailTargets: string[] = [];
+
+      if (selectedIds.length > 0) {
+        const selectedUsers = await User.find({ _id: { $in: selectedIds } }).select('email').lean();
+        emailTargets = selectedUsers.map((u: any) => u.email).filter(Boolean) as string[];
+      } else if (audienceType === 'all') {
+        const users = await User.find({}).select('email').lean();
+        emailTargets = users.map((u: any) => u.email).filter(Boolean) as string[];
+      } else {
+        const staffUsers = await User.find({ role: { $in: STAFF_ROLES } }).select('email').lean();
+        emailTargets = staffUsers.map((u: any) => u.email).filter(Boolean) as string[];
+      }
+
+      emailTargets = Array.from(new Set([...emailTargets, ...externalEmailList]));
+
+      if (emailTargets.length === 0 && deliveryType === 'email') {
+        sendSuccess(res, { sentTo: 0 }, 'No email recipients found');
+        return;
+      }
+
+      if (emailTargets.length > 0) {
+        try {
+          await emailService.sendEmail({ to: emailTargets, subject: title, text: body });
+          emailsSentCount = emailTargets.length;
+        } catch (err: any) {
+          const reason = err?.message || 'Unknown error';
+          console.error('[push] failed to send campaign emails', err);
+          const hint = reason.includes('Greeting never received')
+            ? ' (Port/TLS mismatch — try port 465 with TLS ON, or port 587 with TLS OFF)'
+            : reason.includes('Invalid login') || reason.includes('authentication')
+              ? ' (Check username/password — Gmail requires an App Password)'
+              : '';
+          throw new AppError(`Failed to send emails: ${reason}${hint}`, 422);
+        }
+      }
+
+      if (deliveryType === 'email') {
+        sendSuccess(res, { sentTo: emailsSentCount }, 'Campaign broadcast emails sent');
+        return;
+      }
+    }
+
+    if (deliveryType === 'app' || deliveryType === 'both' || !deliveryType) {
+      if (selectedIds.length > 0) {
+        const selectedUsers = await User.find({ _id: { $in: selectedIds } }).select('_id fcmTokens').lean();
+        const selectedUserIds = selectedUsers.map((user: any) => String(user._id));
+
+        if (selectedUserIds.length === 0) {
+          sendSuccess(res, { sentToUserCount: 0 }, 'No selected users found');
+          return;
+        }
+
+        const results = await notificationService.sendNotificationToUsers(selectedUserIds, { title, body }, { url });
+        sendSuccess(res, { sentToUserCount: results.length }, 'Campaign broadcast sent to selected users');
+        return;
+      }
+
+      if (audienceType === 'all') {
+        const users = await User.find({}).select('_id fcmTokens').lean();
+        const userIdsWithTokens = users.filter((u: any) => Array.isArray(u.fcmTokens) && u.fcmTokens.length > 0).map((u: any) => String(u._id));
+
+        const results = await notificationService.sendNotificationToUsers(userIdsWithTokens, { title, body }, { url });
+        sendSuccess(res, { sentToUserCount: results.length }, 'Campaign broadcast sent to all users (with tokens)');
+        return;
+      }
+
+      const r = await notificationService.sendToStaff({ title, body, url });
+      sendSuccess(res, { result: r }, 'Campaign broadcast sent to staff');
+      return;
+    }
+  }
+);
+
 /**
  * Get user's notification inbox
  * GET /v1/push-notifications/inbox

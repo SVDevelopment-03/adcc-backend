@@ -358,6 +358,7 @@ export const updateChallengeProgress = asyncHandler(async (req: AuthRequest, res
       challengeId: String(id),
       userId,
       progressPercent,
+      progressValue,
     });
   }
 

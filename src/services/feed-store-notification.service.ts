@@ -61,7 +61,7 @@ export async function notifyFeedPostLiked(params: { postId: string; likerId: str
   const result = await notifyUser(
     params.authorId,
     'Someone liked your post',
-    `❤️ ${likerName} liked your post.`,
+    `❤ ${likerName} liked your post.`,
     `/feed/${params.postId}`
   );
 
@@ -75,7 +75,7 @@ export async function notifyStoreItemApproved(itemId: string): Promise<boolean> 
   const result = await notifyUser(
     String((item as any).createdBy),
     'Store listing approved',
-    `🛒 Your listing '${(item as any).title}' is now live on the ADCC marketplace!`,
+    `Your listing '${(item as any).title}' is now live on the ADCC marketplace!`,
     `/store/items/${itemId}`
   );
 

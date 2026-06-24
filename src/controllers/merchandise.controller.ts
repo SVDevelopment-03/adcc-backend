@@ -365,7 +365,8 @@ export const createMerchandiseCategory = asyncHandler(async (req: AuthRequest, r
   const category = await MerchandiseCategory.create({
     id: categoryId,
     name: body.name,
-    icon: body.icon,
+    icon: body.icon ?? '🏷️',
+    image: body.image,
     active: body.active ?? true,
     subcategories: body.subcategories ?? [],
   });
@@ -385,6 +386,7 @@ export const updateMerchandiseCategory = asyncHandler(async (req: AuthRequest, r
 
   if (body.name !== undefined) category.name = String(body.name);
   if (body.icon !== undefined) category.icon = String(body.icon);
+  if (body.image !== undefined) category.image = String(body.image);
   if (body.active !== undefined) category.active = Boolean(body.active);
   if (body.subcategories !== undefined) category.subcategories = body.subcategories;
 

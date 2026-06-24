@@ -59,7 +59,7 @@ export async function notifyCommunityRidePublished(rideId: string): Promise<bool
   const result = await sendToUsers(
     recipients,
     'New ride added near you',
-    `🗓 A new community ride has been scheduled. Tap to view details and join!`,
+    `A new community ride has been scheduled. Tap to view details and join!`,
     `/community-rides/${rideId}`
   );
 
@@ -84,7 +84,7 @@ export async function notifyCommunityRideJoined(params: { rideId: string; userId
   const start = getRideStartDate((ride as any).date, (ride as any).time);
   const when = start ? formatRideWhen(start) : '';
   const body = when
-    ? `✅ You're registered for ${ride.title} on ${when}. See you on the road!`
+    ? `✅ You're registered for ${ride.title} — ${when}. See you on the road!`
     : `✅ You're registered for ${ride.title}. See you on the road!`;
 
   const result = await sendToUsers([params.userId], 'Ride registration confirmed', body, `/community-rides/${params.rideId}`);
@@ -118,7 +118,7 @@ export async function sweepCommunityRideReminders(): Promise<void> {
     const result = await sendToUsers(
       participantIds,
       'Ride starts tomorrow',
-      `🚴 Your community ride starts tomorrow at ${ride.time}. Check the meeting point in the app!`,
+      `Your community ride starts tomorrow at ${ride.time}. Check the meeting point in the app!`,
       `/community-rides/${ride._id}`
     );
 

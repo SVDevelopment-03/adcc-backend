@@ -60,6 +60,30 @@ export const sendStaffWebPushSchema = z
   })
   .strict();
 
+export const sendCampaignBroadcastSchema = z
+  .object({
+    message: stringField('Campaign message is required'),
+    audienceType: stringField('Audience type is required'),
+    deliveryType: z.preprocess(firstValue, z.enum(['app', 'email', 'both'])).optional(),
+    selectedUserIds: optionalStringField('Invalid selected user ids'),
+    externalEmails: optionalStringField('Invalid external email list'),
+    scheduleDate: optionalStringField('Invalid schedule date'),
+    scheduleTime: optionalStringField('Invalid schedule time'),
+    url: optionalStringField('Invalid URL').refine(
+      (val) => {
+        if (!val) return true;
+        try {
+          new URL(val, 'https://example.com');
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Invalid URL' }
+    ),
+  })
+  .strict();
+
 export type RegisterWebPushTokenInput = z.infer<typeof registerWebPushTokenSchema>;
 export type UnregisterWebPushTokenInput = z.infer<typeof unregisterWebPushTokenSchema>;
 export type SendStaffWebPushInput = z.infer<typeof sendStaffWebPushSchema>;

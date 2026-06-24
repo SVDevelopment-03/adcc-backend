@@ -70,7 +70,8 @@ export const merchandiseQuerySchema = z.object({
 
 export const createMerchandiseCategorySchema = z.object({
   name: z.string().min(1, 'Category name is required'),
-  icon: z.string().min(1, 'Category icon is required'),
+  icon: z.string().min(1, 'Category icon is required').optional(),
+  image: z.string().min(1, 'Category image is required').optional(),
   active: z.boolean().optional().default(true),
   subcategories: z.array(
     z.object({

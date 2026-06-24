@@ -8,12 +8,14 @@ import {
   registerWebPushTokenSchema,
   unregisterWebPushTokenSchema,
   sendStaffWebPushSchema,
+  sendCampaignBroadcastSchema,
 } from '@/validators/push-notification.validator';
 import {
   registerWebPushToken,
   unregisterWebPushToken,
   sendWebPushToStaff,
   sendTestBroadcast,
+  sendCampaignBroadcast,
   getNotificationsInbox,
   markNotificationAsRead,
   markAllNotificationsAsRead,
@@ -96,6 +98,15 @@ router.post(
   upload.none(),
   validate(sendStaffWebPushSchema),
   sendTestBroadcast
+);
+
+router.post(
+  '/campaign-broadcast',
+  authenticate,
+  requireStaffPermission('app_configuration'),
+  upload.none(),
+  validate(sendCampaignBroadcastSchema),
+  sendCampaignBroadcast
 );
 
 router.get(

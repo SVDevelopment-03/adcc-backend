@@ -4,6 +4,7 @@ export interface IMerchandiseCategory extends Document {
   id: string;
   name: string;
   icon: string;
+  image?: string | null;
   active: boolean;
   subcategories: Array<{ id: string; name: string }>;
   createdAt: Date;
@@ -26,9 +27,13 @@ const MerchandiseCategorySchema = new Schema<IMerchandiseCategory>(
     },
     icon: {
       type: String,
-      required: [true, 'Category icon is required'],
       trim: true,
       default: '🏷️',
+    },
+    image: {
+      type: String,
+      trim: true,
+      default: null,
     },
     active: {
       type: Boolean,

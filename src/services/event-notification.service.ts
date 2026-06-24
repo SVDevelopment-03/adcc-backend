@@ -148,10 +148,11 @@ export async function sweepEventReminders(): Promise<void> {
 
     if (within24h && !(event as any).reminder24hSentAt) {
       const participantIds = await getParticipantIds(String(event._id));
+      const reminderTime = event.eventTime ? `tomorrow at ${event.eventTime}` : 'tomorrow';
       const sent = await sendToUsers(
         participantIds,
-        'Event reminder',
-        `⏰ Reminder: ${event.title} is tomorrow at ${event.eventTime}. Don't forget your gear!`,
+        'Event reminder — 24 hours',
+        `⏰ Reminder: ${event.title} is ${reminderTime}. Don't forget your gear!`,
         `/events/${event._id}`
       );
       if (sent) {
@@ -163,8 +164,8 @@ export async function sweepEventReminders(): Promise<void> {
       const participantIds = await getParticipantIds(String(event._id));
       const sent = await sendToUsers(
         participantIds,
-        'Event reminder',
-        `🏁 Your event starts in 1 hour. Head to the check-in point now!`,
+        'Event reminder — 1 hour',
+        `⏰ Your event starts in 1 hour. Head to the check-in point now!`,
         `/events/${event._id}`
       );
       if (sent) {

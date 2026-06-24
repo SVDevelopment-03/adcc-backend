@@ -87,7 +87,7 @@ export async function notifyCommunityAnnouncement(params: {
   const title = 'New community announcement';
   const postTitle = params.postTitle?.trim() || params.titleText.trim();
   const author = params.byName?.trim() || community.title;
-  const body = `📢 ${author} posted: '${postTitle}'.`;
+  const body = `${author} posted: '${postTitle}'.`;
   return sendToCommunityMembers(params.communityId, title, body, params.url ?? `/communities/${params.communityId}`);
 }
 
@@ -100,7 +100,7 @@ export async function notifyCommunityNewMember(params: {
   if (!community) return { successCount: 0, failureCount: 0 };
 
   const title = 'New member joined your community';
-  const body = `👋 ${params.memberName.trim() || 'A member'} joined ${community.title}.`;
+  const body = `${params.memberName.trim() || 'A member'} joined ${community.title}.`;
   return sendToCommunityAdmins(params.communityId, title, body, params.url ?? `/communities/${params.communityId}`);
 }
 
@@ -116,7 +116,7 @@ export async function notifyCommunityEventCreated(params: {
   if ((event as any)?.communityNotificationSentAt) return { successCount: 0, failureCount: 0 };
 
   const title = 'New event in your community';
-  const body = `📅 A new event has been added to ${community.title}. Tap to see details.`;
+  const body = `A new event has been added to ${community.title}. Tap to see details.`;
   const result = await sendToCommunityMembers(params.communityId, title, body, params.url ?? `/events/${params.eventId}`);
   if (result.successCount || result.failureCount) {
     await Event.updateOne({ _id: params.eventId }, { $set: { communityNotificationSentAt: new Date() } });
@@ -133,7 +133,7 @@ export async function notifyCommunityGalleryAdded(params: {
   if (!community) return { successCount: 0, failureCount: 0 };
 
   const title = 'New gallery photos added';
-  const body = `📸 ${params.imageCount} new photos added to ${community.title} gallery from last weekend's ride.`;
+  const body = `${params.imageCount} new photos added to ${community.title} gallery from last weekend's ride.`;
   return sendToCommunityMembers(params.communityId, title, body, params.url ?? `/communities/${params.communityId}`);
 }
 

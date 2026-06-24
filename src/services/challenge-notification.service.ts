@@ -72,18 +72,23 @@ async function sendToUsers(
 
 export async function notifyChallengePublished(challengeId: string): Promise<boolean> {
   const challenge = await Challenge.findById(challengeId)
-    .select('title status publishedNotificationSentAt communities')
+    .select('title status publishedNotificationSentAt communities rewardBadge')
+    .populate('rewardBadge', 'name')
     .lean();
 
   if (!challenge) return false;
   if ((challenge as any).publishedNotificationSentAt) return false;
   if (!['Active', 'Upcoming'].includes((challenge as any).status)) return false;
 
+  const badgeName = typeof (challenge as any).rewardBadge === 'object'
+    ? String((challenge as any).rewardBadge.name || 'badge')
+    : 'badge';
+
   const recipientIds = await getChallengeAudienceIds(challengeId);
   const result = await sendToUsers(
     recipientIds,
     'New challenge available',
-    `🏁 ${challenge.title} is now open. Join now and start tracking your progress!`,
+    `New challenge: ${challenge.title}. Join now and earn the ${badgeName}!`,
     `/challenges/${challengeId}`
   );
 
@@ -102,7 +107,7 @@ export async function notifyChallengeJoined(params: { challengeId: string; userI
   const result = await sendToUsers(
     [params.userId],
     'Challenge joined',
-    `✅ You joined ${challenge.title}. Start riding to hit your milestones!`,
+    `✅ You've enrolled in ${challenge.title}. Good luck!`,
     `/challenges/${params.challengeId}`
   );
 
@@ -113,40 +118,56 @@ export async function notifyChallengeProgressMilestones(params: {
   challengeId: string;
   userId: string;
   progressPercent: number;
+  progressValue?: number;
 }): Promise<{ milestoneReached: boolean; completed: boolean }> {
-  const challenge = await Challenge.findById(params.challengeId).select('title rewardBadge').lean();
+  const challenge = await Challenge.findById(params.challengeId)
+    .select('title unit target rewardBadge')
+    .populate('rewardBadge', 'name')
+    .lean();
   const joinRecord = await ChallengeJoin.findOne({ challengeId: params.challengeId, userId: params.userId });
   if (!challenge || !joinRecord) return { milestoneReached: false, completed: false };
 
   const updates: Record<string, Date> = {};
   let milestoneReached = false;
   const percent = Math.max(0, Math.min(100, Math.round(params.progressPercent)));
+  const target = Number((challenge as any).target || 0);
+  const unit = String((challenge as any).unit || '').trim();
+  const progressValue = Number(params.progressValue ?? joinRecord.progressValue ?? 0);
+
+  const completedValue = Math.max(0, Math.min(target, progressValue));
+  const remainingValue = Math.max(0, target - completedValue);
+  const formatValue = (value: number) => (Number.isInteger(value) ? String(value) : value.toFixed(1));
+  const distanceText = unit ? `${formatValue(completedValue)}${unit}` : `${formatValue(completedValue)}`;
+  const remainingText = unit ? `${formatValue(remainingValue)}${unit}` : `${formatValue(remainingValue)}`;
+  const milestoneBody = `You've hit ${percent}% of your challenge — ${distanceText} down, ${remainingText} to go. Keep riding!`;
+  const badgeName = typeof (challenge as any).rewardBadge === 'object'
+    ? String((challenge as any).rewardBadge.name || 'Elite Rider Badge')
+    : 'Elite Rider Badge';
 
   if (percent >= 25 && !joinRecord.milestone25SentAt) {
-    await sendToUsers([params.userId], 'Challenge milestone reached', `🎯 You hit 25% of ${challenge.title}. Keep going!`, `/challenges/${params.challengeId}`);
+    await sendToUsers([params.userId], 'Challenge milestone reached', milestoneBody, `/challenges/${params.challengeId}`);
     updates.milestone25SentAt = new Date();
     milestoneReached = true;
   }
 
   if (percent >= 50 && !joinRecord.milestone50SentAt) {
-    await sendToUsers([params.userId], 'Challenge milestone reached', `🔥 You hit 50% of ${challenge.title}. Halfway there!`, `/challenges/${params.challengeId}`);
+    await sendToUsers([params.userId], 'Challenge milestone reached', milestoneBody, `/challenges/${params.challengeId}`);
     updates.milestone50SentAt = new Date();
     milestoneReached = true;
   }
 
   if (percent >= 75 && !joinRecord.milestone75SentAt) {
-    await sendToUsers([params.userId], 'Challenge milestone reached', `🏆 You hit 75% of ${challenge.title}. Almost done!`, `/challenges/${params.challengeId}`);
+    await sendToUsers([params.userId], 'Challenge milestone reached', milestoneBody, `/challenges/${params.challengeId}`);
     updates.milestone75SentAt = new Date();
     milestoneReached = true;
   }
 
   const completed = percent >= 100 && !joinRecord.completedNotificationSentAt;
   if (completed) {
-    const rewardText = challenge.rewardBadge ? ' Your badge is ready.' : ' You finished the challenge.';
     await sendToUsers(
       [params.userId],
-      'Challenge completed',
-      `🎉 You completed ${challenge.title}.${rewardText}`,
+      'Challenge completed — badge earned',
+      `Congratulations! You completed the challenge and earned the ${badgeName}!`,
       `/challenges/${params.challengeId}`
     );
     updates.completedNotificationSentAt = new Date();
@@ -173,14 +194,16 @@ export async function notifyChallengeEndingSoon(challengeId: string): Promise<bo
 
   const now = new Date();
   const diffMs = endDate.getTime() - now.getTime();
-  const withinWindow = diffMs > 0 && diffMs <= 72 * 60 * 60 * 1000;
+  const threeDaysMs = 72 * 60 * 60 * 1000;
+  const twoDaysMs = 48 * 60 * 60 * 1000;
+  const withinWindow = diffMs > twoDaysMs && diffMs <= threeDaysMs;
   if (!withinWindow) return false;
 
   const recipientIds = await getParticipantIds(challengeId);
   const result = await sendToUsers(
     recipientIds,
     'Challenge ending soon',
-    `⏰ ${challenge.title} ends soon. Finish strong before the deadline.`,
+    `⏳ 3 days left to complete your ${challenge.title}. Push through!`,
     `/challenges/${challengeId}`
   );
 
