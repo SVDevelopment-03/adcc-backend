@@ -24,6 +24,7 @@ import { requireDbReady } from './middleware/db-ready.middleware';
 import { startEventNotificationScheduler } from './services/event-notification.service';
 import { startChallengeNotificationScheduler } from './services/challenge-notification.service';
 import { startCommunityRideNotificationScheduler } from './services/community-ride-notification.service';
+import { seedDefaultLookups, warmAllLookupCaches } from './services/lookup.service';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -74,6 +75,26 @@ const corsOptions: cors.CorsOptions = {
 
     mongoose.connection.once('connected', () => {
       startNotificationSchedulers();
+    });
+  };
+
+  const initLookups = async () => {
+    try {
+      await seedDefaultLookups();
+      await warmAllLookupCaches();
+    } catch (error) {
+      console.error('Failed to seed/warm lookup cache:', error);
+    }
+  };
+
+  const initLookupsWhenDbReady = () => {
+    if (mongoose.connection.readyState === 1) {
+      void initLookups();
+      return;
+    }
+
+    mongoose.connection.once('connected', () => {
+      void initLookups();
     });
   };
 
@@ -150,3 +171,4 @@ const startServer = async () => {
 
 startServer();
 startNotificationSchedulersWhenDbReady();
+initLookupsWhenDbReady();

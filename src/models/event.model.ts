@@ -18,14 +18,13 @@ export interface IEventSchedule {
 
 export type IEventAmenity = string;
 
-export type IEventCategory =
-  | 'Race'
-  | 'Community Ride'
-  | 'Training & Clinics'
-  | 'Awareness Rides'
-  | 'Family & Kids'
-  | 'Corporate Events'
-  | 'National Events';
+/**
+ * Event categories are dashboard-managed (see the `lookups` collection,
+ * type "event_category") rather than a fixed enum, so admins can add/edit/
+ * remove categories without a code change. The stored value is the entry's
+ * English label (see lookup.model.ts for why value === label here).
+ */
+export type IEventCategory = string;
 
 export interface IEvent {
   amenities?: IEventAmenity[];
@@ -241,8 +240,9 @@ const EventSchema = new Schema(
       trim: true,
     },
     category: {
+      // Dashboard-managed via the `lookups` collection (type "event_category") —
+      // intentionally not a Mongoose enum so new categories don't require a deploy.
       type: String,
-      enum: ['Race', 'Community Ride', 'Training & Clinics', 'Awareness Rides', 'Family & Kids', 'Corporate Events', 'National Events'],
       trim: true,
     },
     currentParticipants: {

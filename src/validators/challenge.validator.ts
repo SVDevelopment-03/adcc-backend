@@ -83,9 +83,11 @@ export const updateChallengeProgressSchema = z
 export const createChallengeSchema = z
   .object({
     title: z.preprocess(firstValue, z.string().min(1, 'Challenge title is required')),
+    titleAr: z.preprocess(firstValue, z.string()).optional(),
     description: z.preprocess(firstValue, z.string().min(1, 'Challenge description is required')),
+    descriptionAr: z.preprocess(firstValue, z.string()).optional(),
     image: z.preprocess(firstValue, z.string().url('Invalid image URL')).optional(),
-    type: z.preprocess(firstValue, z.enum(['Distance', 'Frequency', 'Duration', 'Social', 'Event'])),
+    type: z.preprocess(firstValue, z.string().min(1, 'Challenge type is required')),
     target: z.preprocess(firstValue, z.coerce.number().min(0, 'Target cannot be negative')),
     unit: z.preprocess(firstValue, z.string().min(1, 'Unit is required')),
     startDate: dateField('Invalid start date'),
@@ -120,9 +122,11 @@ export const createChallengeSchema = z
 export const updateChallengeSchema = z
   .object({
     title: z.preprocess(firstValue, z.string().min(1, 'Challenge title is required')).optional(),
+    titleAr: z.preprocess(firstValue, z.string()).optional(),
     description: z.preprocess(firstValue, z.string().min(1, 'Challenge description is required')).optional(),
+    descriptionAr: z.preprocess(firstValue, z.string()).optional(),
     image: z.preprocess(firstValue, z.string().url('Invalid image URL')).optional(),
-    type: z.preprocess(firstValue, z.enum(['Distance', 'Frequency', 'Duration', 'Social', 'Event'])).optional(),
+    type: z.preprocess(firstValue, z.string().min(1, 'Challenge type is required')).optional(),
     target: z.preprocess(firstValue, z.coerce.number().min(0, 'Target cannot be negative')).optional(),
     unit: z.preprocess(firstValue, z.string().min(1, 'Unit is required')).optional(),
     startDate: optionalDateField('Invalid start date'),
@@ -157,7 +161,7 @@ export const updateChallengeSchema = z
 
 export const getChallengesQuerySchema = z.object({
   status: z.enum(['Draft', 'Active', 'Upcoming', 'Completed', 'Closed', 'Disabled', 'Archived']).optional(),
-  type: z.enum(['Distance', 'Frequency', 'Duration', 'Social', 'Event']).optional(),
+  type: z.string().optional(),
   featured: z.string().transform((val) => val === 'true').optional(),
   communityId: optionalObjectIdSchema,
   search: z.string().trim().min(1).optional(),

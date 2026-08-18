@@ -1,15 +1,8 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
 
-export type FacilityType =
-  | 'water stations'
-  | 'restrooms'
-  | 'parking'
-  | 'lighting'
-  | 'cafes'
-  | 'bike rental'
-  | 'first aid'
-  | 'changing rooms';
+// Dashboard-managed via the `lookups` collection (type "track_facility").
+export type FacilityType = string;
 
 export interface ITrackFacility {
   facilities?: FacilityType[];
@@ -77,8 +70,9 @@ const TrackSchema = new Schema(
     avgtime: { type: String },
     pace: { type: String, trim: true },
     facilities: {
+        // Dashboard-managed via the `lookups` collection (type "track_facility") —
+        // intentionally not a Mongoose enum so new facilities don't require a deploy.
         type: [String],
-        enum: [ 'water stations', 'restrooms', 'parking', 'lighting', 'cafes', 'bike rental', 'first aid', 'changing rooms' ],
         default: [],
       },
     status: { type: String },

@@ -18,7 +18,9 @@ const nameField = z.preprocess(firstValue, z.string().min(1, 'Badge name is requ
 export const createBadgeSchema = z
   .object({
     name: nameField,
+    nameAr: z.preprocess(firstValue, z.string()).optional(),
     description: z.preprocess(firstValue, z.string().min(1, 'Badge description is required')),
+    descriptionAr: z.preprocess(firstValue, z.string()).optional(),
     icon: z.preprocess(firstValue, z.enum(BADGE_ICON_KEYS)),
     category: z.preprocess(firstValue, z.enum(BADGE_CATEGORIES)),
     timesAwarded: z.preprocess(firstValue, z.coerce.number().min(0, 'Times awarded cannot be negative')).optional(),
@@ -32,7 +34,9 @@ export const createBadgeSchema = z
 export const updateBadgeSchema = z
   .object({
     name: nameField.optional(),
+    nameAr: z.preprocess(firstValue, z.string()).optional(),
     description: z.preprocess(firstValue, z.string().min(1, 'Badge description is required')).optional(),
+    descriptionAr: z.preprocess(firstValue, z.string()).optional(),
     icon: z.preprocess(firstValue, z.enum(BADGE_ICON_KEYS)).optional(),
     category: z.preprocess(firstValue, z.enum(BADGE_CATEGORIES)).optional(),
     timesAwarded: z.preprocess(firstValue, z.coerce.number().min(0, 'Times awarded cannot be negative')).optional(),

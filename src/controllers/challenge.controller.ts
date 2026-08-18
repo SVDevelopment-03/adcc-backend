@@ -8,6 +8,7 @@ import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import challengeNotificationService from '@/services/challenge-notification.service';
+import { localizeChallengeStatic } from '@/utils/localization';
 
 const attachChallengeImage = async (req: AuthRequest, data: Record<string, any>) => {
   const file = (req as any).file as Express.Multer.File | undefined;
@@ -50,6 +51,7 @@ export const createChallenge = asyncHandler(async (req: AuthRequest, res: Respon
 
   void challengeNotificationService.notifyChallengePublished(String(challenge._id));
 
+  localizeChallengeStatic(challenge as unknown as Record<string, any>, lang);
   sendSuccess(res, challenge, t(lang, 'challenge.created'), 201);
 });
 
@@ -82,7 +84,7 @@ export const getAllChallenges = asyncHandler(async (req: Request, res: Response)
   const challengesQuery = Challenge.find(filter)
     .populate('createdBy', 'fullName email')
     .populate('communities', 'title')
-    .populate('rewardBadge', 'name icon image category rarity')
+    .populate('rewardBadge', 'name nameAr icon image category rarity')
     .sort({ startDate: 1, createdAt: -1 })
     .skip(skip)
     .limit(limitNum)
@@ -92,6 +94,8 @@ export const getAllChallenges = asyncHandler(async (req: Request, res: Response)
     challengesQuery,
     Challenge.countDocuments(filter),
   ]);
+
+  challenges.forEach((challenge) => localizeChallengeStatic(challenge as Record<string, any>, lang));
 
   sendSuccess(
     res,
@@ -151,7 +155,7 @@ export const getChallengeById = asyncHandler(async (req: AuthRequest, res: Respo
   const challenge = await Challenge.findById(id)
     .populate('createdBy', 'fullName email')
     .populate('communities', 'title')
-    .populate('rewardBadge', 'name icon image category rarity');
+    .populate('rewardBadge', 'name nameAr icon image category rarity');
 
   if (!challenge) {
     throw new AppError(t(lang, 'challenge.not_found'), 404);
@@ -169,6 +173,8 @@ export const getChallengeById = asyncHandler(async (req: AuthRequest, res: Respo
     progressValue: joinRecord?.progressValue ?? 0,
     progressPercent: joinRecord?.progressPercent ?? 0,
   };
+
+  localizeChallengeStatic(payload, lang);
 
   sendSuccess(res, payload, t(lang, 'challenge.details'));
 });
@@ -199,7 +205,7 @@ export const updateChallenge = asyncHandler(async (req: AuthRequest, res: Respon
   })
     .populate('createdBy', 'fullName email')
     .populate('communities', 'title')
-    .populate('rewardBadge', 'name icon image category rarity');
+    .populate('rewardBadge', 'name nameAr icon image category rarity');
 
   if (!challenge) {
     throw new AppError(t(lang, 'challenge.not_found'), 404);
@@ -211,6 +217,7 @@ export const updateChallenge = asyncHandler(async (req: AuthRequest, res: Respon
     void challengeNotificationService.notifyChallengePublished(String(challenge._id));
   }
 
+  localizeChallengeStatic(challenge as unknown as Record<string, any>, lang);
   sendSuccess(res, challenge, t(lang, 'challenge.updated'));
 });
 
@@ -251,12 +258,13 @@ export const joinChallenge = asyncHandler(async (req: AuthRequest, res: Response
     const challenge = await Challenge.findById(id)
       .populate('createdBy', 'fullName email')
       .populate('communities', 'title')
-      .populate('rewardBadge', 'name icon image category rarity');
+      .populate('rewardBadge', 'name nameAr icon image category rarity');
 
     if (!challenge) {
       throw new AppError(t(lang, 'challenge.not_found'), 404);
     }
 
+    localizeChallengeStatic(challenge as unknown as Record<string, any>, lang);
     sendSuccess(res, challenge, t(lang, 'challenge.joined') || 'Joined challenge');
     return;
   }
@@ -268,7 +276,7 @@ export const joinChallenge = asyncHandler(async (req: AuthRequest, res: Response
   )
     .populate('createdBy', 'fullName email')
     .populate('communities', 'title')
-    .populate('rewardBadge', 'name icon image category rarity');
+    .populate('rewardBadge', 'name nameAr icon image category rarity');
 
   if (!challenge) {
     throw new AppError(t(lang, 'challenge.not_found'), 404);
@@ -294,6 +302,7 @@ export const joinChallenge = asyncHandler(async (req: AuthRequest, res: Response
 
   void challengeNotificationService.notifyChallengeJoined({ challengeId: String(id), userId });
 
+  localizeChallengeStatic(challenge as unknown as Record<string, any>, lang);
   sendSuccess(res, challenge, t(lang, 'challenge.joined') || 'Joined challenge');
 });
 
@@ -365,7 +374,7 @@ export const updateChallengeProgress = asyncHandler(async (req: AuthRequest, res
   const updatedChallenge = await Challenge.findById(id)
     .populate('createdBy', 'fullName email')
     .populate('communities', 'title')
-    .populate('rewardBadge', 'name icon image category rarity');
+    .populate('rewardBadge', 'name nameAr icon image category rarity');
 
   sendSuccess(res, {
     challenge: updatedChallenge,

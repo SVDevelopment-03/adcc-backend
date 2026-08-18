@@ -10,7 +10,9 @@ import {
 
 export interface IBadge extends Document {
   name: string;
+  nameAr?: string;
   description: string;
+  descriptionAr?: string;
   icon: BadgeIcon;
   category: BadgeCategory;
   timesAwarded: number;
@@ -29,9 +31,17 @@ const BadgeSchema = new Schema(
       required: [true, 'Badge title is required'],
       trim: true,
     },
+    nameAr: {
+      type: String,
+      trim: true,
+    },
     description: {
       type: String,
       required: [true, 'Badge description is required'],
+      trim: true,
+    },
+    descriptionAr: {
+      type: String,
       trim: true,
     },
     icon: {

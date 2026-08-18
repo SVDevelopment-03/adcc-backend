@@ -7,6 +7,7 @@ import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import { BADGE_ICONS } from '@/constants/badges';
+import { localizeBadgeStatic } from '@/utils/localization';
 
 const attachBadgeImage = async (req: AuthRequest, data: Record<string, any>) => {
   const file = (req as any).file as Express.Multer.File | undefined;
@@ -94,6 +95,8 @@ export const getAllBadges = asyncHandler(async (req: Request, res: Response) => 
     Badge.countDocuments(filter),
   ]);
 
+  badges.forEach((badge) => localizeBadgeStatic(badge as Record<string, any>, lang));
+
   sendSuccess(
     res,
     {
@@ -123,6 +126,8 @@ export const getBadgeById = asyncHandler(async (req: Request, res: Response) => 
   if (!badge) {
     throw new AppError(t(lang, 'badge.not_found'), 404);
   }
+
+  localizeBadgeStatic(badge as unknown as Record<string, any>, lang);
 
   sendSuccess(res, badge, t(lang, 'badge.details'));
 });

@@ -1,6 +1,7 @@
 import mongoose, { Schema, Document } from 'mongoose';
 
-export type ChallengeType = 'Distance' | 'Frequency' | 'Duration' | 'Social' | 'Event';
+// Dashboard-managed via the `lookups` collection (type "challenge_type").
+export type ChallengeType = string;
 
 export type ChallengeStatus =
   | 'Draft'
@@ -13,7 +14,9 @@ export type ChallengeStatus =
 
 export interface IChallenge extends Document {
   title: string;
+  titleAr?: string;
   description: string;
+  descriptionAr?: string;
   image?: string;
   type: ChallengeType;
   target: number;
@@ -42,9 +45,17 @@ const ChallengeSchema = new Schema(
       required: [true, 'Challenge title is required'],
       trim: true,
     },
+    titleAr: {
+      type: String,
+      trim: true,
+    },
     description: {
       type: String,
       required: [true, 'Challenge description is required'],
+      trim: true,
+    },
+    descriptionAr: {
+      type: String,
       trim: true,
     },
     image: {
@@ -52,8 +63,9 @@ const ChallengeSchema = new Schema(
       trim: true,
     },
     type: {
+      // Dashboard-managed via the `lookups` collection (type "challenge_type") —
+      // intentionally not a Mongoose enum so new types don't require a deploy.
       type: String,
-      enum: ['Distance', 'Frequency', 'Duration', 'Social', 'Event'],
       required: [true, 'Challenge type is required'],
     },
     target: {

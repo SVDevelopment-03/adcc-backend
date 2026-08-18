@@ -8,15 +8,17 @@ const initializeFirebase = () => {
   if (!admin.apps.length) {
     let serviceAccount: admin.ServiceAccount | undefined;
 
-    // Option 1: Use service account JSON file path (preferred when provided)
-    if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH) {
+    // Option 1: Use service account JSON file path (preferred when provided and the file exists —
+    // falls through to the other options below rather than failing hard when it's merely absent,
+    // e.g. a local .env pointing at a file that was never checked in).
+    if (process.env.FIREBASE_SERVICE_ACCOUNT_PATH && fs.existsSync(path.resolve(process.cwd(), process.env.FIREBASE_SERVICE_ACCOUNT_PATH))) {
       const absolutePath = path.resolve(process.cwd(), process.env.FIREBASE_SERVICE_ACCOUNT_PATH);
       try {
         const json = fs.readFileSync(absolutePath, 'utf8');
         serviceAccount = JSON.parse(json) as admin.ServiceAccount;
         console.log('[FIREBASE] Loaded service account from path:', absolutePath);
       } catch (error) {
-        throw new Error(`Failed to load service account from ${absolutePath}. File may not exist or is invalid JSON.`);
+        throw new Error(`Failed to load service account from ${absolutePath}. File exists but is invalid JSON.`);
       }
     }
     // Option 2: Use JSON string environment variable (alternative for cloud deployment)

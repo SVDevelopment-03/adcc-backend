@@ -8,7 +8,7 @@ export interface ICommunity extends Document {
   descriptionAr?: string;
   type: string[];
   category: string;
-  location?: 'Abu Dhabi' | 'Dubai' | 'Al Ain' | 'Sharjah';
+  location?: string; // Dashboard-managed via the `lookups` collection (type "city")
   purposeType?: string;
   ridesThisMonth?: string;
   weeklyRides?: string;
@@ -94,59 +94,11 @@ const CommunitySchema = new Schema(
       trim: true,
     },
     location: {
+      // Dashboard-managed via the `lookups` collection (type "city") —
+      // intentionally not a Mongoose enum so new cities don't require a deploy.
       type: String,
-      enum: [
-        "Abu Dhabi",
-        "Dubai",
-        "Sharjah",
-        "Ajman",
-        "Ras Al Khaimah",
-        "Fujairah",
-        "Umm Al Quwain",
-        "Al Ain",
-        "Riyadh",
-        "Jeddah",
-        "Mecca",
-        "Medina",
-        "Dammam",
-        "Khobar",
-        "Dhahran",
-        "Taif",
-        "Tabuk",
-        "Abha",
-        "Jubail",
-        "Yanbu",
-        "Doha",
-        "Al Wakrah",
-        "Al Khor",
-        "Al Rayyan",
-        "Mesaieed",
-        "Dukhan",
-        "Muscat",
-        "Salalah",
-        "Sohar",
-        "Nizwa",
-        "Sur",
-        "Ibri",
-        "Barka",
-        "Rustaq",
-        "Kuwait City",
-        "Hawalli",
-        "Salmiya",
-        "Farwaniya",
-        "Jahra",
-        "Ahmadi",
-        "Mangaf",
-        "Fahaheel",
-        "Manama",
-        "Muharraq",
-        "Riffa",
-        "Hamad Town",
-        "Isa Town",
-        "Sitra",
-        "Budaiya",
-        "Jidhafs"
-      ]},
+      trim: true,
+    },
       
     area: {
       type: String,

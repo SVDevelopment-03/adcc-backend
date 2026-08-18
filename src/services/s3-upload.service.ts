@@ -50,7 +50,9 @@ const FOLDER_MAP: Record<string, string> = {
   content: 'content',
   'content-section': 'content/sections',
   'content-sections': 'content/sections',
-  'badge-images' : 'badge-images'
+  'badge-images' : 'badge-images',
+  'lookup-icons': 'lookups/icons',
+  'lookup-icon': 'lookups/icons',
 };
 
 let s3Client: S3Client | null = null;
@@ -122,7 +124,7 @@ export const resolveUploadFolder = (folderKey: string) => {
   const folder = FOLDER_MAP[normalizedKey];
   if (!folder) {
     throw new AppError(
-      'Invalid upload folder. Allowed folders: events, tracks, store-items, store-items-galleries, community, community-posts, feed-posts, galleries, events-galleries, tracks-galleries, community-galleries, challenges, badges, content-sections, members-profile, merchandise-banners, product-banners, product-categories, merchandise-categories.',
+      'Invalid upload folder. Allowed folders: events, tracks, store-items, store-items-galleries, community, community-posts, feed-posts, galleries, events-galleries, tracks-galleries, community-galleries, challenges, badges, content-sections, members-profile, merchandise-banners, product-banners, product-categories, merchandise-categories, lookup-icons.',
       400
     );
   }

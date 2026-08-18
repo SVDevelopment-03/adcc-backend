@@ -22,7 +22,9 @@ import adminNotificationRoutes from './admin-notification.route';
 import appConfigRoutes from './app-config.route';
 import newsletterSubscriptionRoutes from './newsletter-subscription.route';
 import bannerRoutes from './banner.route';
+import bannerArRoutes from './banner-ar.route';
 import productBannerRoutes from './product-banner.route';
+import lookupRoutes from './lookup.route';
 // import publicStatsRoutes from './public-stats.route';
 const router = Router();
 
@@ -50,8 +52,10 @@ router.use('/dashboard', dashboardRoutes);
 router.use('/admin-notifications', adminNotificationRoutes);
 router.use('/app-config', appConfigRoutes);
 router.use('/app-banners', bannerRoutes);
+router.use('/app-banners-ar', bannerArRoutes);
 router.use('/product-banners', productBannerRoutes);
 router.use('/newsletter-subscriptions', newsletterSubscriptionRoutes);
+router.use('/lookups', lookupRoutes);
 
 // Add more routes here as you create them
 // router.use('/users', userRoutes);

@@ -10,6 +10,7 @@ import { AuthRequest } from '@/middleware/auth.middleware';
 import mongoose from 'mongoose';
 import { SupportedLanguage } from '@/utils/localization';
 import { localizeTrack } from '@/utils/track-payload';
+import { localizeEventPayload } from '@/utils/event-payload';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 
 const normalizeGalleryImagesInput = (value: unknown): string[] => {
@@ -335,10 +336,14 @@ export const getTrackEvents = asyncHandler(async (req: Request, res: Response) =
     Event.countDocuments(filter),
   ]);
 
+  const localizedEvents = events.map((event) =>
+    localizeEventPayload(event as Record<string, any>, lang)
+  );
+
   sendSuccess(
     res,
     {
-      events,
+      events: localizedEvents,
       pagination: {
         page: pageNum,
         limit: limitNum,

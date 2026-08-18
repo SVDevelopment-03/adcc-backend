@@ -1,5 +1,24 @@
 import { Request } from 'express';
 import { t } from './i18n';
+import {
+  getCachedLookupMap,
+  LOOKUP_TYPE_EVENT_CATEGORY,
+  LOOKUP_TYPE_COMMUNITY_CATEGORY,
+  LOOKUP_TYPE_COMMUNITY_PURPOSE,
+  LOOKUP_TYPE_COMMUNITY_TERRAIN,
+  LOOKUP_TYPE_COUNTRY,
+  LOOKUP_TYPE_CITY,
+  LOOKUP_TYPE_TRACK_FACILITY,
+  LOOKUP_TYPE_EVENT_AMENITY,
+  LOOKUP_TYPE_CHALLENGE_TYPE,
+  LOOKUP_TYPE_CHALLENGE_UNIT,
+} from '@/services/lookup.service';
+
+/** Resolve a dashboard-managed lookup value to its Arabic label; returns the original value if not found. */
+const resolveDynamicLabel = (type: string, value: string): string => {
+  const entry = getCachedLookupMap(type)[value];
+  return entry?.labelAr || value;
+};
 
 export type SupportedLanguage = 'en' | 'ar';
 
@@ -123,23 +142,34 @@ export const translateStaticArray = (
  */
 export const localizeCommunityStatic = (community: Record<string, any>, lang: SupportedLanguage): void => {
   if (lang === 'ar') {
+    // `type` (multi-select tags) and `category` (comma-joined string, same
+    // underlying picklist — see CommunityCreate/CommunityEdit) both draw
+    // from the dashboard-managed community_category lookup list.
     if (community.type && Array.isArray(community.type)) {
-      community.type = community.type.map(t => translateStaticValue(t, 'communityTypes', lang));
-    }
-    if (community.location) {
-      const locationMap: Record<string, string> = {
-        'Abu Dhabi': 'abuDhabi',
-        'Dubai': 'dubai',
-        'Al Ain': 'alAin',
-        'Sharjah': 'sharjah',
-      };
-      const key = locationMap[community.location];
-      if (key) {
-        community.location = t(lang, `locations.${key}`);
-      }
+      community.type = community.type.map((value: string) =>
+        resolveDynamicLabel(LOOKUP_TYPE_COMMUNITY_CATEGORY, value)
+      );
     }
     if (community.category) {
-      community.category = translateStaticValue(community.category, 'categories', lang);
+      community.category = String(community.category)
+        .split(',')
+        .map((value) => resolveDynamicLabel(LOOKUP_TYPE_COMMUNITY_CATEGORY, value.trim()))
+        .join(', ');
+    }
+    if (community.location) {
+      community.location = resolveDynamicLabel(LOOKUP_TYPE_CITY, community.location);
+    }
+    if (community.city) {
+      community.city = resolveDynamicLabel(LOOKUP_TYPE_CITY, community.city);
+    }
+    if (community.country) {
+      community.country = resolveDynamicLabel(LOOKUP_TYPE_COUNTRY, community.country);
+    }
+    if (community.purposeType) {
+      community.purposeType = resolveDynamicLabel(LOOKUP_TYPE_COMMUNITY_PURPOSE, community.purposeType);
+    }
+    if (community.terrain) {
+      community.terrain = resolveDynamicLabel(LOOKUP_TYPE_COMMUNITY_TERRAIN, community.terrain);
     }
   }
 };
@@ -152,8 +182,22 @@ export const localizeEventStatic = (event: Record<string, any>, lang: SupportedL
     if (event.status) {
       event.status = t(lang, `statuses.${event.status.toLowerCase()}`);
     }
+    if (event.city) {
+      event.city = resolveDynamicLabel(LOOKUP_TYPE_CITY, event.city);
+    }
+    if (event.country) {
+      event.country = resolveDynamicLabel(LOOKUP_TYPE_COUNTRY, event.country);
+    }
+    if (event.difficulty) {
+      event.difficulty = translateStaticValue(event.difficulty, 'difficulties', lang);
+    }
     if (event.amenities && Array.isArray(event.amenities)) {
+      // Event amenities are dashboard-managed (see lookup.service.ts); fall back
+      // to the legacy hardcoded amenities keys for values not (yet) in the cache.
       event.amenities = event.amenities.map((amenity: string) => {
+        const dynamicEntry = getCachedLookupMap(LOOKUP_TYPE_EVENT_AMENITY)[amenity];
+        if (dynamicEntry?.labelAr) return dynamicEntry.labelAr;
+
         const amenityKey = amenity.toLowerCase().replace(/\s+/g, '');
         if (amenityKey === 'medicalsupport') {
           return t(lang, 'amenities.medicalSupport');
@@ -170,18 +214,26 @@ export const localizeEventStatic = (event: Record<string, any>, lang: SupportedL
       });
     }
     if (event.category) {
-      const categoryMap: Record<string, string> = {
-        'Race': 'race',
-        'Community Ride': 'communityRide',
-        'Training & Clinics': 'trainingClinics',
-        'Awareness Rides': 'awarenessRides',
-        'Family & Kids': 'familyKids',
-        'Corporate Events': 'corporateEvents',
-        'National Events': 'nationalEvents',
-      };
-      const categoryKey = categoryMap[event.category];
-      if (categoryKey) {
-        event.category = t(lang, `eventCategories.${categoryKey}`);
+      // Event categories are dashboard-managed (see lookup.service.ts); fall back
+      // to the legacy hardcoded map only for categories not (yet) in the cache,
+      // e.g. right after a fresh deploy before the cache has warmed.
+      const dynamicEntry = getCachedLookupMap(LOOKUP_TYPE_EVENT_CATEGORY)[event.category];
+      if (dynamicEntry?.labelAr) {
+        event.category = dynamicEntry.labelAr;
+      } else {
+        const legacyCategoryMap: Record<string, string> = {
+          'Race': 'race',
+          'Community Ride': 'communityRide',
+          'Training & Clinics': 'trainingClinics',
+          'Awareness Rides': 'awarenessRides',
+          'Family & Kids': 'familyKids',
+          'Corporate Events': 'corporateEvents',
+          'National Events': 'nationalEvents',
+        };
+        const categoryKey = legacyCategoryMap[event.category];
+        if (categoryKey) {
+          event.category = t(lang, `eventCategories.${categoryKey}`);
+        }
       }
     }
     if (event.eligibility) {
@@ -224,13 +276,21 @@ export const localizeTrackStatic = (track: Record<string, any>, lang: SupportedL
       track.category = translateStaticValue(track.category, 'categories', lang);
     }
     if (track.country) {
-      track.country = translateStaticValue(track.country, 'countries', lang);
+      track.country = resolveDynamicLabel(LOOKUP_TYPE_COUNTRY, track.country);
+    }
+    if (track.city) {
+      track.city = resolveDynamicLabel(LOOKUP_TYPE_CITY, track.city);
     }
     if (track.visibility) {
       track.visibility = translateStaticValue(track.visibility, 'visibilities', lang);
     }
     if (track.facilities && Array.isArray(track.facilities)) {
+      // Facilities are dashboard-managed (see lookup.service.ts); fall back to the
+      // legacy hardcoded amenities keys for values not (yet) in the cache.
       track.facilities = track.facilities.map((facility: string) => {
+        const dynamicEntry = getCachedLookupMap(LOOKUP_TYPE_TRACK_FACILITY)[facility];
+        if (dynamicEntry?.labelAr) return dynamicEntry.labelAr;
+
         const facilityKey = facility.toLowerCase().replace(/\s+/g, '');
         if (facilityKey === 'bikerental') {
           return t(lang, 'amenities.bikeRental');
@@ -256,5 +316,45 @@ export const localizeCommunityRideStatic = (ride: Record<string, any>, lang: Sup
     if (ride.status) {
       ride.status = t(lang, `statuses.${ride.status.toLowerCase()}`);
     }
+  }
+};
+
+/**
+ * Localize challenge document: swaps title/description for their Arabic
+ * counterparts when present, and resolves `type` via the dashboard-managed
+ * challenge_type lookup (see lookup.service.ts).
+ */
+export const localizeChallengeStatic = (challenge: Record<string, any>, lang: SupportedLanguage): void => {
+  if (lang === 'ar') {
+    if (challenge.titleAr) {
+      challenge.title = challenge.titleAr;
+    }
+    if (challenge.descriptionAr) {
+      challenge.description = challenge.descriptionAr;
+    }
+    if (challenge.type) {
+      challenge.type = resolveDynamicLabel(LOOKUP_TYPE_CHALLENGE_TYPE, challenge.type);
+    }
+    if (challenge.unit) {
+      challenge.unit = resolveDynamicLabel(LOOKUP_TYPE_CHALLENGE_UNIT, challenge.unit);
+    }
+    if (challenge.rewardBadge && typeof challenge.rewardBadge === 'object') {
+      localizeBadgeStatic(challenge.rewardBadge, lang);
+    }
+  }
+};
+
+/**
+ * Localize badge document: swaps name/description for their Arabic
+ * counterparts when present. Works on both a top-level badge document and a
+ * populated `rewardBadge` sub-object (e.g. on a Challenge response).
+ */
+export const localizeBadgeStatic = (badge: Record<string, any> | null | undefined, lang: SupportedLanguage): void => {
+  if (!badge || lang !== 'ar') return;
+  if (badge.nameAr) {
+    badge.name = badge.nameAr;
+  }
+  if (badge.descriptionAr) {
+    badge.description = badge.descriptionAr;
   }
 };
