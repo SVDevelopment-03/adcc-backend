@@ -1,0 +1,491 @@
+diff --git a/src/controllers/auth.controller.ts b/src/controllers/auth.controller.ts
+index 75a726a..00b8e94 100644
+--- a/src/controllers/auth.controller.ts
++++ b/src/controllers/auth.controller.ts
+@@ -8,6 +8,13 @@ import Community from '@/models/community.model';
+ import FeedPost from '@/models/feed-post.model';
+ import CommunityPost from '@/models/community-post.model';
+ import Event from '@/models/event.model';
++import Track from '@/models/track.model';
++import Challenge from '@/models/challenge.model';
++import ChallengeJoin from '@/models/challengeJoin.model';
++import StoreItem from '@/models/store-item.model';
++import CommunityRide from '@/models/community-ride.model';
++import Notification from '@/models/notification.model';
++import AdminNotification from '@/models/admin-notification.model';
+ import { verifyFirebaseToken } from '@/services/firebase.service';
+ import { communityMembershipService } from '@/services';
+ import {
+@@ -195,6 +202,7 @@ export const registerUser = asyncHandler(
+       age,
+       dob,
+       country,
++      city,
+       provider,
+       fcmToken,
+       userAgent,
+@@ -210,6 +218,7 @@ export const registerUser = asyncHandler(
+       age?: number;
+       dob: Date;
+       country?: string;
++      city?: string;
+       provider?: string;
+       fcmToken?: string;
+       userAgent?: string;
+@@ -219,10 +228,14 @@ export const registerUser = asyncHandler(
+       osVersion?: string;
+       appVersion?: string;
+       appBuild?: string;
++      email?: string;
+     };
+     const uid = req.user?.uid; // From JWT (temporary token)
+     const phone = req.user?.phone; // Optional phone from JWT (for phone auth)
+     const email = req.user?.email; // Optional email from JWT (for email/password auth)
++    const emailFromBody = (req.body as any).email
++      ? (req.body as any).email.toString().toLowerCase().trim()
++      : undefined;
+ 
+     if (!uid) {
+       throw new AppError(t(lang, 'auth.firebase_uid_required'), 400);
+@@ -234,16 +247,25 @@ export const registerUser = asyncHandler(
+       throw new AppError(t(lang, 'auth.already_registered'), 400);
+     }
+ 
++    // If email provided in body, ensure it's not already taken
++    if (emailFromBody) {
++      const byEmail = await User.findOne({ email: emailFromBody });
++      if (byEmail) {
++        throw new AppError('Email already in use', 400);
++      }
++    }
++
+     // Create user with Firebase UID
+     const user = await User.create({
+       fullName,
+       firebaseUid: uid,
+       phone: phone || undefined,
+-      email: email || undefined,
++      email: emailFromBody || email || undefined,
+       gender,
+       age,
+       dob,
+       country,
++      city,
+       provider,
+       isVerified: true,
+     });
+@@ -294,6 +316,7 @@ export const registerUser = asyncHandler(
+           age: user.age,
+           dob: user.dob,
+           country: user.country,
++          city: user.city,
+           provider: user.provider,
+           role: user.role,
+           isVerified: user.isVerified,
+@@ -474,6 +497,9 @@ export const deleteMyAccount = asyncHandler(
+     // delete user's feed posts
+     await FeedPost.deleteMany({ createdBy: userId });
+ 
++    // remove user's likes and comments from feed posts
++    await FeedPost.updateMany({}, { $pull: { likes: userId, comments: { user: userId } } });
++
+     // delete user's community posts
+     await CommunityPost.deleteMany({ createdBy: userId });
+ 
+@@ -483,6 +509,25 @@ export const deleteMyAccount = asyncHandler(
+     // delete user's created communities
+     await Community.deleteMany({ createdBy: userId });
+ 
++    // delete tracks created by user
++    await Track.deleteMany({ createdBy: userId });
++
++    // delete challenges created by user and their joins
++    await Challenge.deleteMany({ createdBy: userId });
++    await ChallengeJoin.deleteMany({ userId });
++
++    // delete community rides created by user
++    await CommunityRide.deleteMany({ createdBy: userId });
++
++    // delete store items created by user; unset approvals/rejections made by this user
++    await StoreItem.deleteMany({ createdBy: userId });
++    await StoreItem.updateMany({ approvedBy: userId }, { $unset: { approvedBy: '' } });
++    await StoreItem.updateMany({ rejectedBy: userId }, { $unset: { rejectedBy: '' } });
++
++    // delete notifications for user and remove read references from admin notifications
++    await Notification.deleteMany({ userId });
++    await AdminNotification.updateMany({}, { $pull: { readByUserIds: userId } });
++
+     await User.findByIdAndDelete(userId);
+ 
+     sendSuccess(
+@@ -512,6 +557,55 @@ export const deleteAccount = asyncHandler(async (req: AuthRequest, res: Response
+   }
+ 
+   // Delete the user record from the database
++  // Perform cascade cleanup similar to deleteMyAccount
++  const user = await User.findById(userId);
++  if (!user) {
++    throw new AppError(t(lang, 'auth.user_not_found'), 404);
++  }
++
++  // delete event participations
++  await EventResult.deleteMany({ userId });
++
++  // remove user from all community members arrays
++  await Community.updateMany({ members: userId }, { $pull: { members: userId } });
++
++  // delete community memberships
++  await CommunityMembership.deleteMany({ userId });
++
++  // delete user's feed posts
++  await FeedPost.deleteMany({ createdBy: userId });
++
++  // remove user's likes and comments from feed posts
++  await FeedPost.updateMany({}, { $pull: { likes: userId, comments: { user: userId } } });
++
++  // delete user's community posts
++  await CommunityPost.deleteMany({ createdBy: userId });
++
++  // delete user's created events
++  await Event.deleteMany({ createdBy: userId });
++
++  // delete user's created communities
++  await Community.deleteMany({ createdBy: userId });
++
++  // delete tracks created by user
++  await Track.deleteMany({ createdBy: userId });
++
++  // delete challenges created by user and their joins
++  await Challenge.deleteMany({ createdBy: userId });
++  await ChallengeJoin.deleteMany({ userId });
++
++  // delete community rides created by user
++  await CommunityRide.deleteMany({ createdBy: userId });
++
++  // delete store items created by user; unset approvals/rejections made by this user
++  await StoreItem.deleteMany({ createdBy: userId });
++  await StoreItem.updateMany({ approvedBy: userId }, { $unset: { approvedBy: '' } });
++  await StoreItem.updateMany({ rejectedBy: userId }, { $unset: { rejectedBy: '' } });
++
++  // delete notifications for user and remove read references from admin notifications
++  await Notification.deleteMany({ userId });
++  await AdminNotification.updateMany({}, { $pull: { readByUserIds: userId } });
++
+   await User.findByIdAndDelete(userId);
+ 
+   sendSuccess(res, null, t(lang, 'auth.delete_success'));
+@@ -1109,13 +1203,28 @@ export const updateMyProfile = asyncHandler(
+       throw new AppError(t(lang, 'guest.access_denied'), 403);
+     }
+     
+-    const { fullName, gender, age, dob, country } = req.body;
++    const { fullName, email, gender, age, dob, country, city, profileImage } = req.body;
+     const updates: Record<string, unknown> = {};
+     if (fullName !== undefined) updates.fullName = fullName;
++    if (email !== undefined) {
++      const normalizedEmail = String(email).trim().toLowerCase();
++      const existingUserWithEmail = await User.findOne({
++        email: normalizedEmail,
++        _id: { $ne: userId },
++      }).select('_id');
++
++      if (existingUserWithEmail) {
++        throw new AppError('Email already in use', 400);
++      }
++
++      updates.email = normalizedEmail;
++    }
+     if (gender !== undefined) updates.gender = gender;
+     if (age !== undefined) updates.age = age;
+     if (dob !== undefined) updates.dob = dob;
+     if (country !== undefined) updates.country = country;
++    if (city !== undefined) updates.city = city;
++    if (profileImage !== undefined) updates.profileImage = profileImage;
+ 
+     const user = await User.findByIdAndUpdate(
+       userId,
+diff --git a/src/controllers/dashboard.controller.ts b/src/controllers/dashboard.controller.ts
+index b2cd55b..0986a1b 100644
+--- a/src/controllers/dashboard.controller.ts
++++ b/src/controllers/dashboard.controller.ts
+@@ -172,8 +172,8 @@ export const getDashboardLanding = asyncHandler(async (req: AuthRequest, res: Re
+     tracksRankedByEvents,
+   ] = await Promise.all([
+     User.countDocuments(),
+-    User.countDocuments({ gender: 'Male' }),
+-    User.countDocuments({ gender: 'Female' }),
++    User.countDocuments({ gender: { $regex: '^male$', $options: 'i' } }),
++    User.countDocuments({ gender: { $regex: '^female$', $options: 'i' } }),
+     User.countDocuments({ isVerified: true }),
+     Event.countDocuments({
+       eventDate: { $gte: monthStart, $lte: monthEnd },
+diff --git a/src/controllers/event.controller.ts b/src/controllers/event.controller.ts
+index f39e7bf..32d32d8 100644
+--- a/src/controllers/event.controller.ts
++++ b/src/controllers/event.controller.ts
+@@ -1482,14 +1482,20 @@ export const getMemberEventStatus = asyncHandler(async (req: AuthRequest, res: R
+     throw new AppError(t(lang, "auth.unauthorized"), 401);
+   }
+ 
++  // If userId is not a valid ObjectId (e.g., guest tokens use string ids like 'guest_xxx'),
++  // avoid querying EventResult with an invalid ObjectId which causes a CastError.
++  const isUserObjectId = mongoose.Types.ObjectId.isValid(String(userId));
++
+   // Check if event exists
+   const event = await Event.findById(eventId);
+   if (!event) {
+     throw new AppError(t(lang, "event.not_found"), 404);
+   }
+ 
+-  // Check user's participation status
+-  const eventResult = await EventResult.findOne({ eventId, userId });
++  // Check user's participation status — only query if userId can be cast to ObjectId
++  const eventResult = isUserObjectId
++    ? await EventResult.findOne({ eventId, userId })
++    : null;
+ 
+   let status: "joined" | "not_joined" = "not_joined";
+   let participationDetails = null;
+diff --git a/src/controllers/store.controller.ts b/src/controllers/store.controller.ts
+index f42785e..a9302a9 100644
+--- a/src/controllers/store.controller.ts
++++ b/src/controllers/store.controller.ts
+@@ -60,6 +60,22 @@ const normalizePhotosInput = (value: unknown): string[] => {
+   return [];
+ };
+ 
++const enrichSellerFields = (item: any) => {
++  const createdBy = item?.createdBy;
++  const createdByName =
++    createdBy && typeof createdBy === 'object'
++      ? String(createdBy.fullName || createdBy.name || '').trim()
++      : '';
++  const sellerName =
++    createdByName || String(item?.sellerName || '').trim() || 'Unknown Seller';
++
++  return {
++    ...item,
++    sellerName,
++    postedBy: sellerName,
++  };
++};
++
+ const attachStoreItemImages = async (req: AuthRequest, data: Record<string, any>) => {
+   const files = req.files as {
+     [fieldname: string]: Express.Multer.File[];
+@@ -132,21 +148,29 @@ export const createStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
+     throw new AppError(t(lang, 'store.photos_required'), 400);
+   }
+ 
++  const seller = await User.findById(userId).select('fullName').lean();
++  const sellerName = seller?.fullName?.trim() || 'Unknown Seller';
++
+   const item = await StoreItem.create({
+     ...data,
+     status: 'Pending',
+     isFeatured: false,
+     createdBy: userId,
++    sellerName,
+   });
+ 
+-  const seller = await User.findById(userId).select('fullName').lean();
+   void notifyAdminStoreItemPending({
+     itemTitle: item.title,
+     itemId: item._id.toString(),
+-    sellerName: seller?.fullName?.trim() || 'Seller',
++    sellerName,
+   });
+ 
+-  sendSuccess(res, item, t(lang, 'store.created'), 201);
++  sendSuccess(
++    res,
++    enrichSellerFields(item.toObject ? item.toObject() : item),
++    t(lang, 'store.created'),
++    201
++  );
+ });
+ 
+ /**
+@@ -191,7 +215,7 @@ export const getStoreItems = asyncHandler(async (req: Request, res: Response) =>
+   sendSuccess(
+     res,
+     {
+-      items,
++      items: items.map(enrichSellerFields),
+       pagination: {
+         page: pageNum,
+         limit: limitNum,
+@@ -251,7 +275,7 @@ export const getAdminStoreItems = asyncHandler(async (req: AuthRequest, res: Res
+   sendSuccess(
+     res,
+     {
+-      items,
++      items: items.map(enrichSellerFields),
+       pagination: {
+         page: pageNum,
+         limit: limitNum,
+@@ -295,7 +319,7 @@ export const getMyStoreItems = asyncHandler(async (req: AuthRequest, res: Respon
+   sendSuccess(
+     res,
+     {
+-      items,
++      items: items.map(enrichSellerFields),
+       pagination: {
+         page: pageNum,
+         limit: limitNum,
+@@ -327,7 +351,7 @@ export const getStoreItemById = asyncHandler(async (req: AuthRequest, res: Respo
+     throw new AppError(t(lang, 'store.not_found'), 404);
+   }
+ 
+-  sendSuccess(res, item, t(lang, 'store.details'));
++  sendSuccess(res, enrichSellerFields(item), t(lang, 'store.details'));
+ });
+ 
+ /**
+@@ -373,7 +397,11 @@ export const updateStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
+     .populate('createdBy', 'fullName profileImage')
+     .lean();
+ 
+-  sendSuccess(res, updated, t(lang, 'store.updated'));
++  sendSuccess(
++    res,
++    updated ? enrichSellerFields(updated) : updated,
++    t(lang, 'store.updated')
++  );
+ });
+ 
+ /**
+@@ -396,7 +424,11 @@ export const archiveStoreItem = asyncHandler(async (req: AuthRequest, res: Respo
+   item.isFeatured = false;
+   await item.save();
+ 
+-  sendSuccess(res, item, t(lang, 'store.archived'));
++  sendSuccess(
++    res,
++    enrichSellerFields(item.toObject ? item.toObject() : item),
++    t(lang, 'store.archived')
++  );
+ });
+ 
+ /**
+diff --git a/src/models/store-item.model.ts b/src/models/store-item.model.ts
+index 171988b..a832883 100644
+--- a/src/models/store-item.model.ts
++++ b/src/models/store-item.model.ts
+@@ -4,6 +4,7 @@ export type StoreItemStatus = 'Pending' | 'Approved' | 'Rejected' | 'Sold' | 'Ar
+ 
+ export interface IStoreItem extends Document {
+   title: string;
++  sellerName?: string;
+   description: string;
+   category: string;
+   condition: string;
+@@ -35,6 +36,11 @@ const StoreItemSchema = new Schema(
+       required: [true, 'Item title is required'],
+       trim: true,
+     },
++    sellerName: {
++      type: String,
++      trim: true,
++      default: '',
++    },
+     description: {
+       type: String,
+       required: [true, 'Item description is required'],
+diff --git a/src/services/community-membership.service.ts b/src/services/community-membership.service.ts
+index 962c991..513a777 100644
+--- a/src/services/community-membership.service.ts
++++ b/src/services/community-membership.service.ts
+@@ -3,7 +3,7 @@ import Community from '@/models/community.model';
+ import User from '@/models/user.model';
+ import { AppError } from '@/utils/app-error';
+ import { notifyAdminCommunityMember } from '@/services/admin-notification.service';
+-import type { ICommunityMembership } from '@/models/communityMembership.model';
++import { notifyCommunityNewMember } from '@/services/community-notification.service';
+ 
+ export class CommunityMembershipService {
+   /**
+@@ -52,6 +52,10 @@ export class CommunityMembershipService {
+             memberName: rejoinUser.fullName?.trim() || 'Member',
+             communityId: String(communityId),
+           });
++          void notifyCommunityNewMember({
++            communityId: String(communityId),
++            memberName: rejoinUser.fullName?.trim() || 'Member',
++          });
+         }
+ 
+         return alreadyMember.populate('userId', 'fullName email');
+@@ -80,6 +84,10 @@ export class CommunityMembershipService {
+         memberName: newMemberUser.fullName?.trim() || 'Member',
+         communityId: String(communityId),
+       });
++      void notifyCommunityNewMember({
++        communityId: String(communityId),
++        memberName: newMemberUser.fullName?.trim() || 'Member',
++      });
+     }
+ 
+     return membership.populate('userId', 'fullName email');
+@@ -139,7 +147,7 @@ export class CommunityMembershipService {
+     const filter = { communityId: id };
+ 
+     const [members, totalMembers] = await Promise.all([
+-      CommunityMembership.find(filter)
++      CommunityMembership.find(filter as any)
+         .select('userId role status joinedAt') 
+         .populate('userId', 'fullName email')
+         .sort({ joinedAt: -1 })
+@@ -147,7 +155,7 @@ export class CommunityMembershipService {
+         .limit(limit)
+         .lean(),
+ 
+-      CommunityMembership.countDocuments(filter),
++      CommunityMembership.countDocuments(filter as any),
+     ]);
+ 
+     return {
+@@ -166,7 +174,7 @@ export class CommunityMembershipService {
+   */
+  async getUserCommunities(userId: string) {
+ 
+-  const memberships = await CommunityMembership.find({ userId, status: 'active' }
++  const memberships = await CommunityMembership.find({ userId, status: 'active' } as any
+   ).populate('communityId');
+ 
+   if(!memberships) {
+@@ -185,14 +193,14 @@ export class CommunityMembershipService {
+     const filter = { userId, status: 'active' as ICommunityMembership['status'] };
+ 
+     const [memberships, total] = await Promise.all([
+-      CommunityMembership.find(filter)
++      CommunityMembership.find(filter as any)
+         .select('communityId joinedAt role')
+         .populate('communityId', 'title description image location city memberCount type category slug')
+         .sort({ joinedAt: -1 })
+         .skip(skip)
+         .limit(limit)
+         .lean(),
+-      CommunityMembership.countDocuments(filter),
++      CommunityMembership.countDocuments(filter as any),
+     ]);
+ 
+     const communities = memberships.map((m: any) => ({
+@@ -216,7 +224,7 @@ export class CommunityMembershipService {
+ * Get banned members of a community
+ */ 
+ async getBannedMembers(communityId: any) {
+-  const bannedMembers = await CommunityMembership.find({ communityId, status: 'banned' })
++  const bannedMembers = await CommunityMembership.find({ communityId, status: 'banned' } as any)
+     .populate('userId', 'fullName email');
+ 
+   if(!bannedMembers) {
+@@ -229,7 +237,7 @@ async getBannedMembers(communityId: any) {
+ * Check if user is member of community
+ */
+ async isMember(userId: string, communityId: any) {
+-  const membership = await CommunityMembership.findOne({ userId, communityId, status: 'active' });
++  const membership = await CommunityMembership.findOne({ userId, communityId, status: 'active' } as any);
+   return !!membership;
+ }
+ 

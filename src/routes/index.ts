@@ -1,0 +1,64 @@
+import { Router } from 'express';
+import exampleRoutes from './example.route';
+import authRoutes from './auth.route';
+import communityRoutes from './community.route';
+import communityPostRoutes from './community-post.module';
+import communityRideRoutes from './community-ride.route';
+import eventRoutes from './event.route';
+import challengeRoutes from './challenge.route';
+import badgeRoutes from './badge.route';
+import trackRoutes from './track.route';
+import uploadRoutes from './upload.route';
+import storeRoutes from './store.route';
+import merchandiseRoutes from './merchandise.route';
+import storeCompatRoutes from './store-compat.route';
+import userRoutes from './user.route';
+import feedPostRoutes, { publicFeedRouter } from './feed-post.route';
+import globalSettingRoutes from './global-setting.route';
+import pushNotificationRoutes from './push-notification.route';
+import rbacRoutes from './rbac.route';
+import dashboardRoutes from './dashboard.route';
+import adminNotificationRoutes from './admin-notification.route';
+import appConfigRoutes from './app-config.route';
+import newsletterSubscriptionRoutes from './newsletter-subscription.route';
+import bannerRoutes from './banner.route';
+import bannerArRoutes from './banner-ar.route';
+import productBannerRoutes from './product-banner.route';
+import lookupRoutes from './lookup.route';
+// import publicStatsRoutes from './public-stats.route';
+const router = Router();
+
+// Register all routes
+router.use('/auth', authRoutes);
+router.use('/examples', exampleRoutes);
+router.use('/communities', communityRoutes);
+router.use('/communities/:communityId/community-posts', communityPostRoutes);
+router.use('/community-rides', communityRideRoutes);
+router.use('/events', eventRoutes);
+router.use('/challenges', challengeRoutes);
+router.use('/badges', badgeRoutes);
+router.use('/tracks', trackRoutes);
+router.use('/uploads', uploadRoutes);
+router.use('/store', storeRoutes);
+router.use('/merchandise', merchandiseRoutes);
+router.use('/items', storeCompatRoutes);
+router.use('/user', userRoutes);
+router.use('/feed', publicFeedRouter);
+router.use('/feed-posts', feedPostRoutes);
+router.use('/settings', globalSettingRoutes);
+router.use('/push-notifications', pushNotificationRoutes);
+router.use('/rbac', rbacRoutes);
+router.use('/dashboard', dashboardRoutes);
+router.use('/admin-notifications', adminNotificationRoutes);
+router.use('/app-config', appConfigRoutes);
+router.use('/app-banners', bannerRoutes);
+router.use('/app-banners-ar', bannerArRoutes);
+router.use('/product-banners', productBannerRoutes);
+router.use('/newsletter-subscriptions', newsletterSubscriptionRoutes);
+router.use('/lookups', lookupRoutes);
+
+// Add more routes here as you create them
+// router.use('/users', userRoutes);
+// router.use('/vendors', vendorRoutes);
+
+export default router;

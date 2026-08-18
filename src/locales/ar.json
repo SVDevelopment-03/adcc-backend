@@ -1,0 +1,359 @@
+{
+  "community": {
+    "not_found": "المجتمع غير موجود",
+    "created": "تم إنشاء المجتمع بنجاح",
+    "updated": "تم تحديث المجتمع بنجاح",
+    "deleted": "تم حذف المجتمع بنجاح",
+    "not_member": "أنت لست عضوًا في هذا المجتمع",
+    "status_retrieved": "تم استرجاع حالة عضوية المجتمع بنجاح",
+    "all_communities": "تم استرجاع المجتمعات بنجاح",
+    "community_photos": "تم استرجاع صور المجتمع بنجاح",
+    "details_retrieved": "تم استرجاع تفاصيل المجتمع بنجاح",
+    "joined": "تم الانضمام إلى المجتمع بنجاح",
+    "leave": "تم مغادرة المجتمع بنجاح",
+    "memberRetrieved": "تم استرجاع أعضاء المجتمع بنجاح",
+    "memberCount": "تم استرجاع عدد أعضاء المجتمع بنجاح",
+    "bannedUsers": "تم استرجاع المستخدمين المحظورين في المجتمع بنجاح",
+    "gallery_added": "تمت إضافة {{count}} صورة إلى المعرض بنجاح",
+    "gallery_removed": "تمت إزالة {{count}} صورة من المعرض بنجاح",
+    "gallery_retrieved": "تم استرجاع صور المعرض بنجاح",
+    "gallery_all_exist": "جميع الصور المقدمة موجودة بالفعل في المعرض",
+    "gallery_empty": "المعرض فارغ",
+    "gallery_none_found": "لم يتم العثور على أي من الصور المقدمة في المعرض"
+  },
+  "auth": {
+    "unauthorized": "المستخدم غير مصرح له",
+    "firebase_uid_required": "لم يتم العثور على معرف Firebase في الرمز المميز",
+    "phone_or_email_required": "رقم الهاتف أو البريد الإلكتروني مطلوب للتسجيل",
+    "already_registered": "المستخدم مسجل بالفعل",
+    "login_success": "تم تسجيل الدخول بنجاح",
+    "verify_success": "تم التحقق من المصادقة. يرجى إكمال التسجيل.",
+    "register_success": "تم التسجيل بنجاح",
+    "token_refreshed": "تم تحديث الرمز المميز بنجاح",
+    "invalid_refresh_token": "رمز التحديث غير صالح",
+    "invalid_expired_token": "رمز التحديث غير صالح أو منتهي الصلاحية",
+    "max_devices_reached": "تم الوصول إلى الحد الأقصى لعدد الأجهزة ({{max}}). يرجى تسجيل الخروج من الأجهزة الأخرى للمتابعة.",
+    "logout_success": "تم تسجيل الخروج بنجاح",
+    "user_not_found": "المستخدم غير موجود",
+    "stats_retrieved": "تم استرجاع إحصائيات المستخدم بنجاح",
+    "joined_communities_retrieved": "تم استرجاع المجتمعات المنضم إليها بنجاح",
+    "joined_events_retrieved": "تم استرجاع الأحداث المنضم إليها بنجاح",
+    "active_participations_retrieved": "تم استرجاع المشاركات النشطة بنجاح",
+    "upcoming_events_retrieved": "تم استرجاع الأحداث القادمة بنجاح",
+    "cancelled_events_retrieved": "تم استرجاع الأحداث الملغاة بنجاح",
+    "completed_events_retrieved": "تم استرجاع الأحداث المكتملة بنجاح",
+    "profile_retrieved": "تم استرجاع الملف الشخصي بنجاح",
+    "profile_updated": "تم تحديث الملف الشخصي بنجاح",
+    "guest_login_success": "تم تسجيل الدخول كضيف بنجاح"
+  },
+  "guest": {
+    "access_denied": "المستخدمون الضيوف غير مسموح لهم بأداء هذا الإجراء"
+  },
+  "user": {
+    "not_found": "المستخدم غير موجود",
+    "already_exists": "المستخدم موجود بالفعل",
+    "retrieved": "تم استرجاع المستخدم بنجاح",
+    "created": "تم إنشاء المستخدم بنجاح",
+    "updated": "تم تحديث المستخدم بنجاح",
+    "deleted": "تم حذف المستخدم بنجاح",
+    "list_retrieved": "تم استرجاع المستخدمين بنجاح",
+    "verified_updated": "تم تحديث حالة التحقق للمستخدم بنجاح"
+  },
+  "common": {
+    "bad_request": "طلب غير صالح"
+  },
+  "dashboard": {
+    "landing_retrieved": "تم استرجاع بيانات لوحة التحكم بنجاح"
+  },
+  "image": {
+    "required": "رابط الصورة مطلوب",
+    "invalid": "رابط الصورة غير صالح",
+    "not_found": "الصورة غير موجودة",
+    "deleted": "تم حذف الصورة بنجاح",
+    "upload_failed": "فشل تحميل الصورة"
+  },
+  "track": {
+    "created": "تم إنشاء المسار بنجاح",
+    "not_found": "المسار غير موجود",
+    "updated": "تم تحديث المسار بنجاح",
+    "deleted": "تم حذف المسار بنجاح",
+    "disabled": "تم تعطيل المسار بنجاح",
+    "enabled": "تم تفعيل المسار بنجاح",
+    "archived": "تم أرشفة المسار بنجاح",
+    "allTracks": "تم استرجاع المسارات بنجاح",
+    "trackDetails": "تم استرجاع تفاصيل المسار بنجاح",
+    "trackResult": "تم استرجاع نتائج المسار بنجاح",
+    "communityResult": "تم استرجاع نتائج المجتمع المتعلقة بالمسار بنجاح"
+  },
+  "event": {
+    "not_found": "الحدث غير موجود",
+    "created": "تم إنشاء الحدث بنجاح",
+    "updated": "تم تحديث الحدث بنجاح",
+    "deleted": "تم حذف الحدث بنجاح",
+    "allEvents": "تم استرجاع الأحداث بنجاح",
+    "eventDetails": "تم استرجاع تفاصيل الحدث بنجاح",
+    "not_member": "لم ينضم المستخدم إلى هذا الحدث",
+    "submitted": "تم إرسال نتائج الحدث بنجاح",
+    "already_joined": "انضم المستخدم بالفعل إلى هذا الحدث",
+    "joinEvent": "انضم المستخدم إلى الحدث بنجاح",
+    "rejoinEvent": "انضم المستخدم مرة أخرى إلى الحدث بنجاح",
+    "reason_required": "السبب مطلوب لمغادرة الحدث",
+    "cancelledEvent": "تم إلغاء الحدث بالفعل",
+    "completed": "تم إكمال الحدث بالفعل",
+    "participationCancelled": "تم إلغاء المشاركة في الحدث بنجاح",
+    "status_retrieved": "تم استرجاع حالة المشاركة في الحدث بنجاح",
+    "already_submitted": "تم إرسال النتيجة بالفعل",
+    "calendar_link": "تم إنشاء رابط التقويم",
+    "results_retrieved": "تم استرجاع نتائج الحدث بنجاح",
+    "invalid_id": "معرف الحدث غير صالح",
+    "not_joined": "لم ينضم المستخدم إلى هذا الحدث",
+    "registration_closed": "تم إغلاق التسجيل للحدث بنجاح",
+    "registration_reopened": "تم إعادة فتح التسجيل للحدث بنجاح",
+    "marked_completed": "تم وضع علامة اكتمال على الحدث بنجاح",
+    "disabled": "تم تعطيل الحدث بنجاح",
+    "archived": "تمت أرشفة الحدث بنجاح",
+    "completed_summary_not_found": "لم يتم العثور على ملخص النتائج لهذا الحدث",
+    "completed_summary_retrieved": "تم استرجاع ملخص نتائج الحدث بنجاح",
+    "feedback_updated": "تم تحديث الملاحظات بنجاح",
+    "result_photos_added": "تمت إضافة الصور إلى نتيجة رحلتك بنجاح",
+    "result_photos_limit": "تم الوصول إلى الحد الأقصى لعدد الصور لهذه النتيجة",
+    "participant_checked_in": "تم تسجيل حضور المشارك بنجاح",
+    "participant_no_show": "تم وضع علامة عدم حضور على المشارك",
+    "participant_removed": "تم حذف المشارك من الحدث",
+    "participants_checked_in": "تم تسجيل حضور جميع المشاركين المسجلين بنجاح",
+    "participants_no_show": "تم وضع علامة عدم حضور على جميع المشاركين المسجلين",
+    "no_joined_users": "لم يتم العثور على أي مشاركين مسجلين لتسجيل الدخول",
+    "no_joined_users_no_show": "لم يتم العثور على أي مشاركين مسجلين تم وضع علامة 'غير حاضر' عليهم.",
+    "past_date_not_allowed": "لا يمكن أن يكون تاريخ الحدث في الماضي",
+    "join_not_available": "التسجيل غير مفتوح لهذا الحدث",
+    "cannot_reopen_past_event": "لا يمكن إعادة فتح التسجيل لحدث انتهى تاريخه"
+  },
+  "challenge": {
+    "not_found": "التحدي غير موجود",
+    "created": "تم إنشاء التحدي بنجاح",
+    "updated": "تم تحديث التحدي بنجاح",
+    "deleted": "تم حذف التحدي بنجاح",
+    "allChallenges": "تم استرجاع التحديات بنجاح",
+    "details": "تم استرجاع تفاصيل التحدي بنجاح"
+  },
+  "badge": {
+    "not_found": "الشارة غير موجودة",
+    "name_required": "اسم الشارة مطلوب",
+    "created": "تم إنشاء الشارة بنجاح",
+    "updated": "تم تحديث الشارة بنجاح",
+    "deleted": "تم حذف الشارة بنجاح",
+    "allBadges": "تم استرجاع الشارات بنجاح",
+    "details": "تم استرجاع تفاصيل الشارة بنجاح"
+  },
+  "store": {
+    "created": "تم إنشاء العنصر بنجاح",
+    "list": "تم استرجاع العناصر بنجاح",
+    "admin_list": "تم استرجاع عناصر إدارة السوق بنجاح",
+    "my_list": "تم استرجاع عناصر القائمة الخاصة بي بنجاح",
+    "details": "تم استرجاع تفاصيل العنصر بنجاح",
+    "updated": "تم تحديث العنصر بنجاح",
+    "archived": "تمت أرشفة العنصر بنجاح",
+    "approved": "تمت الموافقة على العنصر بنجاح",
+    "rejected": "تم رفض العنصر بنجاح",
+    "featured": "تم تحديث حالة تمييز العنصر",
+    "sold": "تم وضع علامة على العنصر كمباع",
+    "not_found": "العنصر غير موجود",
+    "forbidden": "تم رفض الوصول إلى هذا العنصر",
+    "admin_required": "مطلوب صلاحية المسؤول",
+    "update_not_allowed": "لا يمكن تحديث العنصر في حالته الحالية",
+    "feature_requires_approval": "يجب الموافقة على العنصر قبل تمييزه",
+    "photos_required": "مطلوب صورة واحدة على الأقل"
+  },
+  "communityRide": {
+    "not_found": "رحلة المجتمع غير موجودة",
+    "created": "تم إنشاء رحلة المجتمع بنجاح",
+    "allRides": "تم استرجاع رحلات المجتمع بنجاح",
+    "retrieved": "تم استرجاع رحلة المجتمع بنجاح",
+    "updated": "تم تحديث رحلة المجتمع بنجاح",
+    "deleted": "تم حذف رحلة المجتمع بنجاح"
+  },
+  "communityPost": {
+    "not_found": "منشور المجتمع غير موجود",
+    "created": "تم إنشاء منشور المجتمع بنجاح",
+    "list": "تم استرجاع منشورات المجتمع بنجاح",
+    "retrieved": "تم استرجاع منشور المجتمع بنجاح",
+    "updated": "تم تحديث منشور المجتمع بنجاح",
+    "deleted": "تم حذف منشور المجتمع بنجاح"
+  },
+  "feedPost": {
+    "not_found": "منشور الخلاصة غير موجود",
+    "created": "تم إنشاء منشور الخلاصة بنجاح",
+    "list": "تم استرجاع منشورات الخلاصة بنجاح",
+    "retrieved": "تم استرجاع منشور الخلاصة بنجاح",
+    "updated": "تم تحديث منشور الخلاصة بنجاح",
+    "user_banned": "أنت محظور من إنشاء منشورات الخلاصة",
+    "user_ban_updated": "تم تحديث حالة حظر منشورات الخلاصة للمستخدم بنجاح"
+  },
+  "contentSetting": {
+    "not_found": "لم يتم العثور على إعدادات المحتوى",
+    "created": "تم إنشاء إعدادات المحتوى بنجاح",
+    "updated": "تم تحديث إعدادات المحتوى بنجاح",
+    "deleted": "تم حذف إعدادات المحتوى بنجاح",
+    "list": "تم استرجاع إعدادات المحتوى بنجاح",
+    "details": "تم استرجاع تفاصيل إعدادات المحتوى بنجاح"
+  },
+  "contentDashboard": {
+    "summary": "تم جلب ملخص لوحة المحتوى بنجاح"
+  },
+  "dashboard": {
+    "summary": "تم جلب ملخص لوحة التحكم بنجاح"
+  },
+  "statuses": {
+    "open": "مفتوح",
+    "draft": "مسودة",
+    "full": "ممتلئ",
+    "completed": "مكتمل",
+    "archived": "مؤرشف",
+    "limited": "محدود",
+    "closed": "مغلق",
+    "disabled": "معطل",
+    "active": "نشط",
+    "left": "غادر",
+    "banned": "محظور",
+    "upcoming": "القادمة"
+  },
+  "communityTypes": {
+    "club": "نادي",
+    "city": "مدينة",
+    "group": "مجموعة",
+    "purpose": "غرض",
+    "special": "خاص",
+    "shop": "متجر",
+    "women": "نساء",
+    "youth": "شباب",
+    "health": "صحة",
+    "family": "عائلة",
+    "corporate": "شركات",
+    "racingPerformance": "السباق والأداء",
+    "leisureSocial": "الترفيه والاجتماعي",
+    "advocacyAwareness": "الدعوة والتوعية",
+    "familyKids": "العائلة والأطفال",
+    "corporateEvents": "فعاليات الشركات",
+    "nationalEvents": "الفعاليات الوطنية",
+    "familyLeisure": "العائلة والترفيه",
+    "groupCommunities": "مجتمعات المجموعات",
+    "cityCommunities": "مجتمعات المدن",
+    "specialInterest": "اهتمامات خاصة",
+    "awarenessCharity": "التوعية والأعمال الخيرية",
+    "trainingClinics": "التدريب والعيادات",
+    "awareness": "التوعية",
+    "nightRiders": "راكبي الليل",
+    "women(sherides)": "نساء (شيريدز)",
+    "mtb/Trail": "الدراجات الجبلية / المسارات"
+  },
+  "locations": {
+    "abuDhabi": "أبوظبي",
+    "dubai": "دبي",
+    "alAin": "العين",
+    "sharjah": "الشارقة"
+  },
+  "amenities": {
+    "water": "ماء",
+    "parking": "موقف سيارات",
+    "toilets": "دورات المياه",
+    "lighting": "إضاءة",
+    "medicalSupport": "الدعم الطبي",
+    "bikeService": "خدمة الدراجات",
+    "cafes": "مقاهي",
+    "bikeRental": "تأجير الدراجات",
+    "firstAid": "الإسعافات الأولية",
+    "changingRooms": "غرف تبديل الملابس",
+    "lights": "أضواء",
+    "women(sherides)": "نساء (شيريدز)"
+  },
+  "trackTypes": {
+    "circuit": "دائري",
+    "road": "طريق",
+    "costal": "ساحلي",
+    "desert": "صحراوي",
+    "urban": "حضري"
+  },
+  "surfaceTypes": {
+    "asphalt": "أسفلت",
+    "concrete": "خرسانة",
+    "mixed": "مختلط"
+  },
+  "experienceLevels": {
+    "beginner": "مبتدئ",
+    "intermediate": "متوسط",
+    "advanced": "متقدم",
+    "all": "جميع المستويات"
+  },
+  "genders": {
+    "male": "ذكر",
+    "female": "أنثى",
+    "other": "آخر",
+    "all": "الكل"
+  },
+  "eventCategories": {
+    "race": "سباق",
+    "communityRide": "ركوب المجتمع",
+    "trainingClinics": "التدريب والعيادات",
+    "awarenessRides": "جولات التوعية",
+    "familyKids": "العائلة والأطفال",
+    "corporateEvents": "فعاليات الشركات",
+    "nationalEvents": "الفعاليات الوطنية"
+  },
+  "categories": {
+    "special": "خاص",
+    "city": "مدينة",
+    "group": "مجموعة",
+    "purpose": "غرض",
+    "type": "نوع",
+    "cityCommunities": "مجتمعات المدن",
+    "typeCommunities": "مجتمعات الأنواع",
+    "groupCommunities": "مجتمعات المجموعات",
+    "racingPerformance": "السباق والأداء",
+    "familyLeisure": "العائلة والترفيه",
+    "women(sherides)": "نساء (شيريدز)"
+  },
+  "difficulties": {
+    "easy": "سهل",
+    "medium": "متوسط",
+    "hard": "صعب",
+    "Beginner": "مبتدئ",
+    "Intermediate": "متوسط",
+    "Advanced": "متقدم"
+  },
+  "countries": {
+    "uae": "الإمارات العربية المتحدة",
+    "KSA": "المملكة العربية السعودية",
+    "Qatar": "قطر",
+    "Bahrain": "البحرين",
+    "Oman": "عمان",
+    "Kuwait": "الكويت"
+  },
+  "visibilities": {
+    "public": "عام",
+    "private": "خاص"
+  },
+  "fieldLabels": {
+    "title": "العنوان",
+    "description": "الوصف",
+    "details": "التفاصيل",
+    "status": "الحالة",
+    "featured": "مميز",
+    "members": "الأعضاء",
+    "list": "قائمة",
+    "gallery": "المعرض",
+    "post": "منشور",
+    "cycling": "ركوب الدراجات",
+    "routes": "المسارات",
+    "city": "المدينة",
+    "location": "الموقع",
+    "type": "النوع",
+    "difficulty": "الصعوبة",
+    "country": "البلد",
+    "visibility": "الرؤية",
+    "category": "الفئة"
+  }
+}
+
+
+
+

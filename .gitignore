@@ -1,0 +1,62 @@
+# Dependencies
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Environment variables
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+# Build output
+dist/
+build/
+*.tsbuildinfo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Logs
+logs/
+*.log
+
+# Uploads (if storing files locally)
+uploads/
+temp/
+
+# Testing
+coverage/
+.nyc_output/
+
+# OS
+Thumbs.db
+
+# Cursor IDE (add this)
+.cursor/
+
+# Firebase (if using)
+firebase-debug.log
+.firebase/
+serviceAccountKey.json
+.firebaserc
+firebase.json
+
+# Misc
+*.pem
+*.key
+
+# Firebase Admin SDK
+
+scripts/
+docs/
+
+
+ADCC_API_Collection.postman_collection.json
