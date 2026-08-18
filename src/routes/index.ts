@@ -25,6 +25,7 @@ import bannerRoutes from './banner.route';
 import bannerArRoutes from './banner-ar.route';
 import productBannerRoutes from './product-banner.route';
 import lookupRoutes from './lookup.route';
+import newsRoutes from './news.route';
 // import publicStatsRoutes from './public-stats.route';
 const router = Router();
 
@@ -56,6 +57,7 @@ router.use('/app-banners-ar', bannerArRoutes);
 router.use('/product-banners', productBannerRoutes);
 router.use('/newsletter-subscriptions', newsletterSubscriptionRoutes);
 router.use('/lookups', lookupRoutes);
+router.use('/news', newsRoutes);
 
 // Add more routes here as you create them
 // router.use('/users', userRoutes);

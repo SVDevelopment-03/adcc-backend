@@ -20,7 +20,8 @@
     "seed:badges": "ts-node -r tsconfig-paths/register scripts/seed-badges.ts",
     "test:firebase": "ts-node -r tsconfig-paths/register scripts/test-firebase-connection.ts",
     "cleanup:tokens": "ts-node -r tsconfig-paths/register scripts/cleanup-expired-tokens.ts",
-    "seed:rbac": "ts-node -r tsconfig-paths/register scripts/seed-rbac.ts"
+    "seed:rbac": "ts-node -r tsconfig-paths/register scripts/seed-rbac.ts",
+    "seed:news": "ts-node -r tsconfig-paths/register scripts/seed-news.ts"
   },
   "author": "",
   "license": "ISC",

@@ -137,6 +137,14 @@
         "allChallenges": "Challenges retrieved successfully",
         "details": "Challenge details retrieved successfully"
     },
+    "news": {
+        "not_found": "News article not found",
+        "created": "News article created successfully",
+        "updated": "News article updated successfully",
+        "deleted": "News article deleted successfully",
+        "allNews": "News retrieved successfully",
+        "details": "News details retrieved successfully"
+    },
     "badge": {
         "not_found": "Badge not found",
         "name_required": "Badge name is required",

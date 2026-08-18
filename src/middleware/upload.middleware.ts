@@ -132,6 +132,14 @@ export const uploadBadgeImageIfMultipart = (req: any, res: any, next: any) => {
   return next();
 };
 
+export const uploadNewsImageIfMultipart = (req: any, res: any, next: any) => {
+  const contentType = (req.headers['content-type'] || '').toString();
+  if (contentType.includes('multipart/form-data')) {
+    return uploadSingleImage(req, res, next);
+  }
+  return next();
+};
+
 export const uploadCommunityPostImageIfMultipart = (req: any, res: any, next: any) => {
   const contentType = (req.headers['content-type'] || '').toString();
   if (contentType.includes('multipart/form-data')) {

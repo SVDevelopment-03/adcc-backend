@@ -51,6 +51,7 @@ export const LOOKUP_TYPE_TRACK_FACILITY = 'track_facility';
 export const LOOKUP_TYPE_EVENT_AMENITY = 'event_amenity';
 export const LOOKUP_TYPE_CHALLENGE_TYPE = 'challenge_type';
 export const LOOKUP_TYPE_CHALLENGE_UNIT = 'challenge_unit';
+export const LOOKUP_TYPE_NEWS_CATEGORY = 'news_category';
 
 export const ALL_LOOKUP_TYPES = [
   LOOKUP_TYPE_EVENT_CATEGORY,
@@ -63,6 +64,7 @@ export const ALL_LOOKUP_TYPES = [
   LOOKUP_TYPE_EVENT_AMENITY,
   LOOKUP_TYPE_CHALLENGE_TYPE,
   LOOKUP_TYPE_CHALLENGE_UNIT,
+  LOOKUP_TYPE_NEWS_CATEGORY,
 ];
 
 // ─── Seed data ───────────────────────────────────────────────────────────
@@ -227,6 +229,15 @@ const CHALLENGE_UNIT_SEED: SeedEntry[] = [
   { value: 'events', label: 'Events', labelAr: 'فعاليات', order: 3 },
 ];
 
+const NEWS_CATEGORY_SEED: SeedEntry[] = [
+  { label: 'Club News', labelAr: 'أخبار النادي', order: 0 },
+  { label: 'Rides & Events', labelAr: 'الجولات والفعاليات', order: 1 },
+  { label: 'Challenges', labelAr: 'التحديات', order: 2 },
+  { label: 'Community', labelAr: 'المجتمع', order: 3 },
+  { label: 'Cycling Tips', labelAr: 'نصائح ركوب الدراجات', order: 4 },
+  { label: 'Announcements', labelAr: 'إعلانات', order: 5 },
+];
+
 const SEED_BY_TYPE: Record<string, SeedEntry[]> = {
   [LOOKUP_TYPE_EVENT_CATEGORY]: EVENT_CATEGORY_SEED,
   [LOOKUP_TYPE_COMMUNITY_CATEGORY]: COMMUNITY_CATEGORY_SEED,
@@ -238,6 +249,7 @@ const SEED_BY_TYPE: Record<string, SeedEntry[]> = {
   [LOOKUP_TYPE_EVENT_AMENITY]: EVENT_AMENITY_SEED,
   [LOOKUP_TYPE_CHALLENGE_TYPE]: CHALLENGE_TYPE_SEED,
   [LOOKUP_TYPE_CHALLENGE_UNIT]: CHALLENGE_UNIT_SEED,
+  [LOOKUP_TYPE_NEWS_CATEGORY]: NEWS_CATEGORY_SEED,
 };
 
 /**
