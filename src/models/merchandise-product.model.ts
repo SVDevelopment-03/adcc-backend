@@ -14,12 +14,14 @@ export interface IMerchandiseProductVariant {
 
 export interface IMerchandiseProduct extends Document {
   name: string;
+  nameAr?: string;
   categoryId: string;
   subcategoryId?: string;
   price: number;
   originalPrice?: number;
   images: string[];
   description: string;
+  descriptionAr?: string;
   specifications: Array<{ label: string; value: string }>;
   variants: IMerchandiseProductVariant[];
   status: MerchandiseProductStatus;
@@ -76,6 +78,10 @@ const MerchandiseProductSchema = new Schema<IMerchandiseProduct>(
       required: [true, 'Product name is required'],
       trim: true,
     },
+    nameAr: {
+      type: String,
+      trim: true,
+    },
     categoryId: {
       type: String,
       required: [true, 'Product category is required'],
@@ -102,6 +108,10 @@ const MerchandiseProductSchema = new Schema<IMerchandiseProduct>(
     description: {
       type: String,
       required: [true, 'Product description is required'],
+      trim: true,
+    },
+    descriptionAr: {
+      type: String,
       trim: true,
     },
     specifications: {

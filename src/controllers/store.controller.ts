@@ -10,6 +10,7 @@ import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import User from '@/models/user.model';
 import { notifyAdminStoreItemPending } from '@/services/admin-notification.service';
 import feedStoreNotificationService from '@/services/feed-store-notification.service';
+import { localizeStoreItemStatic, SupportedLanguage } from '@/utils/localization';
 
 const isAdmin = (req: AuthRequest): boolean => req.user?.role === 'Admin';
 
@@ -61,7 +62,7 @@ const normalizePhotosInput = (value: unknown): string[] => {
   return [];
 };
 
-const enrichSellerFields = (item: any) => {
+const enrichSellerFields = (item: any, lang?: string) => {
   const createdBy = item?.createdBy;
   const createdByName =
     createdBy && typeof createdBy === 'object'
@@ -70,11 +71,17 @@ const enrichSellerFields = (item: any) => {
   const sellerName =
     createdByName || String(item?.sellerName || '').trim() || 'Unknown Seller';
 
-  return {
+  const enriched = {
     ...item,
     sellerName,
     postedBy: sellerName,
   };
+
+  if (lang) {
+    localizeStoreItemStatic(enriched, lang as SupportedLanguage);
+  }
+
+  return enriched;
 };
 
 const attachStoreItemImages = async (req: AuthRequest, data: Record<string, any>) => {
@@ -181,7 +188,7 @@ export const createStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
 
   sendSuccess(
     res,
-    enrichSellerFields(item.toObject ? item.toObject() : item),
+    enrichSellerFields(item.toObject ? item.toObject() : item, lang),
     t(lang, 'store.created'),
     201
   );
@@ -229,7 +236,7 @@ export const getStoreItems = asyncHandler(async (req: AuthRequest, res: Response
   sendSuccess(
     res,
     {
-      items: items.map(enrichSellerFields),
+      items: items.map((i) => enrichSellerFields(i, lang)),
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -289,7 +296,7 @@ export const getAdminStoreItems = asyncHandler(async (req: AuthRequest, res: Res
   sendSuccess(
     res,
     {
-      items: items.map(enrichSellerFields),
+      items: items.map((i) => enrichSellerFields(i, lang)),
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -333,7 +340,7 @@ export const getMyStoreItems = asyncHandler(async (req: AuthRequest, res: Respon
   sendSuccess(
     res,
     {
-      items: items.map(enrichSellerFields),
+      items: items.map((i) => enrichSellerFields(i, lang)),
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -365,7 +372,7 @@ export const getStoreItemById = asyncHandler(async (req: AuthRequest, res: Respo
     throw new AppError(t(lang, 'store.not_found'), 404);
   }
 
-  sendSuccess(res, enrichSellerFields(item), t(lang, 'store.details'));
+  sendSuccess(res, enrichSellerFields(item, lang), t(lang, 'store.details'));
 });
 
 /**
@@ -416,7 +423,7 @@ export const updateStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
 
   sendSuccess(
     res,
-    updated ? enrichSellerFields(updated) : updated,
+    updated ? enrichSellerFields(updated, lang) : updated,
     t(lang, 'store.updated')
   );
 });
@@ -443,7 +450,7 @@ export const archiveStoreItem = asyncHandler(async (req: AuthRequest, res: Respo
 
   sendSuccess(
     res,
-    enrichSellerFields(item.toObject ? item.toObject() : item),
+    enrichSellerFields(item.toObject ? item.toObject() : item, lang),
     t(lang, 'store.archived')
   );
 });
@@ -485,7 +492,7 @@ export const approveStoreItem = asyncHandler(async (req: AuthRequest, res: Respo
 
   void feedStoreNotificationService.notifyStoreItemApproved(String(item._id));
 
-  sendSuccess(res, item, t(lang, 'store.approved'));
+  sendSuccess(res, enrichSellerFields(item, lang), t(lang, 'store.approved'));
 });
 
 /**
@@ -519,7 +526,7 @@ export const rejectStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
 
   void feedStoreNotificationService.notifyStoreItemRejected(String(item._id), req.body?.reason);
 
-  sendSuccess(res, item, t(lang, 'store.rejected'));
+  sendSuccess(res, enrichSellerFields(item, lang), t(lang, 'store.rejected'));
 });
 
 /**
@@ -545,7 +552,7 @@ export const featureStoreItem = asyncHandler(async (req: AuthRequest, res: Respo
   item.isFeatured = !!req.body.isFeatured;
   await item.save();
 
-  sendSuccess(res, item, t(lang, 'store.featured'));
+  sendSuccess(res, enrichSellerFields(item, lang), t(lang, 'store.featured'));
 });
 
 /**
@@ -568,5 +575,5 @@ export const markStoreItemSold = asyncHandler(async (req: AuthRequest, res: Resp
   item.isFeatured = false;
   await item.save();
 
-  sendSuccess(res, item, t(lang, 'store.sold'));
+  sendSuccess(res, enrichSellerFields(item, lang), t(lang, 'store.sold'));
 });

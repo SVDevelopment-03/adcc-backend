@@ -403,3 +403,44 @@ export const localizeNewsStatic = (news: Record<string, any>, lang: SupportedLan
     }
   }
 };
+
+/**
+ * Localize a marketplace/store item: swaps title/description/category/
+ * condition/city for their Arabic counterparts when present.
+ */
+export const localizeStoreItemStatic = (item: Record<string, any>, lang: SupportedLanguage): void => {
+  if (lang === 'ar') {
+    if (item.titleAr) item.title = item.titleAr;
+    if (item.descriptionAr) item.description = item.descriptionAr;
+    if (item.categoryAr) item.category = item.categoryAr;
+    if (item.conditionAr) item.condition = item.conditionAr;
+    if (item.cityAr) item.city = item.cityAr;
+  }
+};
+
+/**
+ * Localize a merchandise product: swaps name/description for their Arabic
+ * counterparts when present.
+ */
+export const localizeMerchandiseStatic = (product: Record<string, any>, lang: SupportedLanguage): void => {
+  if (lang === 'ar') {
+    if (product.nameAr) product.name = product.nameAr;
+    if (product.descriptionAr) product.description = product.descriptionAr;
+  }
+};
+
+/**
+ * Localize a merchandise category: swaps name (and subcategory names) for
+ * their Arabic counterparts when present.
+ */
+export const localizeMerchandiseCategoryStatic = (category: Record<string, any>, lang: SupportedLanguage): void => {
+  if (lang === 'ar') {
+    if (category.nameAr) category.name = category.nameAr;
+    if (Array.isArray(category.subcategories)) {
+      category.subcategories = category.subcategories.map((sub: Record<string, any>) => ({
+        ...sub,
+        name: sub.nameAr || sub.name,
+      }));
+    }
+  }
+};

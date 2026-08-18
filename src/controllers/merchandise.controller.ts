@@ -9,6 +9,13 @@ import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { t } from '@/utils/i18n';
+import { localizeMerchandiseStatic, localizeMerchandiseCategoryStatic, SupportedLanguage } from '@/utils/localization';
+
+const localizeProduct = (product: Record<string, any>, lang: string) => {
+  const localized = { ...product };
+  localizeMerchandiseStatic(localized, lang as SupportedLanguage);
+  return localized;
+};
 
 const ensureObjectId = (id: string): mongoose.Types.ObjectId => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -214,10 +221,12 @@ export const getMerchandiseProducts = asyncHandler(async (req: AuthRequest, res:
     : [];
   const categoryMap = new Map(categories.map((cat: any) => [cat.id, cat.name]));
 
-  const productsWithCategory = products.map((product: any) => ({
-    ...product,
-    categoryName: categoryMap.get(product.categoryId) ?? product.categoryId,
-  }));
+  const productsWithCategory = products.map((product: any) =>
+    localizeProduct({
+      ...product,
+      categoryName: categoryMap.get(product.categoryId) ?? product.categoryId,
+    }, lang)
+  );
 
   sendSuccess(res, {
     items: productsWithCategory,
@@ -239,7 +248,7 @@ export const getMerchandiseProductById = asyncHandler(async (req: AuthRequest, r
     throw new AppError('Product not found', 404);
   }
 
-  sendSuccess(res, product, t(lang, 'merchandise.product_details') || 'Product details retrieved');
+  sendSuccess(res, localizeProduct(product, lang), t(lang, 'merchandise.product_details') || 'Product details retrieved');
 });
 
 export const createMerchandiseProduct = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -265,7 +274,7 @@ export const createMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
     vendorName: isVendorUser(req) ? String(user.fullName || '') : String(data.vendorName || ''),
   });
 
-  sendSuccess(res, product, t(lang, 'merchandise.product_created') || 'Product created', 201);
+  sendSuccess(res, localizeProduct(product.toObject(), lang), t(lang, 'merchandise.product_created') || 'Product created', 201);
 });
 
 export const updateMerchandiseProduct = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -289,7 +298,7 @@ export const updateMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
   Object.assign(product, updateData);
   await product.save();
 
-  sendSuccess(res, product, t(lang, 'merchandise.product_updated') || 'Product updated');
+  sendSuccess(res, localizeProduct(product.toObject(), lang), t(lang, 'merchandise.product_updated') || 'Product updated');
 });
 
 export const deleteMerchandiseProduct = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -324,7 +333,7 @@ export const updateMerchandiseProductStatus = asyncHandler(async (req: AuthReque
   product.status = status as any;
   await product.save();
 
-  sendSuccess(res, product, t(lang, 'merchandise.product_status_updated') || 'Product status updated');
+  sendSuccess(res, localizeProduct(product.toObject(), lang), t(lang, 'merchandise.product_status_updated') || 'Product status updated');
 });
 
 export const updateMerchandiseProductFeatured = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -343,12 +352,16 @@ export const updateMerchandiseProductFeatured = asyncHandler(async (req: AuthReq
   product.featured = Boolean(featured);
   await product.save();
 
-  sendSuccess(res, product, t(lang, 'merchandise.product_featured_updated') || 'Product featured state updated');
+  sendSuccess(res, localizeProduct(product.toObject(), lang), t(lang, 'merchandise.product_featured_updated') || 'Product featured state updated');
 });
 
-export const getMerchandiseCategories = asyncHandler(async (_req: AuthRequest, res: Response) => {
+export const getMerchandiseCategories = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as string;
   const categories = await MerchandiseCategory.find().sort({ active: -1, name: 1 }).lean();
-  sendSuccess(res, categories, 'Categories retrieved');
+  const localized = categories.map((category: any) =>
+    localizeMerchandiseCategoryStatic({ ...category }, lang as SupportedLanguage)
+  );
+  sendSuccess(res, localized, 'Categories retrieved');
 });
 
 export const createMerchandiseCategory = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -365,6 +378,7 @@ export const createMerchandiseCategory = asyncHandler(async (req: AuthRequest, r
   const category = await MerchandiseCategory.create({
     id: categoryId,
     name: body.name,
+    nameAr: body.nameAr,
     icon: body.icon ?? '🏷️',
     image: body.image,
     active: body.active ?? true,
@@ -385,6 +399,7 @@ export const updateMerchandiseCategory = asyncHandler(async (req: AuthRequest, r
   }
 
   if (body.name !== undefined) category.name = String(body.name);
+  if (body.nameAr !== undefined) category.nameAr = String(body.nameAr);
   if (body.icon !== undefined) category.icon = String(body.icon);
   if (body.image !== undefined) category.image = String(body.image);
   if (body.active !== undefined) category.active = Boolean(body.active);
