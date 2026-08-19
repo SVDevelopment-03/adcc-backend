@@ -11,6 +11,7 @@ import User from '@/models/user.model';
 import { notifyAdminStoreItemPending } from '@/services/admin-notification.service';
 import feedStoreNotificationService from '@/services/feed-store-notification.service';
 import { localizeStoreItemStatic, SupportedLanguage } from '@/utils/localization';
+import { translateFieldsToArabic } from '@/services/translation.service';
 
 const isAdmin = (req: AuthRequest): boolean => req.user?.role === 'Admin';
 
@@ -168,6 +169,16 @@ export const createStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
   if (Array.isArray(data.photos) && data.photos.length > 5) {
     throw new AppError('Up to 5 photos are allowed', 400);
   }
+
+  // Auto-translate English → Arabic when Arabic fields weren't provided.
+  const translations = await translateFieldsToArabic({
+    title: !data.titleAr ? data.title : undefined,
+    description: !data.descriptionAr ? data.description : undefined,
+    category: !data.categoryAr ? data.category : undefined,
+    condition: !data.conditionAr ? data.condition : undefined,
+    city: !data.cityAr ? data.city : undefined,
+  });
+  Object.assign(data, translations);
 
   const seller = await User.findById(userId).select('fullName').lean();
   const sellerName = seller?.fullName?.trim() || 'Unknown Seller';
@@ -406,6 +417,22 @@ export const updateStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
   if (updates.photos && !updates.coverImage) {
     updates.coverImage = updates.photos[0];
   }
+
+  // Re-translate when an English field changed without a matching Arabic field.
+  const nextTitleAr = updates.titleAr ?? (item as any).titleAr;
+  const nextDescriptionAr = updates.descriptionAr ?? (item as any).descriptionAr;
+  const nextCategoryAr = updates.categoryAr ?? (item as any).categoryAr;
+  const nextConditionAr = updates.conditionAr ?? (item as any).conditionAr;
+  const nextCityAr = updates.cityAr ?? (item as any).cityAr;
+
+  const translations = await translateFieldsToArabic({
+    title: !nextTitleAr ? (updates.title ?? item.title) : undefined,
+    description: !nextDescriptionAr ? (updates.description ?? item.description) : undefined,
+    category: !nextCategoryAr ? (updates.category ?? item.category) : undefined,
+    condition: !nextConditionAr ? (updates.condition ?? item.condition) : undefined,
+    city: !nextCityAr ? (updates.city ?? item.city) : undefined,
+  });
+  Object.assign(updates, translations);
 
   if (!isAdmin(req) && item.status === 'Approved') {
     updates.status = 'Pending';

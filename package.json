@@ -21,6 +21,7 @@
     "test:firebase": "ts-node -r tsconfig-paths/register scripts/test-firebase-connection.ts",
     "cleanup:tokens": "ts-node -r tsconfig-paths/register scripts/cleanup-expired-tokens.ts",
     "seed:rbac": "ts-node -r tsconfig-paths/register scripts/seed-rbac.ts",
+    "backfill:translations": "ts-node -r tsconfig-paths/register scripts/backfill-translations.ts",
     "seed:news": "ts-node -r tsconfig-paths/register scripts/seed-news.ts"
   },
   "author": "",
@@ -45,6 +46,7 @@
     "morgan": "^1.10.1",
     "multer": "^2.0.2",
     "nodemailer": "^8.0.7",
+    "translate": "^3.1.0",
     "twilio": "^5.10.7",
     "zod": "^4.2.1"
   },

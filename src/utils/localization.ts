@@ -444,3 +444,25 @@ export const localizeMerchandiseCategoryStatic = (category: Record<string, any>,
     }
   }
 };
+
+/**
+ * Localize a feed post: swaps title/description for their Arabic counterparts
+ * when present.
+ */
+export const localizeFeedPostStatic = (post: Record<string, any>, lang: SupportedLanguage): void => {
+  if (lang === 'ar') {
+    if (post.titleAr) post.title = post.titleAr;
+    if (post.descriptionAr) post.description = post.descriptionAr;
+  }
+};
+
+/**
+ * Localize a community post: swaps title/caption for their Arabic
+ * counterparts when present.
+ */
+export const localizeCommunityPostStatic = (post: Record<string, any>, lang: SupportedLanguage): void => {
+  if (lang === 'ar') {
+    if (post.titleAr) post.title = post.titleAr;
+    if (post.captionAr) post.caption = post.captionAr;
+  }
+};
