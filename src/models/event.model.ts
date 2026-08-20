@@ -74,6 +74,7 @@ export interface IEvent extends Document {
   difficulty?: string;
   isFeatured?: boolean;
   allowCancellation?: boolean;
+  isPurposeBased?: boolean;
   galleryImages?: string[];
   publishedNotificationSentAt?: Date | null;
   resultsNotificationSentAt?: Date | null;
@@ -281,6 +282,10 @@ const EventSchema = new Schema(
       trim: true,
     },
     allowCancellation:{
+      type: Boolean,
+      trim: true,
+    },
+    isPurposeBased:{
       type: Boolean,
       trim: true,
     },

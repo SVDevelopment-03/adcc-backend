@@ -50,16 +50,11 @@ const coerceBoolean = (val: unknown) => {
   return raw;
 };
 
-export const facilityEnum = z.enum([
-  'water stations',
-  'restrooms',
-  'parking',
-  'lighting',
-  'cafes',
-  'bike rental',
-  'first aid',
-  'changing rooms',
-]);
+// Facilities are dashboard-managed via the `lookups` collection (type
+// "track_facility") — see track.model.ts. Deliberately a free string, not a
+// fixed enum, so an admin-added facility (or a renamed one) validates fine
+// without a code deploy.
+export const facilitySchema = z.string().trim().min(1);
 
 export const createTrackSchema = z
     .object({
@@ -79,7 +74,7 @@ export const createTrackSchema = z
         trackType: z.preprocess(firstValue, z.enum(['circuit', 'road', 'costal', 'desert', 'urban'], 'Invalid track type')),
         avgtime: z.preprocess(firstValue, z.string().min(0, 'Average time is required')).optional(),
         pace: z.preprocess(firstValue, z.string().min(1, 'Pace is required')).optional(),
-        facilities: z.preprocess(arrayFromStringOrJson, z.array(facilityEnum)).optional(),
+        facilities: z.preprocess(arrayFromStringOrJson, z.array(facilitySchema)).optional(),
         status: z.preprocess(firstValue, z.enum(['open', 'limited', 'closed', 'archived', 'disabled'], 'Invalid status type')),
         difficulty: z.preprocess(firstValue, z.string()).optional(),
         category: z.preprocess(firstValue, z.string()).optional(),
@@ -120,7 +115,7 @@ export const updateTrackSchema = z
         trackType: z.preprocess(firstValue, z.enum(['circuit', 'road', 'costal', 'desert', 'urban'], 'Invalid track type')).optional(),
         avgtime: z.preprocess(firstValue, z.string().min(0, 'Average time is required')).optional(),
         pace: z.preprocess(firstValue, z.string().min(1, 'Pace is required')).optional(),
-        facilities: z.preprocess(arrayFromStringOrJson, z.array(facilityEnum)).optional(),
+        facilities: z.preprocess(arrayFromStringOrJson, z.array(facilitySchema)).optional(),
         status: z.preprocess(firstValue, z.enum(['open', 'limited', 'closed' , 'archived', 'disabled'], 'Invalid status type')),
         difficulty: z.preprocess(firstValue, z.string()).optional(),
         category: z.preprocess(firstValue, z.string()).optional(),
