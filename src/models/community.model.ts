@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { generateUniqueSlug } from '@/utils/slug';
 
 export interface ICommunity extends Document {
   title: string;
@@ -54,6 +55,8 @@ const CommunitySchema = new Schema(
     slug: {
       type: String,
       trim: true,
+      unique: true,
+      sparse: true,
     },
     description: {
       type: String,
@@ -208,6 +211,19 @@ CommunitySchema.pre('save', async function () {
   const tid = doc.trackId as unknown;
   if (tid != null && !Array.isArray(tid)) {
     doc.trackId = [tid as mongoose.Types.ObjectId];
+  }
+});
+
+// Auto-generate a URL-friendly slug from the title on first save. Existing
+// communities keep their slug forever once set — it's never regenerated on
+// a later title edit, so shared/bookmarked links stay valid.
+CommunitySchema.pre('save', async function () {
+  if (!this.slug && this.title) {
+    this.slug = await generateUniqueSlug(
+      this.constructor as mongoose.Model<ICommunity>,
+      this.title,
+      (this._id as mongoose.Types.ObjectId | undefined)?.toString(),
+    );
   }
 });
 

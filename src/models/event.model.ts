@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { generateUniqueSlug } from '@/utils/slug';
 
 export interface IEventEligibility {
   helmetRequired: boolean;
@@ -272,6 +273,8 @@ const EventSchema = new Schema(
     slug: {
       type: String,
       trim: true,
+      unique: true,
+      sparse: true,
     },
     isFeatured:{
       type: Boolean,
@@ -312,5 +315,18 @@ const EventSchema = new Schema(
 // Index for filtering
 EventSchema.index({ eventDate: 1, status: 1 });
 EventSchema.index({ status: 1, eventDate: 1, createdAt: -1 });
+
+// Auto-generate a URL-friendly slug from the title on first save. Existing
+// events keep their slug forever once set — it's never regenerated on a
+// later title edit, so shared/bookmarked links stay valid.
+EventSchema.pre('save', async function () {
+  if (!this.slug && this.title) {
+    this.slug = await generateUniqueSlug(
+      this.constructor as mongoose.Model<IEvent>,
+      this.title,
+      (this._id as mongoose.Types.ObjectId | undefined)?.toString(),
+    );
+  }
+});
 
 export default mongoose.model<IEvent>('events', EventSchema);

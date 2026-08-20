@@ -4,14 +4,10 @@ export type StoreItemStatus = 'Pending' | 'Approved' | 'Rejected' | 'Sold' | 'Ar
 
 export interface IStoreItem extends Document {
   title: string;
-  titleAr?: string;
   sellerName?: string;
   description: string;
-  descriptionAr?: string;
   category: string;
-  categoryAr?: string;
   condition: string;
-  conditionAr?: string;
   currency: string;
   price: number;
   photos: string[];
@@ -20,7 +16,6 @@ export interface IStoreItem extends Document {
   contactMethod: 'Call' | 'WhatsApp' | 'InApp';
   phoneNumber?: string;
   city: string;
-  cityAr?: string;
   status: StoreItemStatus;
   isFeatured: boolean;
   createdBy: mongoose.Types.ObjectId;
@@ -42,10 +37,6 @@ const StoreItemSchema = new Schema(
       required: [true, 'Item title is required'],
       trim: true,
     },
-    titleAr: {
-      type: String,
-      trim: true,
-    },
     sellerName: {
       type: String,
       trim: true,
@@ -56,26 +47,14 @@ const StoreItemSchema = new Schema(
       required: [true, 'Item description is required'],
       trim: true,
     },
-    descriptionAr: {
-      type: String,
-      trim: true,
-    },
     category: {
       type: String,
       required: [true, 'Item category is required'],
       trim: true,
     },
-    categoryAr: {
-      type: String,
-      trim: true,
-    },
     condition: {
       type: String,
       required: [true, 'Item condition is required'],
-      trim: true,
-    },
-    conditionAr: {
-      type: String,
       trim: true,
     },
     currency: {
@@ -129,10 +108,6 @@ const StoreItemSchema = new Schema(
       type: String,
       trim: true,
       required: [true, 'City is required'],
-    },
-    cityAr: {
-      type: String,
-      trim: true,
     },
     status: {
       type: String,

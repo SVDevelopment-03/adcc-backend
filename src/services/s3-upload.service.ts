@@ -26,6 +26,10 @@ const FOLDER_MAP: Record<string, string> = {
   'merchandise-banners': 'merchandise/banners',
   'merchandise-banner': 'merchandise/banners',
   'merchandise-offer-banner': 'merchandise/banners',
+  'merchandise-products': 'merchandise/products',
+  'merchandise-product': 'merchandise/products',
+  'product-images': 'merchandise/products',
+  'product-gallery': 'merchandise/products',
   'product-categories': 'product/categories',
   'product-category': 'product/categories',
   'merchandise-categories': 'product/categories',
@@ -127,7 +131,7 @@ export const resolveUploadFolder = (folderKey: string) => {
   const folder = FOLDER_MAP[normalizedKey];
   if (!folder) {
     throw new AppError(
-      'Invalid upload folder. Allowed folders: events, tracks, store-items, store-items-galleries, community, community-posts, feed-posts, galleries, events-galleries, tracks-galleries, community-galleries, challenges, badges, content-sections, members-profile, merchandise-banners, product-banners, product-categories, merchandise-categories, lookup-icons, news.',
+      'Invalid upload folder. Allowed folders: events, tracks, store-items, store-items-galleries, community, community-posts, feed-posts, galleries, events-galleries, tracks-galleries, community-galleries, challenges, badges, content-sections, members-profile, merchandise-banners, merchandise-products, product-banners, product-categories, merchandise-categories, lookup-icons, news.',
       400
     );
   }

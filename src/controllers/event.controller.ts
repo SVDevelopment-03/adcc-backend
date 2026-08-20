@@ -8,6 +8,7 @@ import { parseTimeToSeconds } from '@/utils/event-results.util';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
+import { idOrSlugFilter } from '@/utils/slug';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import {
@@ -746,9 +747,9 @@ export const getCompletedEventStats = asyncHandler(async (req: AuthRequest, res:
 export const getEventById = asyncHandler(async (req: Request, res: Response) => {
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
    console.log("local-e",lang)
-  const { id } = req.params;
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
-  const event = await Event.findById(id)
+  const event = await Event.findOne(idOrSlugFilter(id))
     .populate('createdBy', 'fullName email')
     .populate('trackId', 'title titleAr')
     .populate('communityId', 'title titleAr');

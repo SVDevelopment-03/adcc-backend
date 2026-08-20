@@ -9,14 +9,10 @@ import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { t } from '@/utils/i18n';
-import { localizeMerchandiseStatic, localizeMerchandiseCategoryStatic, SupportedLanguage } from '@/utils/localization';
-import { translateFieldsToArabic } from '@/services/translation.service';
-
-const localizeProduct = (product: Record<string, any>, lang: string) => {
-  const localized = { ...product };
-  localizeMerchandiseStatic(localized, lang as SupportedLanguage);
-  return localized;
-};
+import {
+  localizeMerchandiseProductStatic,
+  localizeMerchandiseCategoryStatic,
+} from '@/utils/localization';
 
 const ensureObjectId = (id: string): mongoose.Types.ObjectId => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -220,14 +216,16 @@ export const getMerchandiseProducts = asyncHandler(async (req: AuthRequest, res:
   const categories = categoryIds.length
     ? await MerchandiseCategory.find({ id: { $in: categoryIds } }).lean()
     : [];
+  categories.forEach((cat: any) => localizeMerchandiseCategoryStatic(cat, lang as any));
   const categoryMap = new Map(categories.map((cat: any) => [cat.id, cat.name]));
 
-  const productsWithCategory = products.map((product: any) =>
-    localizeProduct({
+  const productsWithCategory = products.map((product: any) => {
+    localizeMerchandiseProductStatic(product, lang as any);
+    return {
       ...product,
       categoryName: categoryMap.get(product.categoryId) ?? product.categoryId,
-    }, lang)
-  );
+    };
+  });
 
   sendSuccess(res, {
     items: productsWithCategory,
@@ -243,13 +241,23 @@ export const getMerchandiseProducts = asyncHandler(async (req: AuthRequest, res:
 export const getMerchandiseProductById = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as string;
   const { id } = req.params;
-  const product = await MerchandiseProduct.findById(ensureObjectId(String(id))).lean();
+  const product: any = await MerchandiseProduct.findById(ensureObjectId(String(id))).lean();
 
   if (!product || (product.status !== 'published' && !isAdminUser(req))) {
     throw new AppError('Product not found', 404);
   }
 
-  sendSuccess(res, localizeProduct(product, lang), t(lang, 'merchandise.product_details') || 'Product details retrieved');
+  if (product.categoryId) {
+    const category: any = await MerchandiseCategory.findOne({ id: product.categoryId }).lean();
+    if (category) {
+      localizeMerchandiseCategoryStatic(category, lang as any);
+      product.categoryName = category.name;
+    }
+  }
+
+  localizeMerchandiseProductStatic(product, lang as any);
+
+  sendSuccess(res, product, t(lang, 'merchandise.product_details') || 'Product details retrieved');
 });
 
 export const createMerchandiseProduct = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -268,13 +276,6 @@ export const createMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
   const data = req.body as any;
   const totalStock = calculateTotalStock(data.variants || []);
 
-  // Auto-translate English → Arabic when Arabic fields weren't provided.
-  const translations = await translateFieldsToArabic({
-    name: !data.nameAr ? data.name : undefined,
-    description: !data.descriptionAr ? data.description : undefined,
-  });
-  Object.assign(data, translations);
-
   const product = await MerchandiseProduct.create({
     ...data,
     totalStock,
@@ -282,7 +283,7 @@ export const createMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
     vendorName: isVendorUser(req) ? String(user.fullName || '') : String(data.vendorName || ''),
   });
 
-  sendSuccess(res, localizeProduct(product.toObject(), lang), t(lang, 'merchandise.product_created') || 'Product created', 201);
+  sendSuccess(res, product, t(lang, 'merchandise.product_created') || 'Product created', 201);
 });
 
 export const updateMerchandiseProduct = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -303,19 +304,10 @@ export const updateMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
     updateData.totalStock = calculateTotalStock(updateData.variants);
   }
 
-  // Re-translate when an English field changed without a matching Arabic field.
-  const nextNameAr = updateData.nameAr ?? (product as any).nameAr;
-  const nextDescriptionAr = updateData.descriptionAr ?? (product as any).descriptionAr;
-  const translations = await translateFieldsToArabic({
-    name: !nextNameAr ? (updateData.name ?? product.name) : undefined,
-    description: !nextDescriptionAr ? (updateData.description ?? product.description) : undefined,
-  });
-  Object.assign(updateData, translations);
-
   Object.assign(product, updateData);
   await product.save();
 
-  sendSuccess(res, localizeProduct(product.toObject(), lang), t(lang, 'merchandise.product_updated') || 'Product updated');
+  sendSuccess(res, product, t(lang, 'merchandise.product_updated') || 'Product updated');
 });
 
 export const deleteMerchandiseProduct = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -350,7 +342,7 @@ export const updateMerchandiseProductStatus = asyncHandler(async (req: AuthReque
   product.status = status as any;
   await product.save();
 
-  sendSuccess(res, localizeProduct(product.toObject(), lang), t(lang, 'merchandise.product_status_updated') || 'Product status updated');
+  sendSuccess(res, product, t(lang, 'merchandise.product_status_updated') || 'Product status updated');
 });
 
 export const updateMerchandiseProductFeatured = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -369,16 +361,14 @@ export const updateMerchandiseProductFeatured = asyncHandler(async (req: AuthReq
   product.featured = Boolean(featured);
   await product.save();
 
-  sendSuccess(res, localizeProduct(product.toObject(), lang), t(lang, 'merchandise.product_featured_updated') || 'Product featured state updated');
+  sendSuccess(res, product, t(lang, 'merchandise.product_featured_updated') || 'Product featured state updated');
 });
 
 export const getMerchandiseCategories = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as string;
   const categories = await MerchandiseCategory.find().sort({ active: -1, name: 1 }).lean();
-  const localized = categories.map((category: any) =>
-    localizeMerchandiseCategoryStatic({ ...category }, lang as SupportedLanguage)
-  );
-  sendSuccess(res, localized, 'Categories retrieved');
+  categories.forEach((cat: any) => localizeMerchandiseCategoryStatic(cat, lang as any));
+  sendSuccess(res, categories, 'Categories retrieved');
 });
 
 export const createMerchandiseCategory = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -392,28 +382,14 @@ export const createMerchandiseCategory = asyncHandler(async (req: AuthRequest, r
     categoryId = `${categoryId}-${Date.now()}`;
   }
 
-  // Auto-translate the category name (and subcategory names) when absent.
-  const nameTranslations = await translateFieldsToArabic({
-    name: !body.nameAr ? body.name : undefined,
-  });
-  const subcategories = Array.isArray(body.subcategories)
-    ? await Promise.all(
-        body.subcategories.map(async (sub: any) => {
-          if (sub?.nameAr) return sub;
-          const translated = await translateFieldsToArabic({ name: sub?.name });
-          return { ...sub, ...(translated.nameAr ? { nameAr: translated.nameAr } : {}) };
-        })
-      )
-    : [];
-
   const category = await MerchandiseCategory.create({
     id: categoryId,
     name: body.name,
-    nameAr: body.nameAr ?? nameTranslations.nameAr,
+    nameAr: body.nameAr,
     icon: body.icon ?? '🏷️',
     image: body.image,
     active: body.active ?? true,
-    subcategories,
+    subcategories: body.subcategories ?? [],
   });
 
   sendSuccess(res, category, t(lang, 'merchandise.category_created') || 'Category created', 201);
@@ -434,23 +410,7 @@ export const updateMerchandiseCategory = asyncHandler(async (req: AuthRequest, r
   if (body.icon !== undefined) category.icon = String(body.icon);
   if (body.image !== undefined) category.image = String(body.image);
   if (body.active !== undefined) category.active = Boolean(body.active);
-
-  // Auto-translate name/subcategories when Arabic wasn't provided.
-  const nextNameAr = body.nameAr ?? category.nameAr;
-  if (!nextNameAr && category.name) {
-    const translated = await translateFieldsToArabic({ name: category.name });
-    if (translated.nameAr) category.nameAr = translated.nameAr;
-  }
-
-  if (body.subcategories !== undefined) {
-    category.subcategories = await Promise.all(
-      (body.subcategories as any[]).map(async (sub: any) => {
-        if (sub?.nameAr) return sub;
-        const translated = await translateFieldsToArabic({ name: sub?.name });
-        return { ...sub, ...(translated.nameAr ? { nameAr: translated.nameAr } : {}) };
-      })
-    );
-  }
+  if (body.subcategories !== undefined) category.subcategories = body.subcategories;
 
   await category.save();
   sendSuccess(res, category, t(lang, 'merchandise.category_updated') || 'Category updated');

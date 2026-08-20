@@ -10,8 +10,6 @@ import User from '@/models/user.model';
 import feedStoreNotificationService from '@/services/feed-store-notification.service';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import { notifyAdminFeedPostPending } from '@/services/admin-notification.service';
-import { localizeFeedPostStatic, SupportedLanguage } from '@/utils/localization';
-import { translateFieldsToArabic } from '@/services/translation.service';
 
 const getLang = (req: Request) => (((req as any).lang || 'en') as string) ?? 'en';
 
@@ -63,14 +61,9 @@ const attachOptionalImage = async (
 
 const feedPostSelect = 'fullName profileImage banFeedPost';
 
-const mapFeedPostForClient = (post: any, currentUserId?: string, lang?: string) => {
-  const localized = { ...post };
-  if (lang) {
-    localizeFeedPostStatic(localized, lang as SupportedLanguage);
-  }
-
-  const likes = Array.isArray(localized.likes) ? localized.likes : [];
-  const comments = Array.isArray(localized.comments) ? localized.comments : [];
+const mapFeedPostForClient = (post: any, currentUserId?: string) => {
+  const likes = Array.isArray(post.likes) ? post.likes : [];
+  const comments = Array.isArray(post.comments) ? post.comments : [];
   const currentUserIdString = currentUserId ? String(currentUserId) : '';
   const mappedComments = comments.map((comment: any) => {
     const commentUserId = String(comment.user?._id ?? comment.user ?? '');
@@ -81,7 +74,7 @@ const mapFeedPostForClient = (post: any, currentUserId?: string, lang?: string) 
   });
 
   return {
-    ...localized,
+    ...post,
     comments: mappedComments,
     likesCount: likes.length,
     commentsCount: comments.length,
@@ -119,16 +112,6 @@ export const createFeedPost = asyncHandler(async (req: AuthRequest, res: Respons
   // Users submit into moderation regardless of any client-provided status.
   data.status = 'pending';
   data.reported = false;
-
-  // Auto-translate English → Arabic when the Arabic fields weren't provided,
-  // so posts are browsable by Arabic users even if authored in English.
-  if (!data.titleAr || !data.descriptionAr) {
-    const translations = await translateFieldsToArabic({
-      title: !data.titleAr ? data.title : undefined,
-      description: !data.descriptionAr ? data.description : undefined,
-    });
-    Object.assign(data, translations);
-  }
 
   await attachOptionalImage(req, data, 'feed-posts');
 
@@ -183,7 +166,7 @@ export const getPublicFeedPosts = asyncHandler(async (req: AuthRequest, res: Res
     res,
     {
       posts: posts.map((post) =>
-        mapFeedPostForClient(post, req.user?.isGuest ? undefined : req.user?.id, lang)
+        mapFeedPostForClient(post, req.user?.isGuest ? undefined : req.user?.id)
       ),
       pagination: {
         page: pageNum,
@@ -226,7 +209,7 @@ export const getMyFeedPosts = asyncHandler(async (req: AuthRequest, res: Respons
   sendSuccess(
     res,
     {
-      posts: posts.map((post) => mapFeedPostForClient(post, userId, lang)),
+      posts: posts.map((post) => mapFeedPostForClient(post, userId)),
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -275,7 +258,7 @@ export const getFeedPosts = asyncHandler(async (req: Request, res: Response) => 
   sendSuccess(
     res,
     {
-      posts: posts.map((post) => mapFeedPostForClient(post, undefined, lang)),
+      posts: posts.map((post) => mapFeedPostForClient(post)),
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -305,7 +288,7 @@ export const getFeedPostById = asyncHandler(async (req: Request, res: Response) 
 
   sendSuccess(
     res,
-    mapFeedPostForClient(post, (req as AuthRequest).user?.id, lang),
+    mapFeedPostForClient(post, (req as AuthRequest).user?.id),
     t(lang, 'feedPost.retrieved')
   );
 });
@@ -332,7 +315,7 @@ export const getPublicFeedPostById = asyncHandler(async (req: AuthRequest, res: 
 
   sendSuccess(
     res,
-    mapFeedPostForClient(post, req.user?.isGuest ? undefined : req.user?.id, lang),
+    mapFeedPostForClient(post, req.user?.isGuest ? undefined : req.user?.id),
     t(lang, 'feedPost.retrieved')
   );
 });
@@ -380,7 +363,7 @@ export const likeFeedPost = asyncHandler(async (req: AuthRequest, res: Response)
     }
   }
 
-  sendSuccess(res, mapFeedPostForClient(updated, userId, lang), t(lang, 'feedPost.updated'));
+  sendSuccess(res, mapFeedPostForClient(updated, userId), t(lang, 'feedPost.updated'));
 });
 
 /**
@@ -417,7 +400,7 @@ export const addFeedComment = asyncHandler(async (req: AuthRequest, res: Respons
     throw new AppError(t(lang, 'feedPost.not_found'), 404);
   }
 
-  sendSuccess(res, mapFeedPostForClient(post, userId, lang), t(lang, 'feedPost.updated'), 201);
+  sendSuccess(res, mapFeedPostForClient(post, userId), t(lang, 'feedPost.updated'), 201);
 });
 
 /**
@@ -459,7 +442,7 @@ export const deleteFeedComment = asyncHandler(async (req: AuthRequest, res: Resp
     .populate('comments.user', 'fullName profileImage')
     .lean();
 
-  sendSuccess(res, mapFeedPostForClient(updated, userId, lang), t(lang, 'feedPost.updated'));
+  sendSuccess(res, mapFeedPostForClient(updated, userId), t(lang, 'feedPost.updated'));
 });
 
 /**

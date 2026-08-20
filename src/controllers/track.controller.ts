@@ -6,6 +6,7 @@ import Community from '@models/community.model';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
+import { idOrSlugFilter } from '@/utils/slug';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import mongoose from 'mongoose';
 import { SupportedLanguage } from '@/utils/localization';
@@ -285,7 +286,7 @@ export const getTrackById = asyncHandler(async (req: Request, res: Response) => 
     ? req.params.trackId[0]
     : req.params.trackId;
 
-    const track = await Track.findById(trackId);
+    const track = await Track.findOne(idOrSlugFilter(trackId));
     if (!track) {
         throw new AppError(t(lang, "track.not_found"), 404);
     }

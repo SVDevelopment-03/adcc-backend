@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { generateUniqueSlug } from '@/utils/slug';
 
 
 // Dashboard-managed via the `lookups` collection (type "track_facility").
@@ -80,7 +81,7 @@ const TrackSchema = new Schema(
     safetyNotes: { type: String },
     helmetRequired: { type: Boolean },
     visibility: { type: String },
-    slug: { type: String },
+    slug: { type: String, unique: true, sparse: true },
     estimatedTime: { type: String },
     country: { type: String },
     difficulty: { type: String },
@@ -105,5 +106,17 @@ const TrackSchema = new Schema(
   { timestamps: true }
 );
 
+// Auto-generate a URL-friendly slug from the title on first save. Existing
+// tracks keep their slug forever once set — it's never regenerated on a
+// later title edit, so shared/bookmarked links stay valid.
+TrackSchema.pre('save', async function () {
+  if (!this.slug && this.title) {
+    this.slug = await generateUniqueSlug(
+      this.constructor as mongoose.Model<ITrack>,
+      this.title,
+      (this._id as mongoose.Types.ObjectId | undefined)?.toString(),
+    );
+  }
+});
 
 export default mongoose.model<ITrack>('track', TrackSchema);

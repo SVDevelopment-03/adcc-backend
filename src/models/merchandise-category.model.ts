@@ -7,7 +7,7 @@ export interface IMerchandiseCategory extends Document {
   icon: string;
   image?: string | null;
   active: boolean;
-  subcategories: Array<{ id: string; name: string; nameAr?: string }>;
+  subcategories: Array<{ id: string; name: string }>;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -54,10 +54,6 @@ const MerchandiseCategorySchema = new Schema<IMerchandiseCategory>(
         name: {
           type: String,
           required: [true, 'Subcategory name is required'],
-          trim: true,
-        },
-        nameAr: {
-          type: String,
           trim: true,
         },
       },

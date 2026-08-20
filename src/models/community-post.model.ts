@@ -5,10 +5,8 @@ export type CommunityPostType = 'Announcement' | 'Highlight' | 'Awareness';
 export interface ICommunityPost extends Document {
   communityId: mongoose.Types.ObjectId;
   title: string;
-  titleAr?: string;
   postType: CommunityPostType;
   caption?: string;
-  captionAr?: string;
   image?: string;
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
@@ -28,20 +26,12 @@ const CommunityPostSchema = new Schema(
       required: [true, 'Post title is required'],
       trim: true,
     },
-    titleAr: {
-      type: String,
-      trim: true,
-    },
     postType: {
       type: String,
       enum: ['Announcement', 'Highlight', 'Awareness'],
       required: [true, 'Post type is required'],
     },
     caption: {
-      type: String,
-      trim: true,
-    },
-    captionAr: {
       type: String,
       trim: true,
     },

@@ -4,9 +4,7 @@ export type FeedPostStatus = 'pending' | 'approved' | 'rejected';
 
 export interface IFeedPost extends Document {
   title: string;
-  titleAr?: string;
   description: string;
-  descriptionAr?: string;
   status: FeedPostStatus;
   image?: string;
   eventId?: string;
@@ -36,17 +34,9 @@ const FeedPostSchema = new Schema(
       required: [true, 'Post title is required'],
       trim: true,
     },
-    titleAr: {
-      type: String,
-      trim: true,
-    },
     description: {
       type: String,
       required: [true, 'Post description is required'],
-      trim: true,
-    },
-    descriptionAr: {
-      type: String,
       trim: true,
     },
     status: {

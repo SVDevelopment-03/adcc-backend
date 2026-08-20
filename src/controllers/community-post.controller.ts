@@ -10,24 +10,6 @@ import { AuthRequest } from '@/middleware/auth.middleware';
 import { t } from '@/utils/i18n';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import { notifyCommunityAnnouncement } from '@/services/community-notification.service';
-import { localizeCommunityPostStatic, SupportedLanguage } from '@/utils/localization';
-import { translateFieldsToArabic } from '@/services/translation.service';
-
-const localizePost = (post: Record<string, any>, lang: string) => {
-  const localized = { ...post };
-  localizeCommunityPostStatic(localized, lang as SupportedLanguage);
-  if (
-    localized.communityId &&
-    typeof localized.communityId === 'object' &&
-    localized.communityId.titleAr
-  ) {
-    localized.communityId = {
-      ...localized.communityId,
-      title: lang === 'ar' ? localized.communityId.titleAr : localized.communityId.title,
-    };
-  }
-  return localized;
-};
 
 const getParamString = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
@@ -84,15 +66,6 @@ export const createCommunityPost = asyncHandler(async (req: AuthRequest, res: Re
     createdBy: userId,
   };
 
-  // Auto-translate English → Arabic when the Arabic fields weren't provided.
-  if (!data.titleAr || !data.captionAr) {
-    const translations = await translateFieldsToArabic({
-      title: !data.titleAr ? data.title : undefined,
-      caption: !data.captionAr ? data.caption : undefined,
-    });
-    Object.assign(data, translations);
-  }
-
   await attachPostImage(req, data);
 
   const post = await CommunityPost.create(data);
@@ -109,7 +82,7 @@ export const createCommunityPost = asyncHandler(async (req: AuthRequest, res: Re
     });
   }
 
-  sendSuccess(res, localizePost(populated.toObject(), lang), t(lang, 'communityPost.created'), 201);
+  sendSuccess(res, populated, t(lang, 'communityPost.created'), 201);
 });
 
 /**
@@ -152,7 +125,7 @@ export const getCommunityPosts = asyncHandler(async (req: Request, res: Response
   sendSuccess(
     res,
     {
-      posts: posts.map((post) => localizePost(post as Record<string, any>, lang)),
+      posts,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -188,7 +161,7 @@ export const getCommunityPostById = asyncHandler(async (req: Request, res: Respo
     throw new AppError(t(lang, 'communityPost.not_found'), 404);
   }
 
-  sendSuccess(res, localizePost(post as Record<string, any>, lang), t(lang, 'communityPost.retrieved'));
+  sendSuccess(res, post, t(lang, 'communityPost.retrieved'));
 });
 
 /**
@@ -218,7 +191,7 @@ export const updateCommunityPost = asyncHandler(async (req: AuthRequest, res: Re
     throw new AppError(t(lang, 'communityPost.not_found'), 404);
   }
 
-  sendSuccess(res, localizePost(post.toObject(), lang), t(lang, 'communityPost.updated'));
+  sendSuccess(res, post, t(lang, 'communityPost.updated'));
 });
 
 /**

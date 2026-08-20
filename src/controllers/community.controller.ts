@@ -7,6 +7,7 @@ import CommunityMembership from '@/models/communityMembership.model';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
+import { idOrSlugFilter } from '@/utils/slug';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { communityMembershipService } from '@/services';
 import { localizeDocumentFields, SupportedLanguage, localizeCommunityStatic } from '@/utils/localization';
@@ -412,14 +413,14 @@ export const getCommunityById = asyncHandler(async (req: Request, res: Response)
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
   const { id } = req.params;
 
-  if (Array.isArray(id) || !mongoose.Types.ObjectId.isValid(id)) {
+  if (Array.isArray(id) || !id) {
     return res.status(400).json({
       success: false,
       message: 'Invalid ID format'
     });
   }
 
-  const community = await Community.findById(id)
+  const community = await Community.findOne(idOrSlugFilter(id))
     .populate('createdBy', 'fullName email')
     .populate('trackId', 'title titleAr distance difficulty trackType category image city description descriptionAr')
     .populate('members', 'fullName email age gender');

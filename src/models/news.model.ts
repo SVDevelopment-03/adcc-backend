@@ -1,4 +1,5 @@
 import mongoose, { Schema, Document } from 'mongoose';
+import { generateUniqueSlug } from '@/utils/slug';
 
 /**
  * News categories are dashboard-managed (see the `lookups` collection,
@@ -67,6 +68,8 @@ const NewsSchema = new Schema(
     slug: {
       type: String,
       trim: true,
+      unique: true,
+      sparse: true,
     },
     createdBy: {
       type: Schema.Types.ObjectId,
@@ -81,5 +84,18 @@ const NewsSchema = new Schema(
 
 NewsSchema.index({ status: 1, publishedAt: -1, createdAt: -1 });
 NewsSchema.index({ title: 'text', titleAr: 'text' });
+
+// Auto-generate a URL-friendly slug from the title on first save. Existing
+// articles keep their slug forever once set — it's never regenerated on a
+// later title edit, so shared/bookmarked links stay valid.
+NewsSchema.pre('save', async function () {
+  if (!this.slug && this.title) {
+    this.slug = await generateUniqueSlug(
+      this.constructor as mongoose.Model<INews>,
+      this.title,
+      (this._id as mongoose.Types.ObjectId | undefined)?.toString(),
+    );
+  }
+});
 
 export default mongoose.model<INews>('news', NewsSchema);

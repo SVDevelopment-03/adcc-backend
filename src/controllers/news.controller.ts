@@ -4,6 +4,7 @@ import { t } from '@/utils/i18n';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
+import { idOrSlugFilter } from '@/utils/slug';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import { localizeNewsStatic } from '@/utils/localization';
@@ -115,9 +116,9 @@ export const getAllNews = asyncHandler(async (req: Request, res: Response) => {
  */
 export const getNewsById = asyncHandler(async (req: Request, res: Response) => {
   const lang = ((req as any).lang || 'en') as any;
-  const { id } = req.params;
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
 
-  const news = await News.findOne({ _id: id, status: 'Published' }).populate('createdBy', 'fullName');
+  const news = await News.findOne({ ...idOrSlugFilter(id), status: 'Published' }).populate('createdBy', 'fullName');
   if (!news) {
     throw new AppError(t(lang, 'news.not_found'), 404);
   }

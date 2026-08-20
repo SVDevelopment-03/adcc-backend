@@ -40,12 +40,14 @@ const merchandiseProductSpecificationSchema = z.object({
 
 export const createMerchandiseProductSchema = z.object({
   name: z.string().min(1, 'Product name is required'),
+  nameAr: z.string().optional(),
   categoryId: z.string().min(1, 'Product category is required'),
   subcategoryId: z.string().optional(),
   price: z.number().min(0, 'Price cannot be negative'),
   originalPrice: z.number().min(0, 'Original price cannot be negative').optional(),
   images: z.array(z.string().min(1)).optional(),
   description: z.string().min(1, 'Product description is required'),
+  descriptionAr: z.string().optional(),
   specifications: z.array(merchandiseProductSpecificationSchema).optional().default([]),
   variants: z.array(merchandiseProductVariantSchema).min(1, 'At least one variant is required'),
   status: merchandiseProductStatusSchema.optional().default('draft'),
@@ -70,6 +72,7 @@ export const merchandiseQuerySchema = z.object({
 
 export const createMerchandiseCategorySchema = z.object({
   name: z.string().min(1, 'Category name is required'),
+  nameAr: z.string().optional(),
   icon: z.string().min(1, 'Category icon is required').optional(),
   image: z.string().min(1, 'Category image is required').optional(),
   active: z.boolean().optional().default(true),
