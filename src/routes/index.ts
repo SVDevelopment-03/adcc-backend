@@ -27,6 +27,7 @@ import productBannerRoutes from './product-banner.route';
 import productBannerArRoutes from './product-banner-ar.route';
 import lookupRoutes from './lookup.route';
 import newsRoutes from './news.route';
+import mediaRoutes from './media.route';
 // import publicStatsRoutes from './public-stats.route';
 const router = Router();
 
@@ -60,6 +61,7 @@ router.use('/product-banners-ar', productBannerArRoutes);
 router.use('/newsletter-subscriptions', newsletterSubscriptionRoutes);
 router.use('/lookups', lookupRoutes);
 router.use('/news', newsRoutes);
+router.use('/media', mediaRoutes);
 
 // Add more routes here as you create them
 // router.use('/users', userRoutes);
