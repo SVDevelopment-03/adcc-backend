@@ -5,6 +5,7 @@ import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
+import { backfillMediaFromContent } from '@/services/media-backfill.service';
 
 /**
  * GET /v1/media?search=&folder=&page=&limit=
@@ -64,4 +65,16 @@ export const deleteMedia = asyncHandler(async (req: AuthRequest, res: Response) 
   }
 
   sendSuccess(res, null, 'Media removed from library');
+});
+
+/**
+ * POST /v1/media/backfill
+ * Scans events/tracks/communities/banners/lookups for images uploaded before
+ * the media catalog existed and adds them, so the picker also offers
+ * pre-existing content, not just uploads made from now on. Safe to run
+ * repeatedly — already-cataloged URLs are skipped.
+ */
+export const backfillMedia = asyncHandler(async (_req: AuthRequest, res: Response) => {
+  const result = await backfillMediaFromContent();
+  sendSuccess(res, result, `Scanned ${result.scanned} image URL(s), added ${result.added} new`);
 });
