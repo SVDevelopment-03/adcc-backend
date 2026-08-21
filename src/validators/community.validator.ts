@@ -178,6 +178,7 @@ export const  createCommunitySchema = z
     city: z.preprocess(firstValue, z.string()).optional(),
     /** Primary track refs (array of ObjectIds). */
     trackId: trackIdArrayFromInput,
+    trackIds: trackIdArrayFromInput.optional(),
   })
   .strict();
 
@@ -218,6 +219,7 @@ export const updateCommunitySchema = z
     area: z.preprocess(firstValue, z.string()).optional(),
     city: z.preprocess(firstValue, z.string()).optional(),
     trackId: trackIdArrayFromInput,
+    trackIds: trackIdArrayFromInput.optional(),
   })
   .strict();
 

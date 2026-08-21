@@ -151,11 +151,25 @@ export const AVAILABLE_CITIES = [
 
 /** Normalizes validated `trackId` from body (array of ObjectIds). */
 const resolveTrackIdFromBody = (body: Record<string, any>): mongoose.Types.ObjectId[] | undefined => {
-  if (!Object.prototype.hasOwnProperty.call(body, 'trackId')) return undefined;
-  const v = body.trackId;
-  if (v === undefined) return undefined;
+  const candidateKeys = ['trackId', 'trackIds'];
+  const source = candidateKeys.find((key) => Object.prototype.hasOwnProperty.call(body, key));
+  if (!source) return undefined;
+
+  const v = body[source];
+  if (v === undefined || v === null) return undefined;
   if (!Array.isArray(v)) return undefined;
-  return uniqueObjectIds(v.filter((id: unknown): id is mongoose.Types.ObjectId => id instanceof mongoose.Types.ObjectId));
+
+  const normalized = v.filter((id: unknown): id is mongoose.Types.ObjectId => {
+    if (id instanceof mongoose.Types.ObjectId) return true;
+    if (typeof id === 'string' && mongoose.Types.ObjectId.isValid(id)) {
+      return true;
+    }
+    return false;
+  });
+
+  return uniqueObjectIds(normalized.map((id) =>
+    id instanceof mongoose.Types.ObjectId ? id : new mongoose.Types.ObjectId(id)
+  ));
 };
 
 const normalizeGalleryImagesInput = (value: unknown): string[] => {

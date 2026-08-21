@@ -61,7 +61,15 @@ router.post(
   validate(createCommunitySchema),
   createCommunity
 );
-router.patch('/:id', authenticate, requireStaffPermission('manage_communities'), uploadCommunityImages, validate(updateCommunitySchema), updateCommunity);
+router.patch(
+  '/:id',
+  authenticate,
+  requireStaffPermission('manage_communities'),
+  uploadCommunityImages,
+  requireParsedMultipartBody,
+  validate(updateCommunitySchema),
+  updateCommunity
+);
 router.delete('/:id', authenticate, requireStaffPermission('manage_communities'), deleteCommunity);
 router.post('/:id/gallery', authenticate, requireStaffPermission('manage_communities'), requireMultipartFormData, uploadCommunityGalleryImages, addGalleryImages);
 router.delete(
