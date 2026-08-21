@@ -306,9 +306,13 @@ export const getTrackEvents = asyncHandler(async (req: Request, res: Response) =
     ? req.params.trackId[0]
     : req.params.trackId;
 
-  if (!mongoose.Types.ObjectId.isValid(trackIdParam)) {
-    throw new AppError(t(lang, "track.not_found"), 400);
+  // Public track detail pages link here using the track's slug, not just its
+  // Mongo _id — resolve either the same way getTrackById does.
+  const track = await Track.findOne(idOrSlugFilter(trackIdParam)).select('_id');
+  if (!track) {
+    throw new AppError(t(lang, "track.not_found"), 404);
   }
+  const trackObjectId = track._id;
 
   const { page = 1, limit = 10 } = req.query;
 
@@ -318,7 +322,7 @@ export const getTrackEvents = asyncHandler(async (req: Request, res: Response) =
 
   const filter: Record<string, any> = {
     trackId: {
-      $in: [new mongoose.Types.ObjectId(trackIdParam), trackIdParam],
+      $in: [trackObjectId, String(trackObjectId)],
     },
   };
 

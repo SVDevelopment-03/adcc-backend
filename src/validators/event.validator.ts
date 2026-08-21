@@ -12,6 +12,18 @@ const optionalStringField = (message: string) =>
 const optionalCoerceNumberField = (message: string) =>
   z.preprocess(firstValue, z.coerce.number().min(0, message)).optional();
 
+// z.coerce.boolean() treats ANY non-empty string as true — including "false" —
+// since it just runs Boolean(value). Multipart/FormData always sends
+// booleans as strings, so that quirk silently turns an unchecked checkbox
+// back into `true` on save. This preprocessor reads the string's actual value.
+const toBooleanValue = (val: unknown) => {
+  const raw = firstValue(val);
+  if (typeof raw === 'boolean') return raw;
+  if (typeof raw === 'string') return ['true', '1'].includes(raw.trim().toLowerCase());
+  return Boolean(raw);
+};
+const booleanField = () => z.preprocess(toBooleanValue, z.boolean());
+
 const jsonOrValue = (val: unknown) => {
   const raw = firstValue(val);
   if (typeof raw !== 'string') return raw;
@@ -121,9 +133,9 @@ export const createEventSchema = z
     difficulty: z.preprocess(firstValue, z.string()).optional(),
     endTime: z.preprocess(firstValue, z.string()).optional(),
     category: z.preprocess(firstValue, z.string()).optional(),
-    isFeatured: z.preprocess(firstValue, z.coerce.boolean()).default(false),
-    allowCancellation: z.preprocess(firstValue, z.coerce.boolean()).default(false),
-    isPurposeBased: z.preprocess(firstValue, z.coerce.boolean()).default(false),
+    isFeatured: booleanField().default(false),
+    allowCancellation: booleanField().default(false),
+    isPurposeBased: booleanField().default(false),
     rewards: rewardsSchema,
     galleryImages: z.preprocess(jsonOrValue, z.array(z.string().url('Invalid image URL'))).optional().default([])
   })
@@ -193,9 +205,9 @@ export const updateEventSchema = z
     endTime: z.preprocess(firstValue, z.string()).optional(),
     category: z.preprocess(firstValue, z.string()).optional(),
     rewards: rewardsSchema,
-    isFeatured: z.preprocess(firstValue, z.coerce.boolean()).default(false),
-    allowCancellation: z.preprocess(firstValue, z.coerce.boolean()).default(false),
-    isPurposeBased: z.preprocess(firstValue, z.coerce.boolean()).default(false),
+    isFeatured: booleanField().default(false),
+    allowCancellation: booleanField().default(false),
+    isPurposeBased: booleanField().default(false),
     galleryImages: z.preprocess(jsonOrValue, z.array(z.string().url('Invalid image URL'))).optional()
 
   })
