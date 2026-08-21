@@ -23,8 +23,49 @@ const COMMUNITY_LOCALIZED_FIELDS = {
   description: 'descriptionAr',
 };
 
+const normalizeCommunityTrackPayload = (community: Record<string, any>) => {
+  const rawTrackIds = Array.isArray(community.trackId)
+    ? community.trackId
+    : community.trackId != null
+      ? [community.trackId]
+      : [];
+
+  const normalizedTrackIds = rawTrackIds
+    .map((track: any) => {
+      if (!track) return null;
+      if (typeof track === 'string') return track;
+      if (typeof track === 'object') return track._id ?? track.id ?? null;
+      return null;
+    })
+    .filter((track): track is string => typeof track === 'string' && track.trim().length > 0);
+
+  community.trackIds = [...new Set(normalizedTrackIds)];
+
+  if (community.trackId != null) {
+    community.trackId = Array.isArray(community.trackId)
+      ? community.trackId.map((track: any) => {
+          if (!track || typeof track === 'string') return { _id: String(track), id: String(track), title: '' };
+          if (typeof track === 'object') {
+            const ref = { ...track };
+            if (ref._id && !ref.id) ref.id = String(ref._id);
+            if (ref.id && !ref._id) ref._id = String(ref.id);
+            return ref;
+          }
+          return track;
+        })
+      : [{
+          _id: String(community.trackId),
+          id: String(community.trackId),
+          title: '',
+        }];
+  }
+
+  return community;
+};
+
 const localizeCommunity = (community: Record<string, any>, lang: SupportedLanguage) => {
-  const localized = localizeDocumentFields(community, lang, COMMUNITY_LOCALIZED_FIELDS);
+  const normalizedCommunity = normalizeCommunityTrackPayload({ ...community });
+  const localized = localizeDocumentFields(normalizedCommunity, lang, COMMUNITY_LOCALIZED_FIELDS);
   localizeCommunityStatic(localized, lang);
   return localized;
 };
