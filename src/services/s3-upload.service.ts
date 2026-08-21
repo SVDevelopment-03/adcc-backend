@@ -2,6 +2,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import crypto from 'crypto';
 import path from 'path';
 import { AppError } from '@/utils/app-error';
+import Media from '@/models/media.model';
 
 const FOLDER_MAP: Record<string, string> = {
   events: 'events',
@@ -142,7 +143,8 @@ export const uploadImageBufferToS3 = async (
   fileBuffer: Buffer,
   mimeType: string,
   originalName: string,
-  folderKey: string
+  folderKey: string,
+  uploadedBy?: string
 ) => {
   try {
     const { bucket, region } = getAwsConfig();
@@ -162,10 +164,31 @@ export const uploadImageBufferToS3 = async (
       })
     );
 
-    return {
+    const result = {
       key,
       url: buildPublicUrl(bucket, region, key),
     };
+
+    // Record every upload in the shared media catalog — this is the single
+    // chokepoint all ~15+ upload controllers funnel through, so hooking it
+    // here means the "choose an existing image" picker sees uploads from
+    // anywhere in the app without each call site needing to know about it.
+    // Never let a catalog write failure break the actual upload.
+    try {
+      await Media.create({
+        url: result.url,
+        key,
+        folder,
+        name: originalName,
+        mimeType,
+        size: fileBuffer.length,
+        uploadedBy: uploadedBy || undefined,
+      });
+    } catch (catalogError) {
+      console.error('Failed to record media library entry:', catalogError);
+    }
+
+    return result;
   } catch (error: any) {
     const details = error?.name || error?.Code || error?.code || 'UnknownS3Error';
     const message = error?.message || 'S3 upload failed';

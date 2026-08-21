@@ -320,3 +320,92 @@ export const deleteProductBanner = asyncHandler(async (req: AuthRequest, res: Re
 
   sendSuccess(res, null, t(lang, 'contentSetting.deleted'), 200);
 });
+
+// ─── Arabic product banners ('product_banner_ar') ───
+// Mirrors the English product-banner endpoints above, kept separate so the
+// two banner sets (used for the club Merchandise Banner Upload sections) can
+// be managed independently, same pattern as app_banner / app_banner_ar.
+
+export const listProductBannersAr = asyncHandler(async (req: Request, res: Response) => {
+  const { active } = req.query as { active?: boolean };
+  const banners = await getBannersByGroup('product_banner_ar', active);
+  sendSuccess(res, { banners }, t((req as any).lang || 'en', 'contentSetting.list'), 200);
+});
+
+export const createProductBannersAr = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as string;
+  const userId = req.user?.id;
+  if (!userId) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const files = extractUploadedFiles(req);
+  if (!files.length) {
+    throw new AppError('At least one image file is required.', 400);
+  }
+
+  const banners = await createBannerEntries(files, 'product_banner_ar', 'product-banners');
+  sendSuccess(res, { banners }, t(lang, 'contentSetting.created'), 201);
+});
+
+export const updateProductBannerAr = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as string;
+  const userId = req.user?.id;
+  if (!userId) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const key = normalizeParamValue(req.params.key);
+  const bodyWithUploadedImage = await attachBannerImage(
+    req,
+    req.body as Record<string, any>,
+    'product-banners'
+  );
+  const { label, title, description, image, active } = bodyWithUploadedImage as {
+    label?: string;
+    title?: string;
+    description?: string;
+    image?: string;
+    active?: boolean;
+  };
+
+  const updates: Record<string, any> = {};
+  if (label !== undefined) updates.label = label;
+  if (title !== undefined) updates.title = title;
+  if (description !== undefined) updates.description = description;
+  if (image !== undefined) updates.image = image;
+  if (active !== undefined) updates.active = active;
+
+  if (Object.keys(updates).length === 0) {
+    throw new AppError('At least one field is required to update', 400);
+  }
+
+  const banner = await GlobalSetting.findOneAndUpdate(
+    { key, group: 'product_banner_ar' },
+    updates,
+    { new: true, runValidators: true }
+  );
+
+  if (!banner) {
+    throw new AppError(t(lang, 'contentSetting.not_found'), 404);
+  }
+
+  sendSuccess(res, banner, t(lang, 'contentSetting.updated'), 200);
+});
+
+export const deleteProductBannerAr = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as string;
+  const userId = req.user?.id;
+  if (!userId) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const key = normalizeParamValue(req.params.key);
+
+  const banner = await GlobalSetting.findOneAndDelete({ key, group: 'product_banner_ar' });
+  if (!banner) {
+    throw new AppError(t(lang, 'contentSetting.not_found'), 404);
+  }
+
+  sendSuccess(res, null, t(lang, 'contentSetting.deleted'), 200);
+});
