@@ -123,6 +123,7 @@ export const createEventSchema = z
     category: z.preprocess(firstValue, z.string()).optional(),
     isFeatured: z.preprocess(firstValue, z.coerce.boolean()).default(false),
     allowCancellation: z.preprocess(firstValue, z.coerce.boolean()).default(false),
+    isPurposeBased: z.preprocess(firstValue, z.coerce.boolean()).default(false),
     rewards: rewardsSchema,
     galleryImages: z.preprocess(jsonOrValue, z.array(z.string().url('Invalid image URL'))).optional().default([])
   })
@@ -194,6 +195,7 @@ export const updateEventSchema = z
     rewards: rewardsSchema,
     isFeatured: z.preprocess(firstValue, z.coerce.boolean()).default(false),
     allowCancellation: z.preprocess(firstValue, z.coerce.boolean()).default(false),
+    isPurposeBased: z.preprocess(firstValue, z.coerce.boolean()).default(false),
     galleryImages: z.preprocess(jsonOrValue, z.array(z.string().url('Invalid image URL'))).optional()
 
   })
