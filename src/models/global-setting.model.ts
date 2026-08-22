@@ -7,7 +7,6 @@ export interface IGlobalSetting extends Document {
   title?: string;
   description?: string;
   image?: string;
-  targetScreen?: string;
   active?: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -40,11 +39,6 @@ const GlobalSettingSchema = new Schema<IGlobalSetting>(
     image: {
       type: String,
       trim: true,
-    },
-    targetScreen: {
-      type: String,
-      trim: true,
-      default: 'home',
     },
     active: {
       type: Boolean,

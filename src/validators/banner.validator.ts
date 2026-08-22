@@ -24,7 +24,6 @@ export const createAppBannerSchema = z
     label: z.preprocess(firstValue, z.string().min(1, 'Label is required')).optional(),
     title: z.preprocess(firstValue, z.string()).optional(),
     description: z.preprocess(firstValue, z.string()).optional(),
-    targetScreen: z.preprocess(firstValue, z.string().min(1, 'Target screen is required')).optional(),
     active: booleanFromString.optional().default(true),
   })
   .strict();
@@ -35,7 +34,6 @@ export const updateAppBannerSchema = z
     title: stringField.optional(),
     description: z.preprocess(firstValue, z.string()).optional(),
     image: z.preprocess(firstValue, z.string()).optional(),
-    targetScreen: z.preprocess(firstValue, z.string().min(1, 'Target screen is required')).optional(),
     active: booleanFromString.optional(),
   })
   .strict();

@@ -262,8 +262,10 @@
   },
   "amenities": {
     "water": "ماء",
+    "waterstations": "محطات المياه",
     "parking": "موقف سيارات",
     "toilets": "دورات المياه",
+    "restrooms": "دورات المياه",
     "lighting": "إضاءة",
     "medicalSupport": "الدعم الطبي",
     "bikeService": "خدمة الدراجات",
