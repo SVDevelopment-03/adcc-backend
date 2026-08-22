@@ -87,7 +87,7 @@ const getBannersByGroup = async (group: string, active?: boolean) => {
   }
 
   return GlobalSetting.find(filter)
-    .select('group key label title description image active createdAt updatedAt')
+    .select('group key label title description image targetScreen active createdAt updatedAt')
     .sort({ createdAt: -1 })
     .lean();
 };
@@ -110,11 +110,12 @@ const createAppBannerForGroup = async (req: AuthRequest, res: Response, group: s
   }
 
   const bodyWithUploadedImage = await attachBannerImage(req, req.body as Record<string, any>);
-  const { key: rawKey, label: rawLabel, title, description, image, active } = bodyWithUploadedImage as {
+  const { key: rawKey, label: rawLabel, title, description, targetScreen, image, active } = bodyWithUploadedImage as {
     key?: string;
     label?: string;
     title?: string;
     description?: string;
+    targetScreen?: string;
     image?: string;
     active?: boolean;
   };
@@ -130,6 +131,7 @@ const createAppBannerForGroup = async (req: AuthRequest, res: Response, group: s
         label,
         title,
         description,
+        ...(targetScreen !== undefined ? { targetScreen } : {}),
         ...(image !== undefined ? { image } : {}),
         active: active ?? existing.active,
       },
@@ -146,6 +148,7 @@ const createAppBannerForGroup = async (req: AuthRequest, res: Response, group: s
     label,
     title,
     description,
+    targetScreen: targetScreen || 'home',
     image,
     active: active ?? true,
   });
