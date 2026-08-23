@@ -108,13 +108,29 @@ export const AVAILABLE_CITIES = [
   'Jidhafs',
 ];
 
-/** Normalizes validated `trackId` from body (array of ObjectIds). */
+/** Normalizes track refs from either `trackId` or `trackIds` payloads. */
 const resolveTrackIdFromBody = (body: Record<string, any>): mongoose.Types.ObjectId[] | undefined => {
-  if (!Object.prototype.hasOwnProperty.call(body, 'trackId')) return undefined;
-  const v = body.trackId;
-  if (v === undefined) return undefined;
-  if (!Array.isArray(v)) return undefined;
-  return uniqueObjectIds(v.filter((id: unknown): id is mongoose.Types.ObjectId => id instanceof mongoose.Types.ObjectId));
+  const rawValues = [
+    body.trackId,
+    body.trackIds,
+  ].filter((value) => value !== undefined && value !== null);
+
+  if (rawValues.length === 0) return undefined;
+
+  const values = rawValues.flatMap((value) => {
+    if (Array.isArray(value)) return value;
+    return [value];
+  });
+
+  const objectIds = values.filter((id: unknown): id is mongoose.Types.ObjectId => id instanceof mongoose.Types.ObjectId);
+  const idStrings = values
+    .filter((id: unknown): id is string => typeof id === 'string')
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+
+  return uniqueObjectIds([...objectIds, ...idStrings]);
 };
 
 const normalizeGalleryImagesInput = (value: unknown): string[] => {
@@ -274,6 +290,7 @@ export const createCommunity = asyncHandler(async (req: AuthRequest, res: Respon
   delete (communityData as any).coverImage;
   const resolvedTrackId = resolveTrackIdFromBody(req.body as Record<string, any>);
   delete communityData.trackId;
+  delete communityData.trackIds;
   if (resolvedTrackId !== undefined) {
     communityData.trackId = resolvedTrackId;
   }
@@ -487,6 +504,7 @@ export const updateCommunity = asyncHandler(async (req: AuthRequest, res: Respon
   const resolvedTrackId = resolveTrackIdFromBody(req.body as Record<string, any>);
   if (resolvedTrackId !== undefined) {
     (req.body as any).trackId = resolvedTrackId;
+    delete (req.body as any).trackIds;
   }
 
   if (req.body.image) {
