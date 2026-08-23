@@ -38,6 +38,13 @@ const merchandiseProductSpecificationSchema = z.object({
   value: z.string().min(1, 'Specification value is required'),
 });
 
+const merchandiseProductSpecificationArSchema = z.object({
+  label: z.string().min(1, 'Specification label is required'),
+  value: z.string().min(1, 'Specification value is required'),
+  labelAr: z.string().optional(),
+  valueAr: z.string().optional(),
+});
+
 export const createMerchandiseProductSchema = z.object({
   name: z.string().min(1, 'Product name is required'),
   nameAr: z.string().optional(),
@@ -49,6 +56,7 @@ export const createMerchandiseProductSchema = z.object({
   description: z.string().min(1, 'Product description is required'),
   descriptionAr: z.string().optional(),
   specifications: z.array(merchandiseProductSpecificationSchema).optional().default([]),
+  specificationsAr: z.array(merchandiseProductSpecificationArSchema).optional().default([]),
   variants: z.array(merchandiseProductVariantSchema).min(1, 'At least one variant is required'),
   status: merchandiseProductStatusSchema.optional().default('draft'),
   featured: z.boolean().optional().default(false),
