@@ -165,10 +165,11 @@ const updateAppBannerForGroup = async (req: AuthRequest, res: Response, group: s
 
   const key = normalizeParamValue(req.params.key);
   const bodyWithUploadedImage = await attachBannerImage(req, req.body as Record<string, any>);
-  const { label, title, description, image, active } = bodyWithUploadedImage as {
+  const { label, title, description, targetScreen, image, active } = bodyWithUploadedImage as {
     label?: string;
     title?: string;
     description?: string;
+    targetScreen?: string;
     image?: string;
     active?: boolean;
   };
@@ -177,6 +178,7 @@ const updateAppBannerForGroup = async (req: AuthRequest, res: Response, group: s
   if (label !== undefined) updates.label = label;
   if (title !== undefined) updates.title = title;
   if (description !== undefined) updates.description = description;
+  if (targetScreen !== undefined) updates.targetScreen = targetScreen;
   if (image !== undefined) updates.image = image;
   if (active !== undefined) updates.active = active;
 
