@@ -49,6 +49,8 @@
     "nodemailer": "^8.0.7",
     "twilio": "^5.10.7",
     "zod": "^4.2.1"
+    ,
+    "translate": "^1.4.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

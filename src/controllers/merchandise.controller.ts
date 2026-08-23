@@ -258,6 +258,33 @@ export const getMerchandiseProductById = asyncHandler(async (req: AuthRequest, r
 
   localizeMerchandiseProductStatic(product, lang as any);
 
+  // If the request is for Arabic and the product lacks `specificationsAr`,
+  // attempt a best-effort on-the-fly translation for the response so the
+  // client immediately sees Arabic specs even before a DB backfill runs.
+  if (lang === 'ar') {
+    try {
+      const hasSpecsAr = Array.isArray(product.specificationsAr) && product.specificationsAr.length > 0;
+      if (!hasSpecsAr && Array.isArray(product.specifications) && product.specifications.length > 0) {
+        const fieldsToTranslate: Record<string, string | null | undefined> = {};
+        (product.specifications as Array<any>).forEach((s: any, idx: number) => {
+          fieldsToTranslate[`spec_${idx}_label`] = s.label;
+          fieldsToTranslate[`spec_${idx}_value`] = s.value;
+        });
+        const translations = await translateFieldsToArabic(fieldsToTranslate);
+        const specsAr = (product.specifications as Array<any>).map((s: any, idx: number) => ({
+          label: s.label,
+          value: s.value,
+          labelAr: translations[`spec_${idx}_label`] || '',
+          valueAr: translations[`spec_${idx}_value`] || '',
+        }));
+        product.specificationsAr = specsAr;
+      }
+    } catch (err) {
+      // Best-effort: don't fail the request on translation errors.
+      console.error('[merchandise] on-the-fly specs translation failed', err);
+    }
+  }
+
   sendSuccess(res, product, t(lang, 'merchandise.product_details') || 'Product details retrieved');
 });
 
