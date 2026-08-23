@@ -29,6 +29,7 @@ import {
   resolveRequestLanguage,
   localizeCommunityStatic,
 } from '@/utils/localization';
+import { getCachedLookupMap, LOOKUP_TYPE_CITY } from '@/services/lookup.service';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
@@ -1172,7 +1173,33 @@ export const getCurrentUser = asyncHandler(
       throw new AppError(t(lang, 'auth.user_not_found'), 404);
     }
 
-    sendSuccess(res, user, t(lang, 'auth.profile_retrieved'));
+    // Convert to plain object so we can adjust localized fields without
+    // mutating the mongoose document directly.
+    const payload: any = typeof user.toObject === 'function' ? user.toObject() : { ...user };
+
+    // Localize `city` using the dashboard-managed lookup cache when possible.
+    if (payload.city && typeof payload.city === 'string') {
+      const entry = getCachedLookupMap(LOOKUP_TYPE_CITY)[payload.city];
+      if (entry) {
+        payload.city = lang === 'ar' ? (entry.labelAr || entry.label) : entry.label;
+      }
+    }
+
+    // Map common skill-level text to localized translations
+    if (payload.skillLevel && typeof payload.skillLevel === 'string') {
+      const lvl = payload.skillLevel.toLowerCase();
+      if (lvl.includes('beginner')) {
+        payload.skillLevel = t(lang, 'beginner');
+      } else if (lvl.includes('intermediate')) {
+        payload.skillLevel = t(lang, 'intermediate');
+      } else if (lvl.includes('advanced')) {
+        payload.skillLevel = t(lang, 'advanced');
+      } else if (lvl.includes('ambassador')) {
+        payload.skillLevel = t(lang, 'ambassador');
+      }
+    }
+
+    sendSuccess(res, payload, t(lang, 'auth.profile_retrieved'));
   }
 );
 

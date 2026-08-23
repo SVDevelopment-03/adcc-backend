@@ -26,6 +26,7 @@ import bannerArRoutes from './banner-ar.route';
 import productBannerRoutes from './product-banner.route';
 import productBannerArRoutes from './product-banner-ar.route';
 import lookupRoutes from './lookup.route';
+import { getStaticData } from '@/controllers/lookup.controller';
 import newsRoutes from './news.route';
 import mediaRoutes from './media.route';
 import contactMessageRoutes from './contact-message.route';
@@ -61,6 +62,10 @@ router.use('/product-banners', productBannerRoutes);
 router.use('/product-banners-ar', productBannerArRoutes);
 router.use('/newsletter-subscriptions', newsletterSubscriptionRoutes);
 router.use('/lookups', lookupRoutes);
+// Consolidated static data endpoint used by clients to fetch all dashboard-managed
+// lookup lists (cities, countries, event categories, etc.) with both English
+// and Arabic labels. Example: GET /v1/static-data
+router.get('/static-data', getStaticData);
 router.use('/news', newsRoutes);
 router.use('/media', mediaRoutes);
 router.use('/contact', contactMessageRoutes);
