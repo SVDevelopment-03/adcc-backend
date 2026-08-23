@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { t } from "@/utils/i18n";
 import Community from '@/models/community.model';
 import Event from '@/models/event.model';
+import Track from '@/models/track.model';
 import CommunityMembership from '@/models/communityMembership.model';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
@@ -460,6 +461,39 @@ export const getCommunityById = asyncHandler(async (req: Request, res: Response)
   const communityObj: any = community.toObject();
   communityObj.upcomingEventCount = upcomingEvents;
   communityObj.memberCount = memberCount;
+
+  // Include tracks referenced by community events so clients (mobile) can
+  // render event-associated tracks along with explicitly assigned ones.
+  try {
+    const eventTrackIdsRaw = await Event.distinct('trackId', { communityId: community._id });
+    const trackIdStrings = new Set<string>();
+
+    // Add explicit community track ids (may be populated or raw)
+    const commTrackField = (community as any).trackId;
+    if (Array.isArray(commTrackField)) {
+      for (const item of commTrackField) {
+        if (!item) continue;
+        const s = (item instanceof mongoose.Types.ObjectId) ? item.toString() : (item._id ? item._id.toString() : String(item));
+        if (s) trackIdStrings.add(s);
+      }
+    }
+
+    // Add distinct event track ids
+    for (const idVal of eventTrackIdsRaw) {
+      if (!idVal) continue;
+      const s = (idVal instanceof mongoose.Types.ObjectId) ? idVal.toString() : String(idVal);
+      if (s) trackIdStrings.add(s);
+    }
+
+    if (trackIdStrings.size > 0) {
+      const ids = Array.from(trackIdStrings).map((s) => new mongoose.Types.ObjectId(s));
+      const tracks = await Track.find({ _id: { $in: ids } }).select('title titleAr distance difficulty trackType category image city description descriptionAr');
+      // Replace the `trackId` field in the response with the merged track docs
+      communityObj.trackId = tracks.map((t) => t.toObject());
+    }
+  } catch (err) {
+    // Non-fatal: ignore errors while enriching with event tracks
+  }
   const localizedCommunity = localizeCommunity(communityObj, lang);
 
   return sendSuccess(res, localizedCommunity, t(lang,"community.details_retrieved"), 201);
