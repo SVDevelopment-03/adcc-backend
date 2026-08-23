@@ -454,3 +454,28 @@ export const deleteProductBannerAr = asyncHandler(async (req: AuthRequest, res: 
 
   sendSuccess(res, null, t(lang, 'contentSetting.deleted'), 200);
 });
+
+/**
+ * DELETE /v1/app-banners-ar/bulk
+ * DELETE /v1/product-banners-ar/bulk
+ * Admin-only: remove all banners for the given Arabic banner group.
+ * Temporary helper for maintenance — requires staff permission in the route.
+ */
+const deleteAllBannersForGroup = async (req: AuthRequest, res: Response, group: string) => {
+  const lang = ((req as any).lang || 'en') as string;
+  const userId = req.user?.id;
+  if (!userId) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const result = await GlobalSetting.deleteMany({ group });
+  sendSuccess(res, { deleted: result.deletedCount ?? 0 }, t(lang, 'contentSetting.deleted'), 200);
+};
+
+export const deleteAllAppBannersAr = asyncHandler((req: AuthRequest, res: Response) =>
+  deleteAllBannersForGroup(req, res, 'app_banner_ar')
+);
+
+export const deleteAllProductBannersAr = asyncHandler((req: AuthRequest, res: Response) =>
+  deleteAllBannersForGroup(req, res, 'product_banner_ar')
+);
