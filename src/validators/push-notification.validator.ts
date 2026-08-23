@@ -40,6 +40,7 @@ export const sendStaffWebPushSchema = z
     // deliveryType: app | email | both (optional)
     deliveryType: z.preprocess(firstValue, z.enum(['app', 'email', 'both'])).optional(),
     selectedUserIds: optionalStringField('Invalid selected user ids'),
+    communityId: optionalStringField('Invalid community id'),
     // optional comma-separated external emails for sending to outsider addresses
     externalEmails: optionalStringField('Invalid external email list'),
     scheduleDate: optionalStringField('Invalid schedule date'),
@@ -66,6 +67,7 @@ export const sendCampaignBroadcastSchema = z
     audienceType: stringField('Audience type is required'),
     deliveryType: z.preprocess(firstValue, z.enum(['app', 'email', 'both'])).optional(),
     selectedUserIds: optionalStringField('Invalid selected user ids'),
+    communityId: optionalStringField('Invalid community id'),
     externalEmails: optionalStringField('Invalid external email list'),
     scheduleDate: optionalStringField('Invalid schedule date'),
     scheduleTime: optionalStringField('Invalid schedule time'),
