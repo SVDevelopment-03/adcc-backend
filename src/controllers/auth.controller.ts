@@ -24,7 +24,11 @@ import {
   generateRefreshToken,
 } from '@/utils/jwt.util';
 import { t } from '@/utils/i18n';
-import { resolveRequestLanguage } from '@/utils/localization';
+import {
+  localizeDocumentFields,
+  resolveRequestLanguage,
+  localizeCommunityStatic,
+} from '@/utils/localization';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
@@ -986,7 +990,33 @@ export const getMyJoinedCommunities = asyncHandler(
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.max(1, Math.min(100, Number(req.query.limit) || 10));
     const result = await communityMembershipService.getMyJoinedCommunities(userId, page, limit);
-    sendSuccess(res, result, t(lang, 'auth.joined_communities_retrieved'));
+
+    const localizedCommunities = (result.communities ?? []).map((item: any) => {
+      if (!item || typeof item !== 'object' || !item.community || typeof item.community !== 'object') {
+        return item;
+      }
+
+      const community = { ...item.community };
+      const localizedCommunity = localizeDocumentFields(community, lang, {
+        title: 'titleAr',
+        description: 'descriptionAr',
+      });
+      localizeCommunityStatic(localizedCommunity, lang);
+
+      return {
+        ...item,
+        community: localizedCommunity,
+      };
+    });
+
+    sendSuccess(
+      res,
+      {
+        ...result,
+        communities: localizedCommunities,
+      },
+      t(lang, 'auth.joined_communities_retrieved')
+    );
   }
 );
 
