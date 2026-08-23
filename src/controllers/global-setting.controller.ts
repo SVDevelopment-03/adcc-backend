@@ -120,7 +120,9 @@ const attachContentSettingImage = async (
  * Admin only
  */
 export const createGlobalSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = ((req as any).lang || 'en') as string;
+  // Admin endpoints always respond in English so the dashboard UI remains LTR
+  // regardless of the client's Accept-Language header.
+  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
   const userId = req.user?.id;
   if (!userId) {
     throw new AppError(t(lang, 'auth.unauthorized'), 401);
@@ -141,7 +143,7 @@ export const createGlobalSetting = asyncHandler(async (req: AuthRequest, res: Re
  * Admin only
  */
 export const upsertGlobalSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = ((req as any).lang || 'en') as string;
+  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
   const userId = req.user?.id;
   if (!userId) {
     throw new AppError(t(lang, 'auth.unauthorized'), 401);
@@ -232,7 +234,7 @@ export const getGlobalSettingByKey = asyncHandler(async (req: Request, res: Resp
  * Admin only
  */
 export const updateGlobalSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = ((req as any).lang || 'en') as string;
+  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
   const key = normalizeParamValue(req.params.key);
 
   const setting = await GlobalSetting.findOneAndUpdate(
@@ -254,7 +256,7 @@ export const updateGlobalSetting = asyncHandler(async (req: AuthRequest, res: Re
  * Admin only
  */
 export const deleteGlobalSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = ((req as any).lang || 'en') as string;
+  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
   const { key } = req.params;
 
   const setting = await GlobalSetting.findOneAndDelete({ key });
@@ -271,7 +273,7 @@ export const deleteGlobalSetting = asyncHandler(async (req: AuthRequest, res: Re
  * Admin only
  */
 export const bulkUpsertGlobalSettings = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = ((req as any).lang || 'en') as string;
+  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
   const userId = req.user?.id;
   if (!userId) {
     throw new AppError(t(lang, 'auth.unauthorized'), 401);
@@ -352,7 +354,7 @@ export const bulkUpsertGlobalSettings = asyncHandler(async (req: AuthRequest, re
  * Admin only
  */
 export const createContentSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = ((req as any).lang || 'en') as string;
+  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
   const userId = req.user?.id;
   if (!userId) {
     throw new AppError(t(lang, 'auth.unauthorized'), 401);
@@ -419,7 +421,7 @@ export const listContentSettings = asyncHandler(async (req: Request, res: Respon
  * Admin only
  */
 export const updateContentSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = ((req as any).lang || 'en') as string;
+  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
   const userId = req.user?.id;
   if (!userId) {
     throw new AppError(t(lang, 'auth.unauthorized'), 401);
@@ -476,7 +478,7 @@ export const updateContentSetting = asyncHandler(async (req: AuthRequest, res: R
  * Admin only
  */
 export const deleteContentSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = ((req as any).lang || 'en') as string;
+  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
   const userId = req.user?.id;
   if (!userId) {
     throw new AppError(t(lang, 'auth.unauthorized'), 401);
