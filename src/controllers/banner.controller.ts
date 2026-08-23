@@ -81,6 +81,9 @@ const attachBannerImage = async (
   }
 
   // No file found and no valid base64 in body — return payload unchanged.
+  // Log for debugging so admins can see why the banner has no image.
+  // eslint-disable-next-line no-console
+  console.debug('attachBannerImage: no multipart file and no base64 image found on request');
   return payload;
 };
 

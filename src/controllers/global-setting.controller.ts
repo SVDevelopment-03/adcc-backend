@@ -99,19 +99,49 @@ const attachContentSettingImage = async (
     flattenedFiles.find((file) => (file.fieldname || '').toLowerCase() === 'image') ||
     flattenedFiles[0];
 
-  if (!imageFile) return payload;
+  if (imageFile) {
+    const uploaded = await uploadImageBufferToS3(
+      imageFile.buffer,
+      imageFile.mimetype,
+      imageFile.originalname,
+      'content-sections'
+    );
 
-  const uploaded = await uploadImageBufferToS3(
-    imageFile.buffer,
-    imageFile.mimetype,
-    imageFile.originalname,
-    'content-sections'
-  );
+    return {
+      ...payload,
+      image: uploaded.url,
+    };
+  }
 
-  return {
-    ...payload,
-    image: uploaded.url,
-  };
+  // Fallback: accept base64/data-URL images sent in the request body.
+  const maybeImage = payload.image;
+  if (typeof maybeImage === 'string') {
+    const dataUrlMatch = maybeImage.match(/^data:(image\/[-+\w.]+);base64,(.+)$/i);
+    try {
+      if (dataUrlMatch) {
+        const mimeType = dataUrlMatch[1];
+        const base64Body = dataUrlMatch[2];
+        const buffer = Buffer.from(base64Body, 'base64');
+        const uploaded = await uploadImageBufferToS3(buffer, mimeType, 'upload.png', 'content-sections');
+        return { ...payload, image: uploaded.url };
+      }
+
+      if (/^[A-Za-z0-9+/=\n\r]+$/.test(maybeImage) && maybeImage.length > 100) {
+        const buffer = Buffer.from(maybeImage.replace(/\s+/g, ''), 'base64');
+        const uploaded = await uploadImageBufferToS3(buffer, 'image/jpeg', 'upload.jpg', 'content-sections');
+        return { ...payload, image: uploaded.url };
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('attachContentSettingImage: base64 upload fallback failed:', err);
+    }
+  }
+
+  // Log for debugging when no image is attached.
+  // eslint-disable-next-line no-console
+  console.debug('attachContentSettingImage: no multipart file and no base64 image found on request');
+
+  return payload;
 };
 
 /**
@@ -120,9 +150,7 @@ const attachContentSettingImage = async (
  * Admin only
  */
 export const createGlobalSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  // Admin endpoints always respond in English so the dashboard UI remains LTR
-  // regardless of the client's Accept-Language header.
-  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
+  const lang = ((req as any).lang || 'en') as string;
   const userId = req.user?.id;
   if (!userId) {
     throw new AppError(t(lang, 'auth.unauthorized'), 401);
@@ -143,7 +171,7 @@ export const createGlobalSetting = asyncHandler(async (req: AuthRequest, res: Re
  * Admin only
  */
 export const upsertGlobalSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
+  const lang = ((req as any).lang || 'en') as string;
   const userId = req.user?.id;
   if (!userId) {
     throw new AppError(t(lang, 'auth.unauthorized'), 401);
@@ -234,7 +262,7 @@ export const getGlobalSettingByKey = asyncHandler(async (req: Request, res: Resp
  * Admin only
  */
 export const updateGlobalSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
+  const lang = ((req as any).lang || 'en') as string;
   const key = normalizeParamValue(req.params.key);
 
   const setting = await GlobalSetting.findOneAndUpdate(
@@ -256,7 +284,7 @@ export const updateGlobalSetting = asyncHandler(async (req: AuthRequest, res: Re
  * Admin only
  */
 export const deleteGlobalSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
+  const lang = ((req as any).lang || 'en') as string;
   const { key } = req.params;
 
   const setting = await GlobalSetting.findOneAndDelete({ key });
@@ -273,7 +301,7 @@ export const deleteGlobalSetting = asyncHandler(async (req: AuthRequest, res: Re
  * Admin only
  */
 export const bulkUpsertGlobalSettings = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
+  const lang = ((req as any).lang || 'en') as string;
   const userId = req.user?.id;
   if (!userId) {
     throw new AppError(t(lang, 'auth.unauthorized'), 401);
@@ -354,7 +382,7 @@ export const bulkUpsertGlobalSettings = asyncHandler(async (req: AuthRequest, re
  * Admin only
  */
 export const createContentSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
+  const lang = ((req as any).lang || 'en') as string;
   const userId = req.user?.id;
   if (!userId) {
     throw new AppError(t(lang, 'auth.unauthorized'), 401);
@@ -421,7 +449,7 @@ export const listContentSettings = asyncHandler(async (req: Request, res: Respon
  * Admin only
  */
 export const updateContentSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
+  const lang = ((req as any).lang || 'en') as string;
   const userId = req.user?.id;
   if (!userId) {
     throw new AppError(t(lang, 'auth.unauthorized'), 401);
@@ -478,7 +506,7 @@ export const updateContentSetting = asyncHandler(async (req: AuthRequest, res: R
  * Admin only
  */
 export const deleteContentSetting = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const lang = req.user ? 'en' : ((req as any).lang || 'en') as string;
+  const lang = ((req as any).lang || 'en') as string;
   const userId = req.user?.id;
   if (!userId) {
     throw new AppError(t(lang, 'auth.unauthorized'), 401);
