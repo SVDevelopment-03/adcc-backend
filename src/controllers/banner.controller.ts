@@ -110,13 +110,13 @@ const createAppBannerForGroup = async (req: AuthRequest, res: Response, group: s
   }
 
   const bodyWithUploadedImage = await attachBannerImage(req, req.body as Record<string, any>);
-  const { key: rawKey, label: rawLabel, title, description, targetScreen, image, active } = bodyWithUploadedImage as {
+  const { key: rawKey, label: rawLabel, title, description, image, targetScreen, active } = bodyWithUploadedImage as {
     key?: string;
     label?: string;
     title?: string;
     description?: string;
-    targetScreen?: string;
     image?: string;
+    targetScreen?: string;
     active?: boolean;
   };
 
@@ -131,8 +131,8 @@ const createAppBannerForGroup = async (req: AuthRequest, res: Response, group: s
         label,
         title,
         description,
-        ...(targetScreen !== undefined ? { targetScreen } : {}),
         ...(image !== undefined ? { image } : {}),
+        ...(targetScreen !== undefined ? { targetScreen } : {}),
         active: active ?? existing.active,
       },
       { new: true, runValidators: true }
@@ -148,8 +148,8 @@ const createAppBannerForGroup = async (req: AuthRequest, res: Response, group: s
     label,
     title,
     description,
-    targetScreen: targetScreen ?? 'home',
     image,
+    targetScreen,
     active: active ?? true,
   });
 
@@ -165,12 +165,12 @@ const updateAppBannerForGroup = async (req: AuthRequest, res: Response, group: s
 
   const key = normalizeParamValue(req.params.key);
   const bodyWithUploadedImage = await attachBannerImage(req, req.body as Record<string, any>);
-  const { label, title, description, targetScreen, image, active } = bodyWithUploadedImage as {
+  const { label, title, description, image, targetScreen, active } = bodyWithUploadedImage as {
     label?: string;
     title?: string;
     description?: string;
-    targetScreen?: string;
     image?: string;
+    targetScreen?: string;
     active?: boolean;
   };
 
@@ -178,8 +178,8 @@ const updateAppBannerForGroup = async (req: AuthRequest, res: Response, group: s
   if (label !== undefined) updates.label = label;
   if (title !== undefined) updates.title = title;
   if (description !== undefined) updates.description = description;
-  if (targetScreen !== undefined) updates.targetScreen = targetScreen;
   if (image !== undefined) updates.image = image;
+  if (targetScreen !== undefined) updates.targetScreen = targetScreen;
   if (active !== undefined) updates.active = active;
 
   if (Object.keys(updates).length === 0) {

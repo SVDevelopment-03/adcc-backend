@@ -43,7 +43,6 @@ const GlobalSettingSchema = new Schema<IGlobalSetting>(
     targetScreen: {
       type: String,
       trim: true,
-      default: 'home',
     },
     active: {
       type: Boolean,
@@ -55,6 +54,9 @@ const GlobalSettingSchema = new Schema<IGlobalSetting>(
   }
 );
 
+// Unique per (group, key) — not per key alone — so the same key can be
+// reused across groups (e.g. an Arabic banner is paired with its English
+// counterpart by reusing that banner's key, see banner.controller.ts).
 GlobalSettingSchema.index({ group: 1, key: 1 }, { unique: true });
 
 export default mongoose.model<IGlobalSetting>('global_settings', GlobalSettingSchema);
