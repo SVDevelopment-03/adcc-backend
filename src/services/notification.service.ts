@@ -39,11 +39,22 @@ async function gatherTokensForUser(userId: string): Promise<string[]> {
 
 export async function sendNotificationToUser(
   userId: string,
-  payload: { title: string; body: string; data?: Record<string, unknown> },
+  payload: {
+    title: string;
+    body: string;
+    type?: INotification['type'];
+    data?: Record<string, unknown>;
+  },
   options: NotificationSendOptions = {}
 ) {
   // Persist in-app notification always
-  await createInAppNotification({ userId, title: payload.title, body: payload.body, data: payload.data });
+  await createInAppNotification({
+    userId,
+    title: payload.title,
+    body: payload.body,
+    type: payload.type,
+    data: payload.data,
+  });
 
   const channels = options.channels ?? ['web', 'fcm'];
 
@@ -119,7 +130,12 @@ export async function sendNotificationToUser(
 
 export async function sendNotificationToUsers(
   userIds: string[],
-  payload: { title: string; body: string; data?: Record<string, unknown> },
+  payload: {
+    title: string;
+    body: string;
+    type?: INotification['type'];
+    data?: Record<string, unknown>;
+  },
   options: NotificationSendOptions = {}
 ) {
   console.log(

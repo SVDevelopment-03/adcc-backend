@@ -277,11 +277,12 @@ export const updateProductBanner = asyncHandler(async (req: AuthRequest, res: Re
     req.body as Record<string, any>,
     'product-banners'
   );
-  const { label, title, description, image, active } = bodyWithUploadedImage as {
+  const { label, title, description, image, targetScreen, active } = bodyWithUploadedImage as {
     label?: string;
     title?: string;
     description?: string;
     image?: string;
+    targetScreen?: string;
     active?: boolean;
   };
 
@@ -290,6 +291,7 @@ export const updateProductBanner = asyncHandler(async (req: AuthRequest, res: Re
   if (title !== undefined) updates.title = title;
   if (description !== undefined) updates.description = description;
   if (image !== undefined) updates.image = image;
+  if (targetScreen !== undefined) updates.targetScreen = targetScreen;
   if (active !== undefined) updates.active = active;
 
   if (Object.keys(updates).length === 0) {
@@ -366,11 +368,12 @@ export const updateProductBannerAr = asyncHandler(async (req: AuthRequest, res: 
     req.body as Record<string, any>,
     'product-banners'
   );
-  const { label, title, description, image, active } = bodyWithUploadedImage as {
+  const { label, title, description, image, targetScreen, active } = bodyWithUploadedImage as {
     label?: string;
     title?: string;
     description?: string;
     image?: string;
+    targetScreen?: string;
     active?: boolean;
   };
 
@@ -379,6 +382,7 @@ export const updateProductBannerAr = asyncHandler(async (req: AuthRequest, res: 
   if (title !== undefined) updates.title = title;
   if (description !== undefined) updates.description = description;
   if (image !== undefined) updates.image = image;
+  if (targetScreen !== undefined) updates.targetScreen = targetScreen;
   if (active !== undefined) updates.active = active;
 
   if (Object.keys(updates).length === 0) {

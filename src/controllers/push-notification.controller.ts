@@ -237,7 +237,7 @@ export const sendWebPushToStaff = asyncHandler(
  */
 export const sendTestBroadcast = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-      const { title, body, url, audienceType, deliveryType, externalEmails, selectedUserIds } = req.body as {
+      const { title, body, url, audienceType, deliveryType, externalEmails, selectedUserIds, communityId } = req.body as {
         title: string;
         body: string;
         url?: string;
@@ -245,6 +245,7 @@ export const sendTestBroadcast = asyncHandler(
         deliveryType?: 'app' | 'email' | 'both';
         externalEmails?: string; // comma separated
         selectedUserIds?: string; // comma separated
+        communityId?: string;
       };
 
     const parseIdList = (value?: string) =>
@@ -322,7 +323,16 @@ export const sendTestBroadcast = asyncHandler(
           return;
         }
 
-        const results = await notificationService.sendNotificationToUsers(selectedUserIds, { title, body }, { url });
+        const results = await notificationService.sendNotificationToUsers(
+          selectedUserIds,
+          {
+            title,
+            body,
+            type: communityId ? 'community' : undefined,
+            data: communityId ? { communityId } : undefined,
+          },
+          { url }
+        );
         sendSuccess(res, { sentToUserCount: results.length }, 'Test broadcast sent to selected users');
         return;
       }
@@ -349,13 +359,14 @@ export const sendTestBroadcast = asyncHandler(
 
 export const sendCampaignBroadcast = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { message, url, audienceType, deliveryType, externalEmails, selectedUserIds } = req.body as {
+    const { message, url, audienceType, deliveryType, externalEmails, selectedUserIds, communityId } = req.body as {
       message: string;
       url?: string;
       audienceType?: string;
       deliveryType?: 'app' | 'email' | 'both';
       externalEmails?: string; // comma separated
       selectedUserIds?: string; // comma separated
+      communityId?: string;
     };
 
     const parseIdList = (value?: string) =>
@@ -434,7 +445,16 @@ export const sendCampaignBroadcast = asyncHandler(
           return;
         }
 
-        const results = await notificationService.sendNotificationToUsers(selectedUserIds, { title, body }, { url });
+        const results = await notificationService.sendNotificationToUsers(
+          selectedUserIds,
+          {
+            title,
+            body,
+            type: communityId ? 'community' : undefined,
+            data: communityId ? { communityId } : undefined,
+          },
+          { url }
+        );
         sendSuccess(res, { sentToUserCount: results.length }, 'Campaign broadcast sent to selected users');
         return;
       }
