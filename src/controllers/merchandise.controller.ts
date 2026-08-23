@@ -372,6 +372,13 @@ export const updateMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
 
   const updateData = req.body as any;
 
+  // Debug: log incoming Arabic specifications payload for troubleshooting
+  try {
+    console.debug('[merchandise][update] incoming specificationsAr:', JSON.stringify(updateData.specificationsAr));
+  } catch (e) {
+    console.debug('[merchandise][update] incoming specificationsAr: <unserializable>');
+  }
+
   if (updateData.variants) {
     updateData.totalStock = calculateTotalStock(updateData.variants);
   }
@@ -415,6 +422,12 @@ export const updateMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
     } catch (err) {
       console.error('[merchandise] update translations failed', err);
     }
+  }
+
+  try {
+    console.debug('[merchandise][update] saving specificationsAr:', JSON.stringify((product as any).specificationsAr));
+  } catch (e) {
+    console.debug('[merchandise][update] saving specificationsAr: <unserializable>');
   }
   await product.save();
 
