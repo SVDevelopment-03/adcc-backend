@@ -36,19 +36,52 @@ const attachBannerImage = async (
   const uploadedFiles = extractUploadedFiles(req);
   const imageFile = uploadedFiles.find((file) => (file.fieldname || '').toLowerCase() === 'image') || uploadedFiles[0];
 
-  if (!imageFile) return payload;
+  if (imageFile) {
+    const uploaded = await uploadImageBufferToS3(
+      imageFile.buffer,
+      imageFile.mimetype,
+      imageFile.originalname,
+      folder
+    );
 
-  const uploaded = await uploadImageBufferToS3(
-    imageFile.buffer,
-    imageFile.mimetype,
-    imageFile.originalname,
-    folder
-  );
+    return {
+      ...payload,
+      image: uploaded.url,
+    };
+  }
 
-  return {
-    ...payload,
-    image: uploaded.url,
-  };
+  // Fallback: some clients send an image as a base64/data-URL string in the
+  // request body (not as multipart). Detect and upload that as well so the
+  // same endpoint works for both multipart and base64 uploads.
+  const maybeImage = payload.image;
+  if (typeof maybeImage === 'string') {
+    const dataUrlMatch = maybeImage.match(/^data:(image\/[-+\w.]+);base64,(.+)$/i);
+    try {
+      if (dataUrlMatch) {
+        const mimeType = dataUrlMatch[1];
+        const base64Body = dataUrlMatch[2];
+        const buffer = Buffer.from(base64Body, 'base64');
+        const uploaded = await uploadImageBufferToS3(buffer, mimeType, 'upload.png', folder);
+        return { ...payload, image: uploaded.url };
+      }
+
+      // Also accept plain base64 (no data: prefix) when it's long enough.
+      if (/^[A-Za-z0-9+/=\n\r]+$/.test(maybeImage) && maybeImage.length > 100) {
+        const buffer = Buffer.from(maybeImage.replace(/\s+/g, ''), 'base64');
+        const uploaded = await uploadImageBufferToS3(buffer, 'image/jpeg', 'upload.jpg', folder);
+        return { ...payload, image: uploaded.url };
+      }
+    } catch (err) {
+      // Do not fail the whole request on upload fallback errors; leave the
+      // original payload untouched so callers can handle the failure.
+      // Log for debugging.
+      // eslint-disable-next-line no-console
+      console.error('Fallback base64 image upload failed:', err);
+    }
+  }
+
+  // No file found and no valid base64 in body — return payload unchanged.
+  return payload;
 };
 
 const createBannerEntries = async (
