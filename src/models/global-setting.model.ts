@@ -19,7 +19,6 @@ const GlobalSettingSchema = new Schema<IGlobalSetting>(
       type: String,
       required: [true, 'Key is required'],
       trim: true,
-      unique: true,
     },
     group: {
       type: String,
@@ -56,6 +55,6 @@ const GlobalSettingSchema = new Schema<IGlobalSetting>(
   }
 );
 
-GlobalSettingSchema.index({ group: 1, key: 1 });
+GlobalSettingSchema.index({ group: 1, key: 1 }, { unique: true });
 
 export default mongoose.model<IGlobalSetting>('global_settings', GlobalSettingSchema);
