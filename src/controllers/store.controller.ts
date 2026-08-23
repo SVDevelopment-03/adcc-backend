@@ -10,6 +10,7 @@ import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import User from '@/models/user.model';
 import { notifyAdminStoreItemPending } from '@/services/admin-notification.service';
 import feedStoreNotificationService from '@/services/feed-store-notification.service';
+import { translateFieldsToArabic } from '@/services/translation.service';
 
 const isAdmin = (req: AuthRequest): boolean => req.user?.role === 'Admin';
 
@@ -166,7 +167,18 @@ export const createStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
   const sellerName = seller?.fullName?.trim() || 'Unknown Seller';
 
   const item = await StoreItem.create({
-    ...data,
+    // Attempt to translate English fields to Arabic and persist both.
+    ...(await (async () => {
+      try {
+        const translations = await translateFieldsToArabic({
+          title: data.title,
+          description: data.description,
+        });
+        return { ...data, ...translations };
+      } catch {
+        return data;
+      }
+    })()),
     status: 'Pending',
     isFeatured: false,
     createdBy: userId,
@@ -405,6 +417,20 @@ export const updateStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
     updates.approvedBy = undefined;
     updates.approvedAt = undefined;
     updates.isFeatured = false;
+  }
+
+  // If title/description are updated, attempt to translate them to Arabic
+  if (updates.title || updates.description) {
+    try {
+      const translations = await translateFieldsToArabic({
+        title: updates.title ?? item.title,
+        description: updates.description ?? item.description,
+      });
+      // Only set the fields that translation returned
+      Object.assign(updates, translations);
+    } catch {
+      // ignore translation errors
+    }
   }
 
   const updated = await StoreItem.findByIdAndUpdate(id, updates, {

@@ -23,6 +23,7 @@ export interface IMerchandiseProduct extends Document {
   description: string;
   descriptionAr?: string;
   specifications: Array<{ label: string; value: string }>;
+  specificationsAr?: Array<{ label: string; value: string; labelAr?: string; valueAr?: string }>;
   variants: IMerchandiseProductVariant[];
   status: MerchandiseProductStatus;
   featured: boolean;
@@ -113,6 +114,17 @@ const MerchandiseProductSchema = new Schema<IMerchandiseProduct>(
     descriptionAr: {
       type: String,
       trim: true,
+    },
+    specificationsAr: {
+      type: [
+        {
+          label: { type: String, trim: true, required: true },
+          value: { type: String, trim: true, required: true },
+          labelAr: { type: String, trim: true },
+          valueAr: { type: String, trim: true },
+        },
+      ],
+      default: [],
     },
     specifications: {
       type: [

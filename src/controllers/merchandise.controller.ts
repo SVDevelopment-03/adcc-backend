@@ -13,6 +13,7 @@ import {
   localizeMerchandiseProductStatic,
   localizeMerchandiseCategoryStatic,
 } from '@/utils/localization';
+import { translateFieldsToArabic } from '@/services/translation.service';
 
 const ensureObjectId = (id: string): mongoose.Types.ObjectId => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -277,7 +278,41 @@ export const createMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
   const totalStock = calculateTotalStock(data.variants || []);
 
   const product = await MerchandiseProduct.create({
-    ...data,
+    // Attempt to auto-translate name/description/specifications to Arabic.
+    ...(await (async () => {
+      try {
+        const fieldsToTranslate: Record<string, string | null | undefined> = {
+          name: data.name,
+          description: data.description,
+        };
+        // For specifications we translate label/value pairs, merging into keys like spec0_label, spec0_value
+        if (Array.isArray(data.specifications)) {
+          data.specifications.forEach((s: any, idx: number) => {
+            fieldsToTranslate[`spec_${idx}_label`] = s.label;
+            fieldsToTranslate[`spec_${idx}_value`] = s.value;
+          });
+        }
+        const translations = await translateFieldsToArabic(fieldsToTranslate);
+        // Map back specificationsAr
+        if (Array.isArray(data.specifications)) {
+          const specsAr: any[] = [];
+          data.specifications.forEach((s: any, idx: number) => {
+            const labelAr = translations[`spec_${idx}_label`];
+            const valueAr = translations[`spec_${idx}_value`];
+            specsAr.push({
+              label: s.label,
+              value: s.value,
+              labelAr: labelAr || '',
+              valueAr: valueAr || '',
+            });
+          });
+          return { ...data, ...translations, specificationsAr: specsAr };
+        }
+        return { ...data, ...translations };
+      } catch {
+        return data;
+      }
+    })()),
     totalStock,
     createdBy: ensureObjectId(userId),
     vendorName: isVendorUser(req) ? String(user.fullName || '') : String(data.vendorName || ''),
@@ -305,6 +340,34 @@ export const updateMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
   }
 
   Object.assign(product, updateData);
+  // If name/description/specifications changed, attempt Arabic translations
+  if (updateData.name || updateData.description || updateData.specifications) {
+    try {
+      const fieldsToTranslate: Record<string, string | null | undefined> = {
+        name: updateData.name ?? product.name,
+        description: updateData.description ?? product.description,
+      };
+      if (Array.isArray(updateData.specifications)) {
+        updateData.specifications.forEach((s: any, idx: number) => {
+          fieldsToTranslate[`spec_${idx}_label`] = s.label;
+          fieldsToTranslate[`spec_${idx}_value`] = s.value;
+        });
+      }
+      const translations = await translateFieldsToArabic(fieldsToTranslate);
+      Object.assign(product, translations);
+      if (Array.isArray(updateData.specifications)) {
+        const specsAr: any[] = [];
+        updateData.specifications.forEach((s: any, idx: number) => {
+          const labelAr = translations[`spec_${idx}_label`];
+          const valueAr = translations[`spec_${idx}_value`];
+          specsAr.push({ label: s.label, value: s.value, labelAr: labelAr || '', valueAr: valueAr || '' });
+        });
+        (product as any).specificationsAr = specsAr;
+      }
+    } catch {
+      // ignore
+    }
+  }
   await product.save();
 
   sendSuccess(res, product, t(lang, 'merchandise.product_updated') || 'Product updated');
