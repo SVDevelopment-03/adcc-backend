@@ -6,6 +6,7 @@ import { uploadSettingsImages } from '@/middleware/upload.middleware';
 import {
   createAppBannerAr,
   deleteAppBannerAr,
+  deleteAllAppBannersAr,
   listAppBannersAr,
   updateAppBannerAr,
 } from '@/controllers/banner.controller';
@@ -45,6 +46,14 @@ router.delete(
   requireStaffPermission('app_configuration'),
   validateParams(bannerKeySchema),
   deleteAppBannerAr
+);
+
+// Temporary: delete all Arabic app banners
+router.delete(
+  '/bulk',
+  authenticate,
+  requireStaffPermission('app_configuration'),
+  deleteAllAppBannersAr
 );
 
 export default router;

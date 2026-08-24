@@ -178,6 +178,8 @@ export const  createCommunitySchema = z
     city: z.preprocess(firstValue, z.string()).optional(),
     /** Primary track refs (array of ObjectIds). */
     trackId: trackIdArrayFromInput,
+    /** Backward-compatible multi-track payload from admin forms. */
+    trackIds: trackIdArrayFromInput,
   })
   .strict();
 
@@ -218,6 +220,7 @@ export const updateCommunitySchema = z
     area: z.preprocess(firstValue, z.string()).optional(),
     city: z.preprocess(firstValue, z.string()).optional(),
     trackId: trackIdArrayFromInput,
+    trackIds: trackIdArrayFromInput,
   })
   .strict();
 

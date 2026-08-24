@@ -194,7 +194,10 @@ export class CommunityMembershipService {
     const [memberships, total] = await Promise.all([
       CommunityMembership.find(filter as any)
         .select('communityId joinedAt role')
-        .populate('communityId', 'title description image location city memberCount type category slug')
+        .populate(
+          'communityId',
+          'title titleAr description descriptionAr image location locationAr city memberCount type category slug'
+        )
         .sort({ joinedAt: -1 })
         .skip(skip)
         .limit(limit)

@@ -135,3 +135,30 @@ export const deleteLookup = asyncHandler(async (req: AuthRequest, res: Response)
   await refreshLookupCache(lookup.type);
   sendSuccess(res, null, 'Lookup deleted');
 });
+
+/**
+ * GET /v1/static-data
+ * Returns all active lookup entries grouped by type. Each item includes
+ * English and Arabic labels (`label`, `labelAr`) so clients can choose
+ * which to display (or show both).
+ */
+export const getStaticData = asyncHandler(async (_req: Request, res: Response) => {
+  // Return all active lookups ordered by type then order
+  const items = await Lookup.find({ active: true }).sort({ type: 1, order: 1, label: 1 }).lean();
+
+  const grouped: Record<string, any[]> = {};
+  for (const it of items) {
+    const type = String(it.type || '').trim();
+    if (!grouped[type]) grouped[type] = [];
+    grouped[type].push({
+      value: it.value,
+      label: it.label,
+      labelAr: it.labelAr,
+      parentValue: it.parentValue,
+      icon: it.icon,
+      order: it.order,
+    });
+  }
+
+  sendSuccess(res, { lookups: grouped }, 'Static data retrieved');
+});

@@ -5,6 +5,7 @@ import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { t } from '@/utils/i18n';
+import { translateFieldsToArabic } from '@/services/translation.service';
 import FeedPost from '@/models/feed-post.model';
 import User from '@/models/user.model';
 import feedStoreNotificationService from '@/services/feed-store-notification.service';
@@ -82,6 +83,48 @@ const mapFeedPostForClient = (post: any, currentUserId?: string) => {
       ? likes.some((like: any) => String(like?._id ?? like) === currentUserIdString)
       : false,
   };
+};
+
+const mapAndTranslateFeedPostForClient = async (post: any, currentUserId: string | undefined, lang: string) => {
+  const mapped = mapFeedPostForClient(post, currentUserId);
+
+  if (String(lang).toLowerCase() !== 'ar') return mapped;
+
+  const fieldsToTranslate: Record<string, string | null | undefined> = {
+    title: mapped.title,
+    description: mapped.description,
+    eventTitle: mapped.eventTitle,
+    trackTitle: mapped.trackTitle,
+    location: mapped.location,
+  };
+
+  // Include comments text by index so translations can be mapped back.
+  const comments = Array.isArray(mapped.comments) ? mapped.comments : [];
+  comments.forEach((c: any, idx: number) => {
+    fieldsToTranslate[`comment_${idx}`] = String(c?.text ?? '');
+  });
+
+  try {
+    const translated = await translateFieldsToArabic(fieldsToTranslate);
+
+    if (translated) {
+      if (translated.titleAr) mapped.titleAr = translated.titleAr;
+      if (translated.descriptionAr) mapped.descriptionAr = translated.descriptionAr;
+      if (translated.eventTitleAr) mapped.eventTitleAr = translated.eventTitleAr;
+      if (translated.trackTitleAr) mapped.trackTitleAr = translated.trackTitleAr;
+      if (translated.locationAr) mapped.locationAr = translated.locationAr;
+
+      comments.forEach((c: any, idx: number) => {
+        const key = `comment_${idx}Ar`;
+        if (translated[key]) c.textAr = translated[key];
+      });
+    }
+  } catch (err) {
+    // Best-effort: don't fail the whole request on translation errors.
+    console.error('[feed-post] translation error', err);
+  }
+
+  return mapped;
 };
 
 /**
@@ -162,12 +205,14 @@ export const getPublicFeedPosts = asyncHandler(async (req: AuthRequest, res: Res
     FeedPost.countDocuments(filter),
   ]);
 
+  const mappedPosts = await Promise.all(
+    posts.map((post) => mapAndTranslateFeedPostForClient(post, req.user?.isGuest ? undefined : req.user?.id, lang))
+  );
+
   sendSuccess(
     res,
     {
-      posts: posts.map((post) =>
-        mapFeedPostForClient(post, req.user?.isGuest ? undefined : req.user?.id)
-      ),
+      posts: mappedPosts,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -206,10 +251,12 @@ export const getMyFeedPosts = asyncHandler(async (req: AuthRequest, res: Respons
     FeedPost.countDocuments({ createdBy: userId }),
   ]);
 
+  const mappedPosts = await Promise.all(posts.map((post) => mapAndTranslateFeedPostForClient(post, userId, lang)));
+
   sendSuccess(
     res,
     {
-      posts: posts.map((post) => mapFeedPostForClient(post, userId)),
+      posts: mappedPosts,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -255,10 +302,12 @@ export const getFeedPosts = asyncHandler(async (req: Request, res: Response) => 
     FeedPost.countDocuments(filter),
   ]);
 
+  const mappedPosts = await Promise.all(posts.map((post) => mapAndTranslateFeedPostForClient(post, undefined, lang)));
+
   sendSuccess(
     res,
     {
-      posts: posts.map((post) => mapFeedPostForClient(post)),
+      posts: mappedPosts,
       pagination: {
         page: pageNum,
         limit: limitNum,
@@ -286,11 +335,8 @@ export const getFeedPostById = asyncHandler(async (req: Request, res: Response) 
     throw new AppError(t(lang, 'feedPost.not_found'), 404);
   }
 
-  sendSuccess(
-    res,
-    mapFeedPostForClient(post, (req as AuthRequest).user?.id),
-    t(lang, 'feedPost.retrieved')
-  );
+  const mapped = await mapAndTranslateFeedPostForClient(post, (req as AuthRequest).user?.id, lang);
+  sendSuccess(res, mapped, t(lang, 'feedPost.retrieved'));
 });
 
 /**
@@ -313,11 +359,8 @@ export const getPublicFeedPostById = asyncHandler(async (req: AuthRequest, res: 
     throw new AppError(t(lang, 'feedPost.not_found'), 404);
   }
 
-  sendSuccess(
-    res,
-    mapFeedPostForClient(post, req.user?.isGuest ? undefined : req.user?.id),
-    t(lang, 'feedPost.retrieved')
-  );
+  const mapped = await mapAndTranslateFeedPostForClient(post, req.user?.isGuest ? undefined : req.user?.id, lang);
+  sendSuccess(res, mapped, t(lang, 'feedPost.retrieved'));
 });
 
 /**
@@ -363,7 +406,8 @@ export const likeFeedPost = asyncHandler(async (req: AuthRequest, res: Response)
     }
   }
 
-  sendSuccess(res, mapFeedPostForClient(updated, userId), t(lang, 'feedPost.updated'));
+  const mappedUpdated = await mapAndTranslateFeedPostForClient(updated, userId, lang);
+  sendSuccess(res, mappedUpdated, t(lang, 'feedPost.updated'));
 });
 
 /**
@@ -400,7 +444,8 @@ export const addFeedComment = asyncHandler(async (req: AuthRequest, res: Respons
     throw new AppError(t(lang, 'feedPost.not_found'), 404);
   }
 
-  sendSuccess(res, mapFeedPostForClient(post, userId), t(lang, 'feedPost.updated'), 201);
+  const mappedPost = await mapAndTranslateFeedPostForClient(post, userId, lang);
+  sendSuccess(res, mappedPost, t(lang, 'feedPost.updated'), 201);
 });
 
 /**
@@ -442,7 +487,8 @@ export const deleteFeedComment = asyncHandler(async (req: AuthRequest, res: Resp
     .populate('comments.user', 'fullName profileImage')
     .lean();
 
-  sendSuccess(res, mapFeedPostForClient(updated, userId), t(lang, 'feedPost.updated'));
+  const mappedPost = await mapAndTranslateFeedPostForClient(updated, userId, lang);
+  sendSuccess(res, mappedPost, t(lang, 'feedPost.updated'));
 });
 
 /**
@@ -502,7 +548,13 @@ export const updateFeedPostModeration = asyncHandler(async (req: AuthRequest, re
     console.error('[feed-post] moderation notification failed', err);
   }
 
-  sendSuccess(res, updated, t(lang, 'feedPost.updated'));
+  // For moderation responses, provide translated fields when requested.
+  try {
+    const mapped = await mapAndTranslateFeedPostForClient(updated, undefined, lang);
+    sendSuccess(res, mapped, t(lang, 'feedPost.updated'));
+  } catch (err) {
+    sendSuccess(res, updated, t(lang, 'feedPost.updated'));
+  }
 });
 
 /**

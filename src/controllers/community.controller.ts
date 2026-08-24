@@ -3,6 +3,7 @@ import mongoose from 'mongoose';
 import { t } from "@/utils/i18n";
 import Community from '@/models/community.model';
 import Event from '@/models/event.model';
+import Track from '@/models/track.model';
 import CommunityMembership from '@/models/communityMembership.model';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
@@ -108,13 +109,29 @@ export const AVAILABLE_CITIES = [
   'Jidhafs',
 ];
 
-/** Normalizes validated `trackId` from body (array of ObjectIds). */
+/** Normalizes track refs from either `trackId` or `trackIds` payloads. */
 const resolveTrackIdFromBody = (body: Record<string, any>): mongoose.Types.ObjectId[] | undefined => {
-  if (!Object.prototype.hasOwnProperty.call(body, 'trackId')) return undefined;
-  const v = body.trackId;
-  if (v === undefined) return undefined;
-  if (!Array.isArray(v)) return undefined;
-  return uniqueObjectIds(v.filter((id: unknown): id is mongoose.Types.ObjectId => id instanceof mongoose.Types.ObjectId));
+  const rawValues = [
+    body.trackId,
+    body.trackIds,
+  ].filter((value) => value !== undefined && value !== null);
+
+  if (rawValues.length === 0) return undefined;
+
+  const values = rawValues.flatMap((value) => {
+    if (Array.isArray(value)) return value;
+    return [value];
+  });
+
+  const objectIds = values.filter((id: unknown): id is mongoose.Types.ObjectId => id instanceof mongoose.Types.ObjectId);
+  const idStrings = values
+    .filter((id: unknown): id is string => typeof id === 'string')
+    .map((id) => id.trim())
+    .filter(Boolean)
+    .filter((id) => mongoose.Types.ObjectId.isValid(id))
+    .map((id) => new mongoose.Types.ObjectId(id));
+
+  return uniqueObjectIds([...objectIds, ...idStrings]);
 };
 
 const normalizeGalleryImagesInput = (value: unknown): string[] => {
@@ -274,6 +291,7 @@ export const createCommunity = asyncHandler(async (req: AuthRequest, res: Respon
   delete (communityData as any).coverImage;
   const resolvedTrackId = resolveTrackIdFromBody(req.body as Record<string, any>);
   delete communityData.trackId;
+  delete communityData.trackIds;
   if (resolvedTrackId !== undefined) {
     communityData.trackId = resolvedTrackId;
   }
@@ -443,6 +461,39 @@ export const getCommunityById = asyncHandler(async (req: Request, res: Response)
   const communityObj: any = community.toObject();
   communityObj.upcomingEventCount = upcomingEvents;
   communityObj.memberCount = memberCount;
+
+  // Include tracks referenced by community events so clients (mobile) can
+  // render event-associated tracks along with explicitly assigned ones.
+  try {
+    const eventTrackIdsRaw = await Event.distinct('trackId', { communityId: community._id });
+    const trackIdStrings = new Set<string>();
+
+    // Add explicit community track ids (may be populated or raw)
+    const commTrackField = (community as any).trackId;
+    if (Array.isArray(commTrackField)) {
+      for (const item of commTrackField) {
+        if (!item) continue;
+        const s = (item instanceof mongoose.Types.ObjectId) ? item.toString() : (item._id ? item._id.toString() : String(item));
+        if (s) trackIdStrings.add(s);
+      }
+    }
+
+    // Add distinct event track ids
+    for (const idVal of eventTrackIdsRaw) {
+      if (!idVal) continue;
+      const s = (idVal instanceof mongoose.Types.ObjectId) ? idVal.toString() : String(idVal);
+      if (s) trackIdStrings.add(s);
+    }
+
+    if (trackIdStrings.size > 0) {
+      const ids = Array.from(trackIdStrings).map((s) => new mongoose.Types.ObjectId(s));
+      const tracks = await Track.find({ _id: { $in: ids } }).select('title titleAr distance difficulty trackType category image city description descriptionAr');
+      // Replace the `trackId` field in the response with the merged track docs
+      communityObj.trackId = tracks.map((t) => t.toObject());
+    }
+  } catch (err) {
+    // Non-fatal: ignore errors while enriching with event tracks
+  }
   const localizedCommunity = localizeCommunity(communityObj, lang);
 
   return sendSuccess(res, localizedCommunity, t(lang,"community.details_retrieved"), 201);
@@ -487,6 +538,7 @@ export const updateCommunity = asyncHandler(async (req: AuthRequest, res: Respon
   const resolvedTrackId = resolveTrackIdFromBody(req.body as Record<string, any>);
   if (resolvedTrackId !== undefined) {
     (req.body as any).trackId = resolvedTrackId;
+    delete (req.body as any).trackIds;
   }
 
   if (req.body.image) {

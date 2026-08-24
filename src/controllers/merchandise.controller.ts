@@ -13,6 +13,7 @@ import {
   localizeMerchandiseProductStatic,
   localizeMerchandiseCategoryStatic,
 } from '@/utils/localization';
+import { translateFieldsToArabic } from '@/services/translation.service';
 
 const ensureObjectId = (id: string): mongoose.Types.ObjectId => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -257,6 +258,33 @@ export const getMerchandiseProductById = asyncHandler(async (req: AuthRequest, r
 
   localizeMerchandiseProductStatic(product, lang as any);
 
+  // If the request is for Arabic and the product lacks `specificationsAr`,
+  // attempt a best-effort on-the-fly translation for the response so the
+  // client immediately sees Arabic specs even before a DB backfill runs.
+  if (lang === 'ar') {
+    try {
+      const hasSpecsAr = Array.isArray(product.specificationsAr) && product.specificationsAr.length > 0;
+      if (!hasSpecsAr && Array.isArray(product.specifications) && product.specifications.length > 0) {
+        const fieldsToTranslate: Record<string, string | null | undefined> = {};
+        (product.specifications as Array<any>).forEach((s: any, idx: number) => {
+          fieldsToTranslate[`spec_${idx}_label`] = s.label;
+          fieldsToTranslate[`spec_${idx}_value`] = s.value;
+        });
+        const translations = await translateFieldsToArabic(fieldsToTranslate);
+        const specsAr = (product.specifications as Array<any>).map((s: any, idx: number) => ({
+          label: s.label,
+          value: s.value,
+          labelAr: translations[`spec_${idx}_label`] || '',
+          valueAr: translations[`spec_${idx}_value`] || '',
+        }));
+        product.specificationsAr = specsAr;
+      }
+    } catch (err) {
+      // Best-effort: don't fail the request on translation errors.
+      console.error('[merchandise] on-the-fly specs translation failed', err);
+    }
+  }
+
   sendSuccess(res, product, t(lang, 'merchandise.product_details') || 'Product details retrieved');
 });
 
@@ -276,8 +304,52 @@ export const createMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
   const data = req.body as any;
   const totalStock = calculateTotalStock(data.variants || []);
 
+  // Build product payload preferring explicit Arabic fields from client.
+  const payload = { ...data } as any;
+
+  // If client didn't provide Arabic fields, auto-translate missing ones.
+  try {
+    const fieldsToTranslate: Record<string, string | null | undefined> = {};
+    if (!payload.nameAr) fieldsToTranslate.name = data.name;
+    if (!payload.descriptionAr) fieldsToTranslate.description = data.description;
+
+    const providedSpecsAr = Array.isArray(data.specificationsAr) ? data.specificationsAr : null;
+    if (!providedSpecsAr && Array.isArray(data.specifications)) {
+      data.specifications.forEach((s: any, idx: number) => {
+        fieldsToTranslate[`spec_${idx}_label`] = s.label;
+        fieldsToTranslate[`spec_${idx}_value`] = s.value;
+      });
+    }
+
+    const translations = Object.keys(fieldsToTranslate).length
+      ? await translateFieldsToArabic(fieldsToTranslate)
+      : {};
+
+    if (!payload.nameAr && (translations as any).nameAr) payload.nameAr = (translations as any).nameAr;
+    if (!payload.descriptionAr && (translations as any).descriptionAr) payload.descriptionAr = (translations as any).descriptionAr;
+
+    if (Array.isArray(providedSpecsAr) && providedSpecsAr.length > 0) {
+      payload.specificationsAr = providedSpecsAr;
+    } else if (Array.isArray(data.specifications)) {
+      const specsAr: any[] = [];
+      data.specifications.forEach((s: any, idx: number) => {
+        const labelAr = (translations as any)[`spec_${idx}_label`];
+        const valueAr = (translations as any)[`spec_${idx}_value`];
+        specsAr.push({
+          label: s.label,
+          value: s.value,
+          labelAr: labelAr || '',
+          valueAr: valueAr || '',
+        });
+      });
+      if (specsAr.some((s) => s.labelAr || s.valueAr)) payload.specificationsAr = specsAr;
+    }
+  } catch (err) {
+    console.error('[merchandise] create translations failed', err);
+  }
+
   const product = await MerchandiseProduct.create({
-    ...data,
+    ...payload,
     totalStock,
     createdBy: ensureObjectId(userId),
     vendorName: isVendorUser(req) ? String(user.fullName || '') : String(data.vendorName || ''),
@@ -300,11 +372,63 @@ export const updateMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
 
   const updateData = req.body as any;
 
+  // Debug: log incoming Arabic specifications payload for troubleshooting
+  try {
+    console.debug('[merchandise][update] incoming specificationsAr:', JSON.stringify(updateData.specificationsAr));
+  } catch (e) {
+    console.debug('[merchandise][update] incoming specificationsAr: <unserializable>');
+  }
+
   if (updateData.variants) {
     updateData.totalStock = calculateTotalStock(updateData.variants);
   }
 
   Object.assign(product, updateData);
+  // If name/description/specifications changed, attempt Arabic translations
+  if (updateData.name || updateData.description || updateData.specifications) {
+    try {
+      const fieldsToTranslate: Record<string, string | null | undefined> = {};
+
+      // Only translate fields that the client didn't explicitly provide in Arabic
+      if (!updateData.nameAr) fieldsToTranslate.name = updateData.name ?? product.name;
+      if (!updateData.descriptionAr) fieldsToTranslate.description = updateData.description ?? product.description;
+
+      const providedSpecsAr = Array.isArray(updateData.specificationsAr) ? updateData.specificationsAr : null;
+
+      if (!providedSpecsAr && Array.isArray(updateData.specifications)) {
+        updateData.specifications.forEach((s: any, idx: number) => {
+          fieldsToTranslate[`spec_${idx}_label`] = s.label;
+          fieldsToTranslate[`spec_${idx}_value`] = s.value;
+        });
+      }
+
+      const translations = Object.keys(fieldsToTranslate).length ? await translateFieldsToArabic(fieldsToTranslate) : {};
+
+      // Apply translations only for missing Arabic fields
+      if (!updateData.nameAr && (translations as any).nameAr) (product as any).nameAr = (translations as any).nameAr;
+      if (!updateData.descriptionAr && (translations as any).descriptionAr) (product as any).descriptionAr = (translations as any).descriptionAr;
+
+      if (Array.isArray(providedSpecsAr) && providedSpecsAr.length > 0) {
+        (product as any).specificationsAr = providedSpecsAr;
+      } else if (Array.isArray(updateData.specifications)) {
+        const specsAr: any[] = [];
+        updateData.specifications.forEach((s: any, idx: number) => {
+          const labelAr = (translations as any)[`spec_${idx}_label`];
+          const valueAr = (translations as any)[`spec_${idx}_value`];
+          specsAr.push({ label: s.label, value: s.value, labelAr: labelAr || '', valueAr: valueAr || '' });
+        });
+        (product as any).specificationsAr = specsAr;
+      }
+    } catch (err) {
+      console.error('[merchandise] update translations failed', err);
+    }
+  }
+
+  try {
+    console.debug('[merchandise][update] saving specificationsAr:', JSON.stringify((product as any).specificationsAr));
+  } catch (e) {
+    console.debug('[merchandise][update] saving specificationsAr: <unserializable>');
+  }
   await product.save();
 
   sendSuccess(res, product, t(lang, 'merchandise.product_updated') || 'Product updated');

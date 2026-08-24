@@ -37,6 +37,11 @@ const StoreItemSchema = new Schema(
       required: [true, 'Item title is required'],
       trim: true,
     },
+    titleAr: {
+      type: String,
+      trim: true,
+      default: '',
+    },
     sellerName: {
       type: String,
       trim: true,
@@ -46,6 +51,11 @@ const StoreItemSchema = new Schema(
       type: String,
       required: [true, 'Item description is required'],
       trim: true,
+    },
+    descriptionAr: {
+      type: String,
+      trim: true,
+      default: '',
     },
     category: {
       type: String,

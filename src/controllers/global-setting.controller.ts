@@ -99,19 +99,49 @@ const attachContentSettingImage = async (
     flattenedFiles.find((file) => (file.fieldname || '').toLowerCase() === 'image') ||
     flattenedFiles[0];
 
-  if (!imageFile) return payload;
+  if (imageFile) {
+    const uploaded = await uploadImageBufferToS3(
+      imageFile.buffer,
+      imageFile.mimetype,
+      imageFile.originalname,
+      'content-sections'
+    );
 
-  const uploaded = await uploadImageBufferToS3(
-    imageFile.buffer,
-    imageFile.mimetype,
-    imageFile.originalname,
-    'content-sections'
-  );
+    return {
+      ...payload,
+      image: uploaded.url,
+    };
+  }
 
-  return {
-    ...payload,
-    image: uploaded.url,
-  };
+  // Fallback: accept base64/data-URL images sent in the request body.
+  const maybeImage = payload.image;
+  if (typeof maybeImage === 'string') {
+    const dataUrlMatch = maybeImage.match(/^data:(image\/[-+\w.]+);base64,(.+)$/i);
+    try {
+      if (dataUrlMatch) {
+        const mimeType = dataUrlMatch[1];
+        const base64Body = dataUrlMatch[2];
+        const buffer = Buffer.from(base64Body, 'base64');
+        const uploaded = await uploadImageBufferToS3(buffer, mimeType, 'upload.png', 'content-sections');
+        return { ...payload, image: uploaded.url };
+      }
+
+      if (/^[A-Za-z0-9+/=\n\r]+$/.test(maybeImage) && maybeImage.length > 100) {
+        const buffer = Buffer.from(maybeImage.replace(/\s+/g, ''), 'base64');
+        const uploaded = await uploadImageBufferToS3(buffer, 'image/jpeg', 'upload.jpg', 'content-sections');
+        return { ...payload, image: uploaded.url };
+      }
+    } catch (err) {
+      // eslint-disable-next-line no-console
+      console.error('attachContentSettingImage: base64 upload fallback failed:', err);
+    }
+  }
+
+  // Log for debugging when no image is attached.
+  // eslint-disable-next-line no-console
+  console.debug('attachContentSettingImage: no multipart file and no base64 image found on request');
+
+  return payload;
 };
 
 /**

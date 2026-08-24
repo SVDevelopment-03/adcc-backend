@@ -18,6 +18,7 @@
     "seed:demo-data": "ts-node -r tsconfig-paths/register scripts/seed-demo-data.ts",
     "seed:demo-communities": "ts-node -r tsconfig-paths/register scripts/seed-demo-communities.ts",
     "seed:badges": "ts-node -r tsconfig-paths/register scripts/seed-badges.ts",
+    "backfill:translations": "ts-node -r tsconfig-paths/register scripts/backfill-translations.ts",
     "test:firebase": "ts-node -r tsconfig-paths/register scripts/test-firebase-connection.ts",
     "cleanup:tokens": "ts-node -r tsconfig-paths/register scripts/cleanup-expired-tokens.ts",
     "seed:rbac": "ts-node -r tsconfig-paths/register scripts/seed-rbac.ts",
@@ -48,6 +49,8 @@
     "nodemailer": "^8.0.7",
     "twilio": "^5.10.7",
     "zod": "^4.2.1"
+    ,
+    "translate": "^1.4.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^2.4.6",

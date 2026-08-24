@@ -36,19 +36,55 @@ const attachBannerImage = async (
   const uploadedFiles = extractUploadedFiles(req);
   const imageFile = uploadedFiles.find((file) => (file.fieldname || '').toLowerCase() === 'image') || uploadedFiles[0];
 
-  if (!imageFile) return payload;
+  if (imageFile) {
+    const uploaded = await uploadImageBufferToS3(
+      imageFile.buffer,
+      imageFile.mimetype,
+      imageFile.originalname,
+      folder
+    );
 
-  const uploaded = await uploadImageBufferToS3(
-    imageFile.buffer,
-    imageFile.mimetype,
-    imageFile.originalname,
-    folder
-  );
+    return {
+      ...payload,
+      image: uploaded.url,
+    };
+  }
 
-  return {
-    ...payload,
-    image: uploaded.url,
-  };
+  // Fallback: some clients send an image as a base64/data-URL string in the
+  // request body (not as multipart). Detect and upload that as well so the
+  // same endpoint works for both multipart and base64 uploads.
+  const maybeImage = payload.image;
+  if (typeof maybeImage === 'string') {
+    const dataUrlMatch = maybeImage.match(/^data:(image\/[-+\w.]+);base64,(.+)$/i);
+    try {
+      if (dataUrlMatch) {
+        const mimeType = dataUrlMatch[1];
+        const base64Body = dataUrlMatch[2];
+        const buffer = Buffer.from(base64Body, 'base64');
+        const uploaded = await uploadImageBufferToS3(buffer, mimeType, 'upload.png', folder);
+        return { ...payload, image: uploaded.url };
+      }
+
+      // Also accept plain base64 (no data: prefix) when it's long enough.
+      if (/^[A-Za-z0-9+/=\n\r]+$/.test(maybeImage) && maybeImage.length > 100) {
+        const buffer = Buffer.from(maybeImage.replace(/\s+/g, ''), 'base64');
+        const uploaded = await uploadImageBufferToS3(buffer, 'image/jpeg', 'upload.jpg', folder);
+        return { ...payload, image: uploaded.url };
+      }
+    } catch (err) {
+      // Do not fail the whole request on upload fallback errors; leave the
+      // original payload untouched so callers can handle the failure.
+      // Log for debugging.
+      // eslint-disable-next-line no-console
+      console.error('Fallback base64 image upload failed:', err);
+    }
+  }
+
+  // No file found and no valid base64 in body — return payload unchanged.
+  // Log for debugging so admins can see why the banner has no image.
+  // eslint-disable-next-line no-console
+  console.debug('attachBannerImage: no multipart file and no base64 image found on request');
+  return payload;
 };
 
 const createBannerEntries = async (
@@ -277,11 +313,12 @@ export const updateProductBanner = asyncHandler(async (req: AuthRequest, res: Re
     req.body as Record<string, any>,
     'product-banners'
   );
-  const { label, title, description, image, active } = bodyWithUploadedImage as {
+  const { label, title, description, image, targetScreen, active } = bodyWithUploadedImage as {
     label?: string;
     title?: string;
     description?: string;
     image?: string;
+    targetScreen?: string;
     active?: boolean;
   };
 
@@ -290,6 +327,7 @@ export const updateProductBanner = asyncHandler(async (req: AuthRequest, res: Re
   if (title !== undefined) updates.title = title;
   if (description !== undefined) updates.description = description;
   if (image !== undefined) updates.image = image;
+  if (targetScreen !== undefined) updates.targetScreen = targetScreen;
   if (active !== undefined) updates.active = active;
 
   if (Object.keys(updates).length === 0) {
@@ -366,11 +404,12 @@ export const updateProductBannerAr = asyncHandler(async (req: AuthRequest, res: 
     req.body as Record<string, any>,
     'product-banners'
   );
-  const { label, title, description, image, active } = bodyWithUploadedImage as {
+  const { label, title, description, image, targetScreen, active } = bodyWithUploadedImage as {
     label?: string;
     title?: string;
     description?: string;
     image?: string;
+    targetScreen?: string;
     active?: boolean;
   };
 
@@ -379,6 +418,7 @@ export const updateProductBannerAr = asyncHandler(async (req: AuthRequest, res: 
   if (title !== undefined) updates.title = title;
   if (description !== undefined) updates.description = description;
   if (image !== undefined) updates.image = image;
+  if (targetScreen !== undefined) updates.targetScreen = targetScreen;
   if (active !== undefined) updates.active = active;
 
   if (Object.keys(updates).length === 0) {
@@ -414,3 +454,28 @@ export const deleteProductBannerAr = asyncHandler(async (req: AuthRequest, res: 
 
   sendSuccess(res, null, t(lang, 'contentSetting.deleted'), 200);
 });
+
+/**
+ * DELETE /v1/app-banners-ar/bulk
+ * DELETE /v1/product-banners-ar/bulk
+ * Admin-only: remove all banners for the given Arabic banner group.
+ * Temporary helper for maintenance — requires staff permission in the route.
+ */
+const deleteAllBannersForGroup = async (req: AuthRequest, res: Response, group: string) => {
+  const lang = ((req as any).lang || 'en') as string;
+  const userId = req.user?.id;
+  if (!userId) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const result = await GlobalSetting.deleteMany({ group });
+  sendSuccess(res, { deleted: result.deletedCount ?? 0 }, t(lang, 'contentSetting.deleted'), 200);
+};
+
+export const deleteAllAppBannersAr = asyncHandler((req: AuthRequest, res: Response) =>
+  deleteAllBannersForGroup(req, res, 'app_banner_ar')
+);
+
+export const deleteAllProductBannersAr = asyncHandler((req: AuthRequest, res: Response) =>
+  deleteAllBannersForGroup(req, res, 'product_banner_ar')
+);
