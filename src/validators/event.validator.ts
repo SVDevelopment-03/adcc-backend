@@ -123,7 +123,7 @@ export const createEventSchema = z
       z.object({
         helmetRequired: z.coerce.boolean().optional(),
         roadBikeOnly: z.coerce.boolean().optional(),
-        experinceLevel: z.enum(['beginner', 'intermediate', 'advanced', 'all']).optional(),
+        experienceLevel: z.enum(['beginner', 'intermediate', 'advanced', 'all']).optional(),
         gender: z.enum(['male', 'female', 'other', 'all']).optional()
       })
     ).optional(),
@@ -196,7 +196,7 @@ export const updateEventSchema = z
       z.object({
         helmetRequired: z.coerce.boolean().optional(),
         roadBikeOnly: z.coerce.boolean().optional(),
-        experinceLevel: z.enum(['beginner', 'intermediate', 'advanced', 'all']).optional(),
+        experienceLevel: z.enum(['beginner', 'intermediate', 'advanced', 'all']).optional(),
         gender: z.enum(['male', 'female', 'other', 'all']).optional()
       })
     ).optional(),
