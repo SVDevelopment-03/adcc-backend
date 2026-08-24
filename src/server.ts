@@ -6,7 +6,7 @@ dns.setDefaultResultOrder('ipv4first');
 
 import dotenv from 'dotenv';
 
-// Load environment variables FIRST, before any other imports
+// Load environment variables FIRST, before any other import
 dotenv.config();
 
 import express from 'express';
