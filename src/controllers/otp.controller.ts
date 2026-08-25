@@ -1,0 +1,69 @@
+import { Request, Response } from 'express';
+import { asyncHandler } from '@/utils/async-handler';
+import { sendSuccess } from '@/utils/response';
+import { AppError } from '@/utils/app-error';
+import { setOtp, verifyOtp } from '@/services/otp.store';
+import nexusService from '@/services/nexus.service';
+import crypto from 'node:crypto';
+import User from '@/models/user.model';
+import { generateTokens } from '@/utils/jwt.util';
+import { t } from '@/utils/i18n';
+
+/**
+ * POST /v1/otp/send
+ * body: { recipient, sender?, category?, msgTemplate? }
+ */
+export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
+  const { recipient, sender = 'ADCC', category = 'TNX', msgTemplate } = req.body as {
+    recipient: string;
+    sender?: string;
+    category?: string;
+    msgTemplate?: string;
+  };
+
+  if (!recipient) throw new AppError('Recipient phone number is required', 400);
+
+  // Generate 6-digit code
+  const code = (Math.floor(100000 + Math.random() * 900000)).toString();
+  const message = msgTemplate || `Your ADCC OTP code is ${code}`;
+
+  // Store OTP in memory with TTL (5 minutes)
+  setOtp(recipient, code, 300);
+
+  // Send via Nexus
+  await nexusService.sendSmsViaNexus({ msg: message, recipient, sender, category });
+
+  sendSuccess(res, { recipient, expiresIn: 300 }, 'OTP sent');
+});
+
+/**
+ * POST /v1/otp/verify
+ * body: { recipient, code }
+ */
+export const verifyOtpController = asyncHandler(async (req: Request, res: Response) => {
+  const { recipient, code } = req.body as { recipient: string; code: string };
+  if (!recipient || !code) throw new AppError('Recipient and code are required', 400);
+
+  const ok = verifyOtp(recipient, code);
+  if (!ok) throw new AppError('Invalid or expired OTP', 400);
+
+  // If a user exists with this phone, issue JWT tokens; otherwise return isNewUser
+  const user = await User.findOne({ phone: recipient });
+  if (user) {
+    const tokens = generateTokens({ id: user._id.toString(), uid: user._id.toString(), phone: user.phone || '' });
+
+    // Store refresh token in DB (simple expiry adding similar to auth flow)
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 3);
+    user.refreshTokens = user.refreshTokens || [];
+    user.refreshTokens.push({ token: tokens.refreshToken, expiresAt, createdAt: new Date() } as any);
+    await user.save();
+
+    sendSuccess(res, { user: { id: user._id, phone: user.phone, fullName: user.fullName }, ...tokens }, t('auth.login_success'));
+  } else {
+    // New user flow: return isNewUser with temporary tokens
+    const uid = crypto.randomUUID();
+    const tokens = generateTokens({ uid, phone: recipient });
+    sendSuccess(res, { isNewUser: true, uid, phone: recipient, ...tokens }, 'OTP verified');
+  }
+});
