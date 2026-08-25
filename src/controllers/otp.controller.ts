@@ -8,6 +8,7 @@ import crypto from 'node:crypto';
 import User from '@/models/user.model';
 import { generateTokens } from '@/utils/jwt.util';
 import { t } from '@/utils/i18n';
+import { resolveRequestLanguage } from '@/utils/localization';
 
 /**
  * POST /v1/otp/send
@@ -59,11 +60,13 @@ export const verifyOtpController = asyncHandler(async (req: Request, res: Respon
     user.refreshTokens.push({ token: tokens.refreshToken, expiresAt, createdAt: new Date() } as any);
     await user.save();
 
-    sendSuccess(res, { user: { id: user._id, phone: user.phone, fullName: user.fullName }, ...tokens }, t('auth.login_success'));
+    const lang = resolveRequestLanguage(req);
+    sendSuccess(res, { user: { id: user._id, phone: user.phone, fullName: user.fullName }, ...tokens }, t(lang, 'auth.login_success'));
   } else {
     // New user flow: return isNewUser with temporary tokens
     const uid = crypto.randomUUID();
     const tokens = generateTokens({ uid, phone: recipient });
-    sendSuccess(res, { isNewUser: true, uid, phone: recipient, ...tokens }, 'OTP verified');
+    const lang = resolveRequestLanguage(req);
+    sendSuccess(res, { isNewUser: true, uid, phone: recipient, ...tokens }, t(lang, 'auth.verify_success'));
   }
 });

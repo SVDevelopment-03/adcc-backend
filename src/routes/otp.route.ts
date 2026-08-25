@@ -1,22 +1,28 @@
 import { Router } from 'express';
 import { sendOtp, verifyOtpController } from '@/controllers/otp.controller';
-import { asyncHandler } from '@/utils/async-handler';
 import { sendOtpSchema, verifyOtpSchema } from '@/validators/otp.validator';
-import { z } from 'zod';
 
 const router = Router();
 
-router.post('/send', asyncHandler(async (req, res, next) => {
-  // Basic validation
-  const parsed = sendOtpSchema.parse(req.body);
-  req.body = parsed as any;
-  return sendOtp(req, res as any);
-}));
+// Validate bodies before calling controllers
+router.post('/send', (req, res, next) => {
+  try {
+    const parsed = sendOtpSchema.parse(req.body);
+    req.body = parsed as any;
+    return sendOtp(req, res, next);
+  } catch (err) {
+    return next(err);
+  }
+});
 
-router.post('/verify', asyncHandler(async (req, res, next) => {
-  const parsed = verifyOtpSchema.parse(req.body);
-  req.body = parsed as any;
-  return verifyOtpController(req, res as any);
-}));
+router.post('/verify', (req, res, next) => {
+  try {
+    const parsed = verifyOtpSchema.parse(req.body);
+    req.body = parsed as any;
+    return verifyOtpController(req, res, next);
+  } catch (err) {
+    return next(err);
+  }
+});
 
 export default router;
