@@ -24,12 +24,31 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
 
   if (!recipient) throw new AppError('Recipient phone number is required', 400);
 
+
   // Generate 6-digit code
   const code = (Math.floor(100000 + Math.random() * 900000)).toString();
-  const message = msgTemplate || `Your ADCC OTP code is ${code}`;
 
-  // Store OTP in memory with TTL (5 minutes)
-  setOtp(recipient, code, 300);
+  // TTL in seconds (default 5 minutes)
+  const ttlSeconds = 300;
+  const ttlMinutes = Math.floor(ttlSeconds / 60);
+
+  // Default Royal Formal bilingual template (Arabic then English)
+  const defaultTemplate =
+    'نادي أبوظبي للدراجات (ADCC): رمز التحقق الخاص بك هو {code} — صالح لمدة {expiry} دقيقة. الرجاء عدم مشاركة هذا الرمز مع أي شخص.\n' +
+    'ADCC — Abu Dhabi Cycling Club: Your verification code is {code}. It is valid for {expiry} minutes. Please do not share this code.';
+
+  // Prepare message by replacing placeholders if provided template includes them
+  let messageTemplateToUse = msgTemplate && typeof msgTemplate === 'string' && msgTemplate.trim().length > 0
+    ? msgTemplate
+    : defaultTemplate;
+
+  // Replace placeholders {code} and {expiry}
+  const message = messageTemplateToUse
+    .replace(/\{code\}/g, code)
+    .replace(/\{expiry\}/g, String(ttlMinutes));
+
+  // Store OTP in memory with TTL
+  setOtp(recipient, code, ttlSeconds);
 
   // Send via Nexus
   await nexusService.sendSmsViaNexus({ msg: message, recipient, sender, category });
