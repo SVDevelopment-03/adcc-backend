@@ -53,9 +53,12 @@ export const sendSmsViaNexus = async (payload: { msg: string; recipient: string;
   const token = await loginToNexus();
   try {
     const url = `${NEXUS_BASE}/api/v1/sms/send`;
+    // Debug: log the exact payload sent to Nexus for troubleshooting
+    console.debug('[Nexus] sendSms payload:', JSON.stringify(payload));
     const headers: any = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
     const resp = await axios.post(url, payload, { headers, timeout: 10_000 });
+    console.debug('[Nexus] sendSms response:', resp.status, resp.data);
     return resp.data;
   } catch (err: any) {
     const respData = err?.response?.data;
