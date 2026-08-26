@@ -37,6 +37,10 @@ export const clearOtp = (phone: string) => {
   store.delete(normalize(phone));
 };
 
-const normalize = (phone: string) => phone.replace(/\s+/g, '').trim();
+const normalize = (phone: string) => {
+  if (!phone || typeof phone !== 'string') return '';
+  // Remove all non-digit characters so '+971...' and '971...' match
+  return phone.replace(/\D+/g, '').trim();
+};
 
 export default { setOtp, verifyOtp, clearOtp };
