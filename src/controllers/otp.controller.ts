@@ -15,7 +15,7 @@ import { resolveRequestLanguage } from '@/utils/localization';
  * body: { recipient, sender?, category?, msgTemplate? }
  */
 export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
-  const { recipient, sender = 'ADCC', category = 'TNX', msgTemplate } = req.body as {
+  const { recipient, sender = 'ADCC', category = 'TXN', msgTemplate } = req.body as {
     recipient: string;
     sender?: string;
     category?: string;
