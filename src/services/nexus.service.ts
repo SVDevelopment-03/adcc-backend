@@ -53,11 +53,38 @@ export const sendSmsViaNexus = async (payload: { msg: string; recipient: string;
   const token = await loginToNexus();
   try {
     const url = `${NEXUS_BASE}/api/v1/sms/send`;
-    // Debug: log the exact payload sent to Nexus for troubleshooting
-    console.debug('[Nexus] sendSms payload:', JSON.stringify(payload));
+    // Normalize category to Nexus-expected values and map common typos
+    let finalCategory = payload.category ?? 'TXN';
+    const c = String(finalCategory).trim().toLowerCase();
+    switch (c) {
+      case 'tnx':
+      case 'txn':
+        finalCategory = 'TXN';
+        break;
+      case 'otp':
+        finalCategory = 'OTP';
+        break;
+      case 'promo':
+        finalCategory = 'Promo';
+        break;
+      case 'subscription':
+        finalCategory = 'Subscription';
+        break;
+      case 'statutory':
+        finalCategory = 'statutory';
+        break;
+      default:
+        finalCategory = 'TXN';
+    }
+
+    const normalizedPayload = { ...payload, category: finalCategory };
+    if (payload.category !== normalizedPayload.category) {
+      console.debug('[Nexus] normalized category from', payload.category, 'to', normalizedPayload.category);
+    }
+    console.debug('[Nexus] sendSms payload:', JSON.stringify(normalizedPayload));
     const headers: any = { 'Content-Type': 'application/json' };
     if (token) headers.Authorization = `Bearer ${token}`;
-    const resp = await axios.post(url, payload, { headers, timeout: 10_000 });
+    const resp = await axios.post(url, normalizedPayload, { headers, timeout: 10_000 });
     console.debug('[Nexus] sendSms response:', resp.status, resp.data);
     return resp.data;
   } catch (err: any) {
