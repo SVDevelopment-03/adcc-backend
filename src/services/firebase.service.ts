@@ -263,6 +263,16 @@ export const getFirebaseUserByEmail = async (
   }
 };
 
+export const updateFirebasePhone = async (uid: string, phoneNumber: string) => {
+  initializeFirebase();
+  try {
+    return await admin.auth().updateUser(uid, { phoneNumber });
+  } catch (error: any) {
+    // Surface errors to caller
+    throw new Error(error?.message || 'Failed to update Firebase user phone');
+  }
+};
+
 export interface WebPushPayload {
   title: string;
   body: string;

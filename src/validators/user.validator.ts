@@ -79,3 +79,12 @@ export type UpdateUserVerifiedInput = z.infer<typeof updateUserVerifiedSchema>;
 export type RegisterFcmTokenInput = z.infer<typeof registerFcmTokenSchema>;
 export type UnregisterFcmTokenInput = z.infer<typeof unregisterFcmTokenSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
+export const changePhoneConfirmSchema = z
+  .object({
+    newPhone: z.preprocess(firstValue, z.string().min(6, 'New phone is required')),
+    oldCode: z.preprocess(firstValue, z.string().min(4, 'Old OTP is required')),
+    newCode: z.preprocess(firstValue, z.string().min(4, 'New OTP is required')),
+  })
+  .strict();
+
+export type ChangePhoneConfirmInput = z.infer<typeof changePhoneConfirmSchema>;
