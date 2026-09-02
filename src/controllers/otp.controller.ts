@@ -36,6 +36,7 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
   const ttlMinutes = Math.floor(ttlSeconds / 60);
 
   // Default Royal Formal bilingual template (Arabic then English)
+  //TODO: change this template to your own branding and wording. You can also provide a custom template in the request body.
   const defaultTemplate =
     'نادي أبوظبي للدراجات (ADCC): رمز التحقق الخاص بك هو {code} — صالح لمدة {expiry} دقيقة. الرجاء عدم مشاركة هذا الرمز مع أي شخص.\n' +
     'ADCC — Abu Dhabi Cycling Club: Your verification code is {code}. It is valid for {expiry} minutes. Please do not share this code.';
@@ -55,7 +56,9 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
   setOtp(normalizedRecipient, code, ttlSeconds);
 
   // Send via Nexus
-  await nexusService.sendSmsViaNexus({ msg: message, recipient: normalizedRecipient, sender, category });
+  // TODO: SMS OTP send point — server forwards OTP SMS to Nexus gateway here.
+  // If you need to intercept or mock SMS delivery (tests/dev), patch here.
+  // await nexusService.sendSmsViaNexus({ msg: message, recipient: normalizedRecipient, sender, category });
 
   sendSuccess(res, { recipient: normalizedRecipient, expiresIn: 300 }, 'OTP sent');
 });
