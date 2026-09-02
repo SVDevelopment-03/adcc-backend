@@ -81,10 +81,18 @@ export type UnregisterFcmTokenInput = z.infer<typeof unregisterFcmTokenSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;
 export const changePhoneConfirmSchema = z
   .object({
+    changeToken: z.preprocess(firstValue, z.string().min(10, 'Change token is required')),
     newPhone: z.preprocess(firstValue, z.string().min(6, 'New phone is required')),
-    oldCode: z.preprocess(firstValue, z.string().min(4, 'Old OTP is required')),
     newCode: z.preprocess(firstValue, z.string().min(4, 'New OTP is required')),
   })
   .strict();
 
 export type ChangePhoneConfirmInput = z.infer<typeof changePhoneConfirmSchema>;
+
+export const changePhoneStartSchema = z
+  .object({
+    oldCode: z.preprocess(firstValue, z.string().min(4, 'Old OTP is required')),
+  })
+  .strict();
+
+export type ChangePhoneStartInput = z.infer<typeof changePhoneStartSchema>;

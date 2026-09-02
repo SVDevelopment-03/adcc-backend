@@ -11,7 +11,7 @@ import {
   updateUserVerified,
   updateUser,
 } from '@/controllers/user.controller';
-import { confirmPhoneChange } from '@/controllers/phone-change.controller';
+import { startPhoneChange, confirmPhoneChange } from '@/controllers/phone-change.controller';
 import { getAllUsers, getUserById, deleteUser } from '@/controllers/user.controller';
 import {
   createUserSchema,
@@ -64,14 +64,24 @@ router.post(
   unregisterFcmToken
 );
 
-// Phone change: confirm both old and new OTPs and update phone
+// Phone change start: verify old phone OTP and issue change token
+router.post(
+  '/phone-change/start',
+  authenticate,
+  authenticatedOnly,
+  (req, res, next) => {
+    const { changePhoneStartSchema } = require('@/validators/user.validator');
+    return (require('@/middleware/validate.middleware').validate(changePhoneStartSchema))(req, res, next);
+  },
+  startPhoneChange
+);
+
+// Phone change confirm: provide changeToken + newPhone + newCode
 router.post(
   '/phone-change/confirm',
   authenticate,
   authenticatedOnly,
-  // validate schema inline to avoid cyclic import issues
   (req, res, next) => {
-    // lazy-validate using validator imported here to keep route file simple
     const { changePhoneConfirmSchema } = require('@/validators/user.validator');
     return (require('@/middleware/validate.middleware').validate(changePhoneConfirmSchema))(req, res, next);
   },
