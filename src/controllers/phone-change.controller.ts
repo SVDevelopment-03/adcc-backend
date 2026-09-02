@@ -92,7 +92,7 @@ export const confirmPhoneChange = asyncHandler(async (req: AuthRequest, res: Res
   // Best-effort update to Firebase auth profile if linked
   if (user.firebaseUid) {
     try {
-      await updateFirebasePhone(user.firebaseUid, newPhone);
+      await updateFirebasePhone(user.firebaseUid, normalizedNewPhone);
     } catch (err) {
       console.error('Failed to update Firebase phone for user', user._id, err);
     }
