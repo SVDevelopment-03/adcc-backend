@@ -24,6 +24,22 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
 
   if (!recipient) throw new AppError('Recipient phone number is required', 400);
 
+  // Normalize recipient to E.164-ish format used across the system
+  const normalizeRecipient = (r: string) => {
+    if (!r) return r;
+    const raw = String(r).trim();
+    if (raw.startsWith('+')) return raw;
+    if (/^971\d{8,9}$/.test(raw)) return `+${raw}`;
+    if (/^5\d{8}$/.test(raw)) return `+971${raw}`;
+    if (/^0\d{8,9}$/.test(raw)) return `+971${raw.replace(/^0/, '')}`;
+    // Fallback: remove non-digits and prefix + if it looks like an international number
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length >= 8 && digits.length <= 15) return digits.startsWith('971') ? `+${digits}` : `+${digits}`;
+    return raw;
+  };
+
+  const normalizedRecipient = normalizeRecipient(recipient);
+
 
   // Generate 6-digit code
   const code = (Math.floor(100000 + Math.random() * 900000)).toString();
@@ -48,12 +64,13 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
     .replace(/\{expiry\}/g, String(ttlMinutes));
 
   // Store OTP in memory with TTL
-  setOtp(recipient, code, ttlSeconds);
+  // Store OTP keyed by normalized recipient so verify uses same key
+  setOtp(normalizedRecipient, code, ttlSeconds);
 
   // Send via Nexus
-  await nexusService.sendSmsViaNexus({ msg: message, recipient, sender, category });
+  await nexusService.sendSmsViaNexus({ msg: message, recipient: normalizedRecipient, sender, category });
 
-  sendSuccess(res, { recipient, expiresIn: 300 }, 'OTP sent');
+  sendSuccess(res, { recipient: normalizedRecipient, expiresIn: 300 }, 'OTP sent');
 });
 
 /**
@@ -64,11 +81,26 @@ export const verifyOtpController = asyncHandler(async (req: Request, res: Respon
   const { recipient, code } = req.body as { recipient: string; code: string };
   if (!recipient || !code) throw new AppError('Recipient and code are required', 400);
 
-  const ok = verifyOtp(recipient, code);
+  // Normalize recipient same as sendOtp
+  const normalizeRecipient = (r: string) => {
+    if (!r) return r;
+    const raw = String(r).trim();
+    if (raw.startsWith('+')) return raw;
+    if (/^971\d{8,9}$/.test(raw)) return `+${raw}`;
+    if (/^5\d{8}$/.test(raw)) return `+971${raw}`;
+    if (/^0\d{8,9}$/.test(raw)) return `+971${raw.replace(/^0/, '')}`;
+    const digits = raw.replace(/\D/g, '');
+    if (digits.length >= 8 && digits.length <= 15) return digits.startsWith('971') ? `+${digits}` : `+${digits}`;
+    return raw;
+  };
+
+  const normalizedRecipient = normalizeRecipient(recipient);
+
+  const ok = verifyOtp(normalizedRecipient, code);
   if (!ok) throw new AppError('Invalid or expired OTP', 400);
 
   // If a user exists with this phone, issue JWT tokens; otherwise return isNewUser
-  const user = await User.findOne({ phone: recipient });
+  const user = await User.findOne({ phone: normalizedRecipient });
   if (user) {
     const tokens = generateTokens({ id: user._id.toString(), uid: user._id.toString(), phone: user.phone || '' });
 
