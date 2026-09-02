@@ -58,7 +58,7 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
   // Send via Nexus
   // TODO: SMS OTP send point — server forwards OTP SMS to Nexus gateway here.
   // If you need to intercept or mock SMS delivery (tests/dev), patch here.
-  // await nexusService.sendSmsViaNexus({ msg: message, recipient: normalizedRecipient, sender, category });
+  await nexusService.sendSmsViaNexus({ msg: message, recipient: normalizedRecipient, sender, category });
 
   sendSuccess(res, { recipient: normalizedRecipient, expiresIn: 300 }, 'OTP sent');
 });
