@@ -3,6 +3,7 @@ import { asyncHandler } from '@/utils/async-handler';
 import { sendSuccess } from '@/utils/response';
 import { AppError } from '@/utils/app-error';
 import { setOtp, verifyOtp } from '@/services/otp.store';
+import { normalizePhone } from '@/utils/phone.util';
 import nexusService from '@/services/nexus.service';
 import crypto from 'node:crypto';
 import User from '@/models/user.model';
@@ -24,21 +25,7 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
 
   if (!recipient) throw new AppError('Recipient phone number is required', 400);
 
-  // Normalize recipient to E.164-ish format used across the system
-  const normalizeRecipient = (r: string) => {
-    if (!r) return r;
-    const raw = String(r).trim();
-    if (raw.startsWith('+')) return raw;
-    if (/^971\d{8,9}$/.test(raw)) return `+${raw}`;
-    if (/^5\d{8}$/.test(raw)) return `+971${raw}`;
-    if (/^0\d{8,9}$/.test(raw)) return `+971${raw.replace(/^0/, '')}`;
-    // Fallback: remove non-digits and prefix + if it looks like an international number
-    const digits = raw.replace(/\D/g, '');
-    if (digits.length >= 8 && digits.length <= 15) return digits.startsWith('971') ? `+${digits}` : `+${digits}`;
-    return raw;
-  };
-
-  const normalizedRecipient = normalizeRecipient(recipient);
+  const normalizedRecipient = normalizePhone(recipient) || recipient;
 
 
   // Generate 6-digit code

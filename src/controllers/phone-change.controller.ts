@@ -4,6 +4,7 @@ import { asyncHandler } from '@/utils/async-handler';
 import { sendSuccess } from '@/utils/response';
 import { AppError } from '@/utils/app-error';
 import { verifyOtp, clearOtp } from '@/services/otp.store';
+import { normalizePhone } from '@/utils/phone.util';
 import User from '@/models/user.model';
 import PhoneChangeToken from '@/models/phoneChangeToken.model';
 import { AuthRequest } from '@/middleware/auth.middleware';
@@ -59,18 +60,20 @@ export const confirmPhoneChange = asyncHandler(async (req: AuthRequest, res: Res
     newCode: string;
   };
 
+  const normalizedNewPhone = normalizePhone(newPhone) || newPhone;
+
   const tokenDoc = await PhoneChangeToken.findOne({ token: changeToken });
   if (!tokenDoc) throw new AppError('Invalid change token', 400);
   if (tokenDoc.used) throw new AppError('Change token already used', 400);
   if (tokenDoc.expiresAt < new Date()) throw new AppError('Change token expired', 400);
   if (tokenDoc.userId.toString() !== userId) throw new AppError('Change token does not belong to user', 403);
 
-  // Verify OTP for new phone
-  const okNew = verifyOtp(newPhone, newCode);
+  // Verify OTP for new phone (use normalized format)
+  const okNew = verifyOtp(normalizedNewPhone, newCode);
   if (!okNew) throw new AppError('Invalid or expired OTP for new phone', 400);
 
   // Ensure new phone not already used by another user
-  const existing = await User.findOne({ phone: newPhone });
+  const existing = await User.findOne({ phone: normalizedNewPhone });
   if (existing && existing._id.toString() !== userId) {
     throw new AppError('Phone number already in use', 400);
   }
@@ -79,7 +82,7 @@ export const confirmPhoneChange = asyncHandler(async (req: AuthRequest, res: Res
   const user = await User.findById(userId);
   if (!user) throw new AppError(t(lang, 'user.not_found'), 404);
 
-  user.phone = newPhone;
+  user.phone = normalizedNewPhone;
   user.isVerified = true;
   await user.save();
 
@@ -97,7 +100,7 @@ export const confirmPhoneChange = asyncHandler(async (req: AuthRequest, res: Res
 
   // Clear OTP entries for newPhone just in case
   try {
-    clearOtp(newPhone);
+    clearOtp(normalizedNewPhone);
   } catch (e) {
     // ignore
   }
