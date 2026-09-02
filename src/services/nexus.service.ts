@@ -53,6 +53,23 @@ export const sendSmsViaNexus = async (payload: { msg: string; recipient: string;
   const token = await loginToNexus();
   try {
     const url = `${NEXUS_BASE}/api/v1/sms/send`;
+    // Ensure recipient is a string and normalize common local formats to E.164
+    const rawRecipient = String(payload.recipient || '').trim();
+    const normalizeRecipient = (r: string) => {
+      if (!r) return r;
+      // Already E.164
+      if (r.startsWith('+')) return r;
+      // Starts with country code without plus (e.g. 9715...)
+      if (/^971\d{8,9}$/.test(r)) return `+${r}`;
+      // Local UAE mobile without leading zero (e.g. 5XXXXXXXX)
+      if (/^5\d{8}$/.test(r)) return `+971${r}`;
+      // Local with leading zero (e.g. 05XXXXXXXX or 0XXXXXXXXX)
+      if (/^0\d{8,9}$/.test(r)) return `+971${r.replace(/^0/, '')}`;
+      // Fallback: return as-is (let Nexus respond with an error if invalid)
+      return r;
+    };
+    const normalizedRecipient = normalizeRecipient(rawRecipient);
+    payload = { ...payload, recipient: normalizedRecipient };
     // Normalize category to Nexus-expected values and map common typos
     let finalCategory = payload.category ?? 'TXN';
     const c = String(finalCategory).trim().toLowerCase();
