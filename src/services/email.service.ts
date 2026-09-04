@@ -7,6 +7,12 @@ interface EmailOptions {
   subject: string;
   text?: string;
   html?: string;
+  attachments?: Array<{
+    filename: string;
+    content: string | Buffer;
+    contentType?: string;
+    cid?: string; // for inline images
+  }>;
 }
 
 type SmtpConfig = {
@@ -87,7 +93,10 @@ export async function sendEmail(options: EmailOptions) {
   const chunkSize = 100;
   for (let i = 0; i < options.to.length; i += chunkSize) {
     const chunk = options.to.slice(i, i + chunkSize);
-    const mail = { from, to: chunk.join(','), subject: options.subject, text: options.text, html: options.html };
+    const mail: any = { from, to: chunk.join(','), subject: options.subject, text: options.text, html: options.html };
+    if (options.attachments && options.attachments.length > 0) {
+      mail.attachments = options.attachments;
+    }
     console.log(`[EMAIL] sending chunk ${Math.floor(i / chunkSize) + 1} → ${chunk.length} address(es)`);
     const t0 = Date.now();
     try {

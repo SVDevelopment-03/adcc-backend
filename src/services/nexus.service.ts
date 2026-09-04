@@ -9,6 +9,11 @@ const AUTH_PASSWORD = process.env.NEXUS_AUTH_PASSWORD;
 let cachedToken: string | null = null;
 let tokenExpiry: number | null = null; // epoch ms
 
+const clearCachedNexusToken = () => {
+  cachedToken = null;
+  tokenExpiry = null;
+};
+
 const loginToNexus = async (): Promise<string> => {
   // Return cached token if still valid (with small safety margin)
   if (cachedToken && tokenExpiry && Date.now() + 30_000 < tokenExpiry) {
@@ -51,15 +56,15 @@ const loginToNexus = async (): Promise<string> => {
 };
 
 export const sendSmsViaNexus = async (payload: { msg: string; recipient: string; sender: string; category?: string }) => {
-  const token = await loginToNexus();
-  try {
+  let token = await loginToNexus();
+
+  const send = async (authToken: string) => {
     const url = `${NEXUS_BASE}/api/v1/sms/send`;
-    // Ensure recipient is a string and normalize common local formats to E.164
     const rawRecipient = String(payload.recipient || '').trim();
     const normalizedRecipient = normalizePhone(rawRecipient) || rawRecipient;
-    payload = { ...payload, recipient: normalizedRecipient };
-    // Normalize category to Nexus-expected values and map common typos
-    let finalCategory = payload.category ?? 'TXN';
+    const inputPayload = { ...payload, recipient: normalizedRecipient };
+
+    let finalCategory = inputPayload.category ?? 'TXN';
     const c = String(finalCategory).trim().toLowerCase();
     switch (c) {
       case 'tnx':
@@ -82,20 +87,41 @@ export const sendSmsViaNexus = async (payload: { msg: string; recipient: string;
         finalCategory = 'TXN';
     }
 
-    const normalizedPayload = { ...payload, category: finalCategory };
-    if (payload.category !== normalizedPayload.category) {
-      console.debug('[Nexus] normalized category from', payload.category, 'to', normalizedPayload.category);
+    const normalizedPayload = { ...inputPayload, category: finalCategory };
+    if (inputPayload.category !== normalizedPayload.category) {
+      console.debug('[Nexus] normalized category from', inputPayload.category, 'to', normalizedPayload.category);
     }
+
     console.debug('[Nexus] sendSms payload:', JSON.stringify(normalizedPayload));
     const headers: any = { 'Content-Type': 'application/json' };
-    if (token) headers.Authorization = `Bearer ${token}`;
-    const resp = await axios.post(url, normalizedPayload, { headers, timeout: 10_000 });
+    if (authToken) headers.Authorization = `Bearer ${authToken}`;
+    return axios.post(url, normalizedPayload, { headers, timeout: 10_000 });
+  };
+
+  try {
+    const resp = await send(token);
     console.debug('[Nexus] sendSms response:', resp.status, resp.data);
     return resp.data;
   } catch (err: any) {
-    const respData = err?.response?.data;
     const status = err?.response?.status;
-    console.error('Nexus sendSms error', { status, respData, message: err.message });
+    const respData = err?.response?.data;
+
+    if (status === 401 || status === 403) {
+      console.warn('[Nexus] token expired or rejected, clearing cached token and retrying once');
+      clearCachedNexusToken();
+      token = await loginToNexus();
+      try {
+        const retryResp = await send(token);
+        console.debug('[Nexus] sendSms retry response:', retryResp.status, retryResp.data);
+        return retryResp.data;
+      } catch (retryErr: any) {
+        const retryStatus = retryErr?.response?.status;
+        const retryRespData = retryErr?.response?.data;
+        const retryRemoteMsg = retryRespData?.message || retryRespData?.error || JSON.stringify(retryRespData || {});
+        const retryMsg = retryRemoteMsg && retryRemoteMsg !== '{}' ? `Nexus sendSms failed: ${retryRemoteMsg}` : 'Failed to send SMS via Nexus';
+        throw new AppError(retryMsg, retryStatus === 401 || retryStatus === 403 ? 403 : 502);
+      }
+    }
 
     const remoteMsg = respData?.message || respData?.error || JSON.stringify(respData || {});
     const msg = remoteMsg && remoteMsg !== '{}' ? `Nexus sendSms failed: ${remoteMsg}` : 'Failed to send SMS via Nexus';
