@@ -41,6 +41,7 @@ const dobSchema = z
 export const registerUserSchema = z.object({
   fullName: z.string().min(1, 'Full name is required').trim(),
   email: z.preprocess(firstValue, z.string().trim().email('Invalid email')).optional(),
+  phone: z.preprocess(firstValue, z.string().trim().min(1, 'Phone number is required')).optional(),
   gender: z.enum(['Male', 'Female'], {
     message: 'Gender must be either Male or Female',
   }),
