@@ -36,6 +36,7 @@ import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { upsertUserFcmToken } from '@/services/push-token.service';
+import { getPhoneLookupVariants } from '@/utils/phone.util';
 
 /** Guest role and ID prefix - guest users are stateless (no DB record) */
 const GUEST_ROLE = 'Guest';
@@ -499,7 +500,11 @@ export const registerUser = asyncHandler(
 
     const byUid = await User.findOne({ firebaseUid: uid });
     const byEmail = email ? await User.findOne({ email }) : null;
-    const byPhone = phone ? await User.findOne({ phone }) : null;
+    const byPhone = phone
+      ? await User.findOne({
+          $or: getPhoneLookupVariants(phone).map((value) => ({ phone: value }))
+        })
+      : null;
 
     const candidateUser = byUid || byEmail || byPhone;
 

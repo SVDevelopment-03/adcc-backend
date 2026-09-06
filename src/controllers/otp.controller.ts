@@ -3,7 +3,7 @@ import { asyncHandler } from '@/utils/async-handler';
 import { sendSuccess } from '@/utils/response';
 import { AppError } from '@/utils/app-error';
 import { setOtp, verifyOtp } from '@/services/otp.store';
-import { normalizePhone } from '@/utils/phone.util';
+import { normalizePhone, getPhoneLookupVariants } from '@/utils/phone.util';
 import nexusService from '@/services/nexus.service';
 import crypto from 'node:crypto';
 import User from '@/models/user.model';
@@ -95,7 +95,10 @@ export const verifyOtpController = asyncHandler(async (req: Request, res: Respon
   if (!ok) throw new AppError('Invalid or expired OTP', 400);
 
   // If a user exists with this phone, issue JWT tokens; otherwise return isNewUser
-  const user = await User.findOne({ phone: normalizedRecipient });
+  const variantPhones = getPhoneLookupVariants(normalizedRecipient);
+  const user = await User.findOne({
+    $or: variantPhones.map((phone) => ({ phone }))
+  });
   if (user) {
     const tokens = generateTokens({ id: user._id.toString(), uid: user._id.toString(), phone: user.phone || '' });
 
