@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import crypto from 'node:crypto';
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 import User from '@/models/user.model';
 import EventResult from '@/models/eventResult.model';
 import CommunityMembership from '@/models/communityMembership.model';
@@ -189,6 +190,187 @@ export const verifyFirebaseAuth = asyncHandler(
         t(lang, 'auth.verify_success')
       );
     }
+  }
+);
+
+/**
+ * Email/password register
+ * POST /v1/auth/email/register
+ * Creates a user with an email/password pair using the app's own backend auth flow.
+ */
+export const emailRegister = asyncHandler(
+  async (req: Request, res: Response) => {
+    const lang = resolveRequestLanguage(req);
+    const {
+      fullName,
+      email,
+      password,
+      gender = 'Male',
+      age,
+      dob,
+      country,
+      city,
+      provider = 'email',
+    } = req.body as {
+      fullName: string;
+      email: string;
+      password: string;
+      gender?: 'Male' | 'Female';
+      age?: number;
+      dob?: string;
+      country?: string;
+      city?: string;
+      provider?: string;
+    };
+
+    const normalizedEmail = email?.toString().trim().toLowerCase();
+
+    if (!normalizedEmail || !fullName?.trim()) {
+      throw new AppError('Full name and email are required', 400);
+    }
+
+    if (!password || password.trim().length < 6) {
+      throw new AppError('Password must be at least 6 characters', 400);
+    }
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      throw new AppError('Email already in use', 409);
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const user = await User.create({
+      fullName: fullName.trim(),
+      email: normalizedEmail,
+      passwordHash,
+      gender,
+      age,
+      dob: dob ? new Date(dob) : undefined,
+      country,
+      city,
+      provider,
+      isVerified: true,
+    });
+
+    const tokens = generateTokens({
+      id: user._id.toString(),
+      email: user.email || '',
+      role: user.role,
+      phone: user.phone || '',
+    });
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 3);
+
+    user.refreshTokens.push({
+      token: tokens.refreshToken,
+      expiresAt,
+      createdAt: new Date(),
+    });
+    await user.save();
+
+    sendSuccess(
+      res,
+      {
+        user: {
+          id: user._id,
+          fullName: user.fullName,
+          email: user.email,
+          phone: user.phone,
+          gender: user.gender,
+          age: user.age,
+          dob: user.dob,
+          country: user.country,
+          city: user.city,
+          provider: user.provider,
+          role: user.role,
+          isVerified: user.isVerified,
+        },
+        ...tokens,
+      },
+      t(lang, 'auth.register_success')
+    );
+  }
+);
+
+/**
+ * Email/password login
+ * POST /v1/auth/email/login
+ * Authenticates using the app's backend email/password flow.
+ */
+export const emailLogin = asyncHandler(
+  async (req: Request, res: Response) => {
+    const lang = resolveRequestLanguage(req);
+    const {
+      email,
+      password,
+    } = req.body as {
+      email: string;
+      password: string;
+    };
+
+    const normalizedEmail = email?.toString().trim().toLowerCase();
+
+    if (!normalizedEmail || !password || password.trim().length < 6) {
+      throw new AppError('Invalid email or password', 401);
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user || !user.passwordHash) {
+      throw new AppError('Invalid email or password', 401);
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isPasswordValid) {
+      throw new AppError('Invalid email or password', 401);
+    }
+
+    const now = new Date();
+    user.refreshTokens = user.refreshTokens.filter((token) => token.expiresAt >= now);
+
+    if (user.refreshTokens.length >= Number(process.env.MAX_REFRESH_TOKENS || 5)) {
+      throw new AppError(t(lang, 'auth.max_devices_reached', { max: process.env.MAX_REFRESH_TOKENS || '5' }), 403);
+    }
+
+    const tokens = generateTokens({
+      id: user._id.toString(),
+      email: user.email || '',
+      phone: user.phone || '',
+      role: user.role,
+    });
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 3);
+
+    user.refreshTokens.push({
+      token: tokens.refreshToken,
+      expiresAt,
+      createdAt: new Date(),
+    });
+    await user.save();
+
+    sendSuccess(
+      res,
+      {
+        user: {
+          id: user._id,
+          fullName: user.fullName,
+          email: user.email,
+          phone: user.phone,
+          gender: user.gender,
+          age: user.age,
+          dob: user.dob,
+          country: user.country,
+          city: user.city,
+          provider: user.provider,
+          role: user.role,
+          isVerified: user.isVerified,
+        },
+        ...tokens,
+      },
+      t(lang, 'auth.login_success')
+    );
   }
 );
 

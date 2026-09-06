@@ -16,7 +16,9 @@ import {
   getMyCompletedEvents,
   getPerformanceInsights,
   updateMyProfile,
-  guestLogin
+  guestLogin,
+  emailRegister,
+  emailLogin,
 } from '@/controllers/auth.controller';
 import { validate } from '@/middleware/validate.middleware';
 import {
@@ -25,6 +27,8 @@ import {
   refreshTokenSchema,
   logoutSchema,
   updateProfileSchema,
+  emailRegisterSchema,
+  emailLoginSchema,
 } from '@/validators/auth.validator';
 import { authenticate } from '@/middleware/auth.middleware';
 
@@ -32,6 +36,8 @@ const router = express.Router();
 
 // Public routes
 router.post('/verify', validate(verifyFirebaseAuthSchema), verifyFirebaseAuth);
+router.post('/email/register', validate(emailRegisterSchema), emailRegister);
+router.post('/email/login', validate(emailLoginSchema), emailLogin);
 
 router.post(
   '/register',
