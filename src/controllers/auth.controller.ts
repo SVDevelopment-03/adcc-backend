@@ -250,7 +250,9 @@ export const emailRegister = asyncHandler(
         const expiresAt = new Date();
         expiresAt.setDate(expiresAt.getDate() + 3);
 
-        existingUser.refreshTokens = existingUser.refreshTokens.filter((token) => token.expiresAt >= new Date());
+        existingUser.refreshTokens = existingUser.refreshTokens.filter(
+          (token) => token.expiresAt >= new Date()
+        );
         existingUser.refreshTokens.push({
           token: tokens.refreshToken,
           expiresAt,
@@ -258,29 +260,28 @@ export const emailRegister = asyncHandler(
         });
         await existingUser.save();
 
-        return sendSuccess(
-          res,
-          {
-            isNewUser: true,
-            isProfileIncomplete: true,
-            user: {
-              id: existingUser._id,
-              fullName: existingUser.fullName,
-              email: existingUser.email,
-              phone: existingUser.phone,
-              gender: existingUser.gender,
-              age: existingUser.age,
-              dob: existingUser.dob,
-              country: existingUser.country,
-              city: existingUser.city,
-              provider: existingUser.provider,
-              role: existingUser.role,
-              isVerified: existingUser.isVerified,
-            },
-            ...tokens,
+        const incompletePayload = {
+          isNewUser: true,
+          isProfileIncomplete: true,
+          user: {
+            id: existingUser._id,
+            fullName: existingUser.fullName,
+            email: existingUser.email,
+            phone: existingUser.phone,
+            gender: existingUser.gender,
+            age: existingUser.age,
+            dob: existingUser.dob,
+            country: existingUser.country,
+            city: existingUser.city,
+            provider: existingUser.provider,
+            role: existingUser.role,
+            isVerified: existingUser.isVerified,
           },
-          'Profile setup required'
-        );
+          ...tokens,
+        };
+
+        sendSuccess(res, incompletePayload, 'Profile setup required');
+        return;
       }
 
       throw new AppError('Email already in use', 409);
