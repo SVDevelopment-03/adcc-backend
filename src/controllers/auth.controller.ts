@@ -369,8 +369,12 @@ export const emailLogin = asyncHandler(
     }
 
     const user = await User.findOne({ email: normalizedEmail });
-    if (!user || !user.passwordHash) {
+    if (!user) {
       throw new AppError('No account found with this email. Please create an account first.', 404);
+    }
+
+    if (!user.passwordHash) {
+      throw new AppError('This email is linked to your account, but a password has not been set yet. Please complete setup first.', 400);
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
@@ -447,6 +451,7 @@ export const registerUser = asyncHandler(
       country,
       city,
       provider,
+      password,
       fcmToken,
       userAgent,
       platform,
@@ -463,6 +468,7 @@ export const registerUser = asyncHandler(
       country?: string;
       city?: string;
       provider?: string;
+      password?: string;
       fcmToken?: string;
       userAgent?: string;
       platform?: 'web' | 'android' | 'ios';
@@ -537,6 +543,14 @@ export const registerUser = asyncHandler(
       user.city = city || user.city;
       user.provider = provider || user.provider;
       user.isVerified = true;
+      if (password && password.trim().length >= 6) {
+        user.passwordHash = await bcrypt.hash(password.trim(), 12);
+      }
+      await user.save();
+    } else {
+      if (password && password.trim().length >= 6) {
+        user.passwordHash = await bcrypt.hash(password.trim(), 12);
+      }
       await user.save();
     }
 

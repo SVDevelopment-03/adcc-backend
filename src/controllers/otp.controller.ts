@@ -75,13 +75,18 @@ export const verifyOtpController = asyncHandler(async (req: Request, res: Respon
   const normalizeRecipient = (r: string) => {
     if (!r) return r;
     const raw = String(r).trim();
-    if (raw.startsWith('+')) return raw;
-    if (/^971\d{8,9}$/.test(raw)) return `+${raw}`;
-    if (/^5\d{8}$/.test(raw)) return `+971${raw}`;
-    if (/^0\d{8,9}$/.test(raw)) return `+971${raw.replace(/^0/, '')}`;
     const digits = raw.replace(/\D/g, '');
-    if (digits.length >= 8 && digits.length <= 15) return digits.startsWith('971') ? `+${digits}` : `+${digits}`;
-    return raw;
+    if (!digits) return raw;
+
+    const dedupedDigits = digits.startsWith('971') ? digits.slice(3) : digits;
+    const finalDigits = dedupedDigits.startsWith('971') ? dedupedDigits.slice(3) : dedupedDigits;
+
+    if (/^5\d{8}$/.test(finalDigits)) return `+971${finalDigits}`;
+    if (/^\d{9}$/.test(finalDigits) && finalDigits.startsWith('5')) return `+971${finalDigits}`;
+    if (/^\d{9}$/.test(finalDigits) && finalDigits.startsWith('0')) return `+971${finalDigits.slice(1)}`;
+    if (/^971\d{8,9}$/.test(digits)) return `+${digits}`;
+    if (/^\d{8,9}$/.test(finalDigits)) return `+971${finalDigits}`;
+    return `+${digits}`;
   };
 
   const normalizedRecipient = normalizeRecipient(recipient);
