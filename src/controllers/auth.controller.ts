@@ -242,6 +242,7 @@ export const emailRegister = asyncHandler(
       if (!isProfileSetupComplete(existingUser)) {
         const tokens = generateTokens({
           id: existingUser._id.toString(),
+          uid: existingUser._id.toString(),
           email: existingUser.email || '',
           role: existingUser.role,
           phone: existingUser.phone || '',
@@ -304,6 +305,7 @@ export const emailRegister = asyncHandler(
 
     const tokens = generateTokens({
       id: user._id.toString(),
+      uid: user._id.toString(),
       email: user.email || '',
       role: user.role,
       phone: user.phone || '',
@@ -387,6 +389,7 @@ export const emailLogin = asyncHandler(
 
     const tokens = generateTokens({
       id: user._id.toString(),
+      uid: user._id.toString(),
       email: user.email || '',
       phone: user.phone || '',
       role: user.role,
@@ -471,9 +474,10 @@ export const registerUser = asyncHandler(
       email?: string;
       phone?: string;
     };
-    const uid = req.user?.uid; // From JWT (temporary token)
-    const phoneFromToken = req.user?.phone; // Optional phone from JWT (for phone auth)
-    const emailFromToken = req.user?.email; // Optional email from JWT (for email/password auth)
+
+    const uid = req.user?.uid ?? req.user?.id;
+    const phoneFromToken = req.user?.phone;
+    const emailFromToken = req.user?.email;
     const emailFromBody = (req.body as any).email
       ? (req.body as any).email.toString().toLowerCase().trim()
       : undefined;
@@ -487,41 +491,54 @@ export const registerUser = asyncHandler(
       throw new AppError(t(lang, 'auth.firebase_uid_required'), 400);
     }
 
-    // Check if user already exists by UID
-    const existingUser = await User.findOne({ firebaseUid: uid });
-    if (existingUser) {
-      throw new AppError(t(lang, 'auth.already_registered'), 400);
+    const byUid = await User.findOne({ firebaseUid: uid });
+    const byEmail = email ? await User.findOne({ email }) : null;
+    const byPhone = phone ? await User.findOne({ phone }) : null;
+
+    const candidateUser = byUid || byEmail || byPhone;
+
+    if (byUid && byEmail && byUid._id.toString() !== byEmail._id.toString()) {
+      throw new AppError('Email already in use', 400);
     }
 
-    // If email provided in body, ensure it's not already taken
-    if (emailFromBody) {
-      const byEmail = await User.findOne({ email: emailFromBody });
-      if (byEmail) {
-        throw new AppError('Email already in use', 400);
-      }
+    if (byUid && byPhone && byUid._id.toString() !== byPhone._id.toString()) {
+      throw new AppError('Phone number already in use', 400);
     }
 
-    if (phoneFromBody) {
-      const byPhone = await User.findOne({ phone: phoneFromBody });
-      if (byPhone) {
-        throw new AppError('Phone number already in use', 400);
-      }
+    if (byEmail && byPhone && byEmail._id.toString() !== byPhone._id.toString()) {
+      throw new AppError('Phone number already in use', 400);
     }
 
-    // Create user with Firebase UID
-    const user = await User.create({
-      fullName,
-      firebaseUid: uid,
-      phone: phone || undefined,
-      email: email || undefined,
-      gender,
-      age,
-      dob,
-      country,
-      city,
-      provider,
-      isVerified: true,
-    });
+    const user = candidateUser
+      ? candidateUser
+      : await User.create({
+          fullName,
+          firebaseUid: uid,
+          phone: phone || undefined,
+          email: email || undefined,
+          gender,
+          age,
+          dob,
+          country,
+          city,
+          provider,
+          isVerified: true,
+        });
+
+    if (candidateUser) {
+      user.fullName = fullName || user.fullName;
+      user.firebaseUid = user.firebaseUid || uid;
+      user.phone = phone || user.phone || undefined;
+      user.email = email || user.email || undefined;
+      user.gender = gender || user.gender;
+      user.age = age ?? user.age;
+      user.dob = dob || user.dob;
+      user.country = country || user.country;
+      user.city = city || user.city;
+      user.provider = provider || user.provider;
+      user.isVerified = true;
+      await user.save();
+    }
 
     if (fcmToken) {
       await upsertUserFcmToken(user._id.toString(), {
@@ -536,19 +553,16 @@ export const registerUser = asyncHandler(
       });
     }
 
-    // Generate new tokens with user ID
     const tokens = generateTokens({
       id: user._id.toString(),
-      uid: user.firebaseUid,
+      uid: user.firebaseUid || user._id.toString(),
       phone: user.phone || phone || '',
       email: user.email || email || '',
       role: user.role,
     });
 
-    // For new users, they start with 0 tokens, so no need to check limit
-    // Store refresh token
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 3); // 3 days
+    expiresAt.setDate(expiresAt.getDate() + 3);
 
     user.refreshTokens.push({
       token: tokens.refreshToken,
