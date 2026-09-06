@@ -273,6 +273,7 @@ export const emailRegister = asyncHandler(
     sendSuccess(
       res,
       {
+        isNewUser: true,
         user: {
           id: user._id,
           fullName: user.fullName,
