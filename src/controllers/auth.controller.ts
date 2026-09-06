@@ -370,12 +370,12 @@ export const emailLogin = asyncHandler(
 
     const user = await User.findOne({ email: normalizedEmail });
     if (!user || !user.passwordHash) {
-      throw new AppError('Invalid email or password', 401);
+      throw new AppError('No account found with this email. Please create an account first.', 404);
     }
 
     const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
     if (!isPasswordValid) {
-      throw new AppError('Invalid email or password', 401);
+      throw new AppError('Incorrect password for this email. Please try again.', 401);
     }
 
     const isProfileIncomplete = !isProfileSetupComplete(user);
