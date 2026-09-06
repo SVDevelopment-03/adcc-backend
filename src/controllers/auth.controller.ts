@@ -417,13 +417,19 @@ export const registerUser = asyncHandler(
       appVersion?: string;
       appBuild?: string;
       email?: string;
+      phone?: string;
     };
     const uid = req.user?.uid; // From JWT (temporary token)
-    const phone = req.user?.phone; // Optional phone from JWT (for phone auth)
-    const email = req.user?.email; // Optional email from JWT (for email/password auth)
+    const phoneFromToken = req.user?.phone; // Optional phone from JWT (for phone auth)
+    const emailFromToken = req.user?.email; // Optional email from JWT (for email/password auth)
     const emailFromBody = (req.body as any).email
       ? (req.body as any).email.toString().toLowerCase().trim()
       : undefined;
+    const phoneFromBody = (req.body as any).phone
+      ? (req.body as any).phone.toString().trim()
+      : undefined;
+    const phone = phoneFromBody || phoneFromToken;
+    const email = emailFromBody || emailFromToken;
 
     if (!uid) {
       throw new AppError(t(lang, 'auth.firebase_uid_required'), 400);
@@ -443,12 +449,19 @@ export const registerUser = asyncHandler(
       }
     }
 
+    if (phoneFromBody) {
+      const byPhone = await User.findOne({ phone: phoneFromBody });
+      if (byPhone) {
+        throw new AppError('Phone number already in use', 400);
+      }
+    }
+
     // Create user with Firebase UID
     const user = await User.create({
       fullName,
       firebaseUid: uid,
       phone: phone || undefined,
-      email: emailFromBody || email || undefined,
+      email: email || undefined,
       gender,
       age,
       dob,
