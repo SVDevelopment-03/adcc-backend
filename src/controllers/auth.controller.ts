@@ -198,6 +198,10 @@ export const verifyFirebaseAuth = asyncHandler(
  * POST /v1/auth/email/register
  * Creates a user with an email/password pair using the app's own backend auth flow.
  */
+const isProfileSetupComplete = (user: any) => {
+  return !!user && !!user.gender && !!user.dob && !!user.country && !!user.city;
+};
+
 export const emailRegister = asyncHandler(
   async (req: Request, res: Response) => {
     const lang = resolveRequestLanguage(req);
@@ -235,6 +239,50 @@ export const emailRegister = asyncHandler(
 
     const existingUser = await User.findOne({ email: normalizedEmail });
     if (existingUser) {
+      if (!isProfileSetupComplete(existingUser)) {
+        const tokens = generateTokens({
+          id: existingUser._id.toString(),
+          email: existingUser.email || '',
+          role: existingUser.role,
+          phone: existingUser.phone || '',
+        });
+
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 3);
+
+        existingUser.refreshTokens = existingUser.refreshTokens.filter((token) => token.expiresAt >= new Date());
+        existingUser.refreshTokens.push({
+          token: tokens.refreshToken,
+          expiresAt,
+          createdAt: new Date(),
+        });
+        await existingUser.save();
+
+        return sendSuccess(
+          res,
+          {
+            isNewUser: true,
+            isProfileIncomplete: true,
+            user: {
+              id: existingUser._id,
+              fullName: existingUser.fullName,
+              email: existingUser.email,
+              phone: existingUser.phone,
+              gender: existingUser.gender,
+              age: existingUser.age,
+              dob: existingUser.dob,
+              country: existingUser.country,
+              city: existingUser.city,
+              provider: existingUser.provider,
+              role: existingUser.role,
+              isVerified: existingUser.isVerified,
+            },
+            ...tokens,
+          },
+          'Profile setup required'
+        );
+      }
+
       throw new AppError('Email already in use', 409);
     }
 
@@ -327,6 +375,8 @@ export const emailLogin = asyncHandler(
       throw new AppError('Invalid email or password', 401);
     }
 
+    const isProfileIncomplete = !isProfileSetupComplete(user);
+
     const now = new Date();
     user.refreshTokens = user.refreshTokens.filter((token) => token.expiresAt >= now);
 
@@ -354,6 +404,7 @@ export const emailLogin = asyncHandler(
     sendSuccess(
       res,
       {
+        isProfileIncomplete,
         user: {
           id: user._id,
           fullName: user.fullName,
@@ -370,7 +421,7 @@ export const emailLogin = asyncHandler(
         },
         ...tokens,
       },
-      t(lang, 'auth.login_success')
+      isProfileIncomplete ? 'Profile setup required' : t(lang, 'auth.login_success')
     );
   }
 );
