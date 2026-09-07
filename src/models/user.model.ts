@@ -20,6 +20,8 @@ export interface IUser extends Document {
   phone?: string;
   email?: string;
   passwordHash?: string;
+  resetPasswordCodeHash?: string;
+  resetPasswordExpiresAt?: Date;
   profileImage?: string;
   gender: 'Male' | 'Female';
   age?: number;
@@ -113,6 +115,15 @@ const UserSchema = new Schema(
     passwordHash: {
       type: String,
       trim: true,
+      default: null,
+    },
+    resetPasswordCodeHash: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    resetPasswordExpiresAt: {
+      type: Date,
       default: null,
     },
     profileImage: {

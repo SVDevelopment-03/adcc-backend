@@ -88,6 +88,16 @@ export const emailLoginSchema = z.object({
   password: z.preprocess(firstValue, z.string().min(6, 'Password must be at least 6 characters')),
 }).strict();
 
+export const forgotPasswordSchema = z.object({
+  email: z.preprocess(firstValue, z.string().trim().email('Invalid email')),
+}).strict();
+
+export const resetPasswordSchema = z.object({
+  email: z.preprocess(firstValue, z.string().trim().email('Invalid email')),
+  code: z.preprocess(firstValue, z.string().trim().min(4, 'Reset code is required')),
+  password: z.preprocess(firstValue, z.string().min(6, 'Password must be at least 6 characters')),
+}).strict();
+
 export const refreshTokenSchema = z.object({
   refreshToken: z.string().min(1, 'Refresh token is required'),
 });

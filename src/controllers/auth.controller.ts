@@ -37,6 +37,7 @@ import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { upsertUserFcmToken } from '@/services/push-token.service';
 import { getPhoneLookupVariants } from '@/utils/phone.util';
+import { sendEmail } from '@/services/email.service';
 
 /** Guest role and ID prefix - guest users are stateless (no DB record) */
 const GUEST_ROLE = 'Guest';
@@ -432,6 +433,105 @@ export const emailLogin = asyncHandler(
       },
       isProfileIncomplete ? 'Profile setup required' : t(lang, 'auth.login_success')
     );
+  }
+);
+
+export const forgotPassword = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { email } = req.body as { email: string };
+    const normalizedEmail = email?.toString().trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      throw new AppError('Email is required', 400);
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      throw new AppError('No account found with this email.', 404);
+    }
+
+    if (!user.passwordHash) {
+      throw new AppError('This account does not have a password yet. Please sign in with phone OTP or complete setup.', 400);
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    user.resetPasswordCodeHash = await bcrypt.hash(code, 12);
+    user.resetPasswordExpiresAt = expiresAt;
+    await user.save();
+
+    try {
+      await sendEmail({
+        to: [normalizedEmail],
+        subject: 'ADCC - Password reset code',
+        text: `Your ADCC password reset code is: ${code}. It expires in 15 minutes.`,
+        html: `
+          <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <h3>ADCC password reset</h3>
+            <p>Your password reset code is:</p>
+            <p><strong style="font-size: 24px; letter-spacing: 2px;">${code}</strong></p>
+            <p>This code expires in 15 minutes.</p>
+          </div>
+        `,
+      });
+    } catch (error: any) {
+      user.resetPasswordCodeHash = undefined;
+      user.resetPasswordExpiresAt = undefined;
+      await user.save();
+      throw new AppError(`Unable to send reset email: ${error?.message || 'SMTP unavailable'}`, 500);
+    }
+
+    sendSuccess(res, { expiresInMinutes: 15 }, 'Reset code sent to your email.');
+  }
+);
+
+export const resetPassword = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { email, code, password } = req.body as {
+      email: string;
+      code: string;
+      password: string;
+    };
+
+    const normalizedEmail = email?.toString().trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new AppError('Email is required', 400);
+    }
+    if (!code || code.trim().length < 4) {
+      throw new AppError('Reset code is required', 400);
+    }
+    if (!password || password.trim().length < 6) {
+      throw new AppError('Password must be at least 6 characters', 400);
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      throw new AppError('No account found with this email.', 404);
+    }
+
+    if (!user.resetPasswordCodeHash || !user.resetPasswordExpiresAt) {
+      throw new AppError('No valid reset code was found for this account.', 400);
+    }
+
+    const isExpired = new Date(user.resetPasswordExpiresAt).getTime() < Date.now();
+    if (isExpired) {
+      user.resetPasswordCodeHash = undefined;
+      user.resetPasswordExpiresAt = undefined;
+      await user.save();
+      throw new AppError('Reset code has expired. Please request a new one.', 400);
+    }
+
+    const isValidCode = await bcrypt.compare(code.trim(), user.resetPasswordCodeHash);
+    if (!isValidCode) {
+      throw new AppError('Invalid reset code. Please try again.', 400);
+    }
+
+    user.passwordHash = await bcrypt.hash(password.trim(), 12);
+    user.resetPasswordCodeHash = undefined;
+    user.resetPasswordExpiresAt = undefined;
+    await user.save();
+
+    sendSuccess(res, null, 'Password reset successfully.');
   }
 );
 
