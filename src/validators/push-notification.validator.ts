@@ -70,6 +70,7 @@ export const sendStaffWebPushSchema = z
       },
       { message: 'Invalid image URL' }
     ),
+    actions: optionalStringField('Invalid actions payload').optional(),
   })
   .strict();
 

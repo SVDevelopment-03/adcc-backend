@@ -278,6 +278,7 @@ export interface WebPushPayload {
   body: string;
   url?: string;
   image?: string;
+  actions?: Array<{ action: string; title: string; icon?: string }>;
 }
 
 export const sendWebPushNotification = async (
@@ -302,22 +303,24 @@ export const sendWebPushNotification = async (
 
   return admin.messaging().sendEachForMulticast({
     tokens,
-    notification: {
-      title: payload.title,
-      body: payload.body,
-    },
+      notification: {
+        title: payload.title,
+        body: payload.body,
+      },
     webpush: {
       notification: {
         title: payload.title,
         body: payload.body,
-        // `image` supported in Web Notifications; include when present
+        // include web notification extras when present
         ...(payload.image ? { image: payload.image } : {}),
+        ...(payload.actions ? { actions: payload.actions } : {}),
       },
       fcmOptions: payload.url ? { link: payload.url } : undefined,
     },
     data: {
       ...(payload.url ? { url: payload.url } : {}),
       ...(payload.image ? { image: payload.image } : {}),
+      ...(payload.actions ? { actions: JSON.stringify(payload.actions) } : {}),
     },
   });
 };

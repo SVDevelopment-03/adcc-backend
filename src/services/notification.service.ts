@@ -9,6 +9,7 @@ export interface NotificationSendOptions {
   channels?: NotificationChannel[]; // order of preference
   url?: string;
   image?: string;
+  actions?: Array<{ action: string; title: string; icon?: string }>;
 }
 
 export async function createInAppNotification(params: {
@@ -74,8 +75,22 @@ export async function sendNotificationToUser(
     // Prefer explicit image option, else check payload.data for image/imageUrl
     const imageFromData = (payload.data && (payload.data as any).image) || (payload.data && (payload.data as any).imageUrl);
     const imageToSend = options.image ?? imageFromData ?? undefined;
-
-    const response = await sendWebPushNotification(tokens, { title: payload.title, body: payload.body, url: options.url, image: imageToSend });
+    // Prefer explicit actions option, else check payload.data for actions
+    let actionsFromData: any = undefined;
+    if (payload.data && (payload.data as any).actions) {
+      const raw = (payload.data as any).actions;
+      if (typeof raw === 'string') {
+        try {
+          actionsFromData = JSON.parse(raw);
+        } catch {
+          actionsFromData = undefined;
+        }
+      } else {
+        actionsFromData = raw;
+      }
+    }
+    const actionsToSend = options.actions ?? actionsFromData ?? undefined;
+    const response = await sendWebPushNotification(tokens, { title: payload.title, body: payload.body, url: options.url, image: imageToSend, actions: actionsToSend });
     console.log(
       '[PUSH] sendNotificationToUser result',
       'userId=' + userId,
@@ -201,7 +216,21 @@ export async function sendToStaff(payload: { title: string; body: string; url?: 
     // eslint-disable-next-line no-await-in-loop
     const imageFromData = (payload.data && (payload.data as any).image) || (payload.data && (payload.data as any).imageUrl);
     const imageToSend = _options?.image ?? imageFromData ?? undefined;
-    const response = await sendWebPushNotification(chunk, { title: payload.title, body: payload.body, url: payload.url, image: imageToSend });
+    let actionsFromData: any = undefined;
+    if (payload.data && (payload.data as any).actions) {
+      const raw = (payload.data as any).actions;
+      if (typeof raw === 'string') {
+        try {
+          actionsFromData = JSON.parse(raw);
+        } catch {
+          actionsFromData = undefined;
+        }
+      } else {
+        actionsFromData = raw;
+      }
+    }
+    const actionsToSend = _options?.actions ?? actionsFromData ?? undefined;
+    const response = await sendWebPushNotification(chunk, { title: payload.title, body: payload.body, url: payload.url, image: imageToSend, actions: actionsToSend });
     successCount += response.successCount;
     failureCount += response.failureCount;
     response.responses.forEach((resp, index) => {
