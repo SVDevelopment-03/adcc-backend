@@ -305,13 +305,13 @@ export const sendWebPushNotification = async (
     notification: {
       title: payload.title,
       body: payload.body,
-      image: payload.image,
     },
     webpush: {
       notification: {
         title: payload.title,
         body: payload.body,
-        image: payload.image,
+        // `image` supported in Web Notifications; include when present
+        ...(payload.image ? { image: payload.image } : {}),
       },
       fcmOptions: payload.url ? { link: payload.url } : undefined,
     },

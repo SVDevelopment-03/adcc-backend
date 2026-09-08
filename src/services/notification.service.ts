@@ -162,7 +162,7 @@ export async function sendNotificationToUsers(
   return results;
 }
 
-export async function sendToStaff(payload: { title: string; body: string; url?: string }, _options: NotificationSendOptions = {}) {
+export async function sendToStaff(payload: { title: string; body: string; url?: string; data?: Record<string, unknown> }, _options: NotificationSendOptions = {}) {
   console.log(
     '[PUSH] sendToStaff',
     'role=Vendor',
