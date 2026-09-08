@@ -277,6 +277,7 @@ export interface WebPushPayload {
   title: string;
   body: string;
   url?: string;
+  image?: string;
 }
 
 export const sendWebPushNotification = async (
@@ -304,14 +305,19 @@ export const sendWebPushNotification = async (
     notification: {
       title: payload.title,
       body: payload.body,
+      image: payload.image,
     },
     webpush: {
       notification: {
         title: payload.title,
         body: payload.body,
+        image: payload.image,
       },
       fcmOptions: payload.url ? { link: payload.url } : undefined,
     },
-    data: payload.url ? { url: payload.url } : undefined,
+    data: {
+      ...(payload.url ? { url: payload.url } : {}),
+      ...(payload.image ? { image: payload.image } : {}),
+    },
   });
 };

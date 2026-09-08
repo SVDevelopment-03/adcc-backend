@@ -8,6 +8,7 @@ export type NotificationChannel = 'in_app' | 'web' | 'fcm';
 export interface NotificationSendOptions {
   channels?: NotificationChannel[]; // order of preference
   url?: string;
+  image?: string;
 }
 
 export async function createInAppNotification(params: {
@@ -70,7 +71,11 @@ export async function sendNotificationToUser(
     );
     if (tokens.length === 0) return { successCount: 0, failureCount: 0 };
 
-    const response = await sendWebPushNotification(tokens, { title: payload.title, body: payload.body, url: options.url });
+    // Prefer explicit image option, else check payload.data for image/imageUrl
+    const imageFromData = (payload.data && (payload.data as any).image) || (payload.data && (payload.data as any).imageUrl);
+    const imageToSend = options.image ?? imageFromData ?? undefined;
+
+    const response = await sendWebPushNotification(tokens, { title: payload.title, body: payload.body, url: options.url, image: imageToSend });
     console.log(
       '[PUSH] sendNotificationToUser result',
       'userId=' + userId,
@@ -194,7 +199,9 @@ export async function sendToStaff(payload: { title: string; body: string; url?: 
   for (let i = 0; i < tokens.length; i += chunkSize) {
     const chunk = tokens.slice(i, i + chunkSize);
     // eslint-disable-next-line no-await-in-loop
-    const response = await sendWebPushNotification(chunk, { title: payload.title, body: payload.body, url: payload.url });
+    const imageFromData = (payload.data && (payload.data as any).image) || (payload.data && (payload.data as any).imageUrl);
+    const imageToSend = _options?.image ?? imageFromData ?? undefined;
+    const response = await sendWebPushNotification(chunk, { title: payload.title, body: payload.body, url: payload.url, image: imageToSend });
     successCount += response.successCount;
     failureCount += response.failureCount;
     response.responses.forEach((resp, index) => {
