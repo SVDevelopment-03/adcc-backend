@@ -35,12 +35,18 @@ const emailSettingsSchema = z.object({
   replyTo: z.string().trim(),
 });
 
+const gtmSchema = z.object({
+  headCode: z.string(),
+  bodyCode: z.string(),
+});
+
 export const appConfigSchema = z.object({
   appName: z.string().trim().min(1),
   supportEmail: z.string().trim().email(),
   contactPhone: z.string().trim().min(3),
   defaultLanguage: z.enum(['English', 'Arabic']),
   emailSettings: emailSettingsSchema.optional(),
+  gtm: gtmSchema.optional(),
   features: featuresSchema,
   notifications: notificationsSchema,
   security: securitySchema,

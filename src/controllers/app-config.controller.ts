@@ -22,6 +22,10 @@ const DEFAULT_APP_CONFIG = {
     fromName: 'Abu Dhabi Cycling Club',
     replyTo: '',
   },
+  gtm: {
+    headCode: '',
+    bodyCode: '',
+  },
   features: {
     marketplace: true,
     communities: true,
@@ -65,6 +69,10 @@ function mergeAppConfig(config: Record<string, any> | undefined) {
     emailSettings: {
       ...DEFAULT_APP_CONFIG.emailSettings,
       ...(config?.emailSettings || {}),
+    },
+    gtm: {
+      ...DEFAULT_APP_CONFIG.gtm,
+      ...(config?.gtm || {}),
     },
   };
 }
@@ -117,6 +125,11 @@ export const updateAppConfig = asyncHandler(async (req: AuthRequest, res: Respon
       ...(existing?.config?.emailSettings || {}),
       ...(incomingConfig.emailSettings || {}),
       smtpPassword: String(incomingPassword ?? '').trim() ? String(incomingPassword) : existingPassword,
+    },
+    gtm: {
+      ...DEFAULT_APP_CONFIG.gtm,
+      ...(existing?.config?.gtm || {}),
+      ...(incomingConfig.gtm || {}),
     },
   };
 
