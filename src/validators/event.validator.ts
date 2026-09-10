@@ -120,12 +120,30 @@ export const createEventSchema = z
     ).optional(),
     eligibility: z.preprocess(
       jsonOrValue,
-      z.object({
-        helmetRequired: z.coerce.boolean().optional(),
-        roadBikeOnly: z.coerce.boolean().optional(),
-        experienceLevel: z.enum(['beginner', 'intermediate', 'advanced', 'all']).optional(),
-        gender: z.enum(['male', 'female', 'other', 'all']).optional()
-      })
+      z.union([
+        z.object({
+          helmetRequired: z.coerce.boolean().optional(),
+          roadBikeOnly: z.coerce.boolean().optional(),
+          experienceLevel: z.enum(['beginner', 'intermediate', 'advanced', 'all']).optional(),
+          gender: z.enum(['male', 'female', 'other', 'all']).optional(),
+          label: z.string().trim().min(1).optional(),
+          text: z.string().trim().min(1).optional(),
+          requirement: z.string().trim().min(1).optional(),
+          value: z.string().trim().min(1).optional(),
+        }),
+        z.array(
+          z.object({
+            helmetRequired: z.coerce.boolean().optional(),
+            roadBikeOnly: z.coerce.boolean().optional(),
+            experienceLevel: z.enum(['beginner', 'intermediate', 'advanced', 'all']).optional(),
+            gender: z.enum(['male', 'female', 'other', 'all']).optional(),
+            label: z.string().trim().min(1).optional(),
+            text: z.string().trim().min(1).optional(),
+            requirement: z.string().trim().min(1).optional(),
+            value: z.string().trim().min(1).optional(),
+          })
+        )
+      ])
     ).optional(),
 
     status: z.preprocess(firstValue, z.enum(['Draft', 'Open', 'Full', 'Closed', 'Disabled', 'Completed', 'Archived'])).default('Draft'),
@@ -193,12 +211,30 @@ export const updateEventSchema = z
     ).optional(),
     eligibility: z.preprocess(
       jsonOrValue,
-      z.object({
-        helmetRequired: z.coerce.boolean().optional(),
-        roadBikeOnly: z.coerce.boolean().optional(),
-        experienceLevel: z.enum(['beginner', 'intermediate', 'advanced', 'all']).optional(),
-        gender: z.enum(['male', 'female', 'other', 'all']).optional()
-      })
+      z.union([
+        z.object({
+          helmetRequired: z.coerce.boolean().optional(),
+          roadBikeOnly: z.coerce.boolean().optional(),
+          experienceLevel: z.enum(['beginner', 'intermediate', 'advanced', 'all']).optional(),
+          gender: z.enum(['male', 'female', 'other', 'all']).optional(),
+          label: z.string().trim().min(1).optional(),
+          text: z.string().trim().min(1).optional(),
+          requirement: z.string().trim().min(1).optional(),
+          value: z.string().trim().min(1).optional(),
+        }),
+        z.array(
+          z.object({
+            helmetRequired: z.coerce.boolean().optional(),
+            roadBikeOnly: z.coerce.boolean().optional(),
+            experienceLevel: z.enum(['beginner', 'intermediate', 'advanced', 'all']).optional(),
+            gender: z.enum(['male', 'female', 'other', 'all']).optional(),
+            label: z.string().trim().min(1).optional(),
+            text: z.string().trim().min(1).optional(),
+            requirement: z.string().trim().min(1).optional(),
+            value: z.string().trim().min(1).optional(),
+          })
+        )
+      ])
     ).optional(),
     slug: z.preprocess(firstValue, z.string()).optional(),
     difficulty: z.preprocess(firstValue, z.string()).optional(),
