@@ -8,6 +8,8 @@ export type NotificationChannel = 'in_app' | 'web' | 'fcm';
 export interface NotificationSendOptions {
   channels?: NotificationChannel[]; // order of preference
   url?: string;
+  image?: string;
+  actions?: Array<{ action: string; title: string; icon?: string }>;
 }
 
 export async function createInAppNotification(params: {
@@ -70,7 +72,25 @@ export async function sendNotificationToUser(
     );
     if (tokens.length === 0) return { successCount: 0, failureCount: 0 };
 
-    const response = await sendWebPushNotification(tokens, { title: payload.title, body: payload.body, url: options.url });
+    // Prefer explicit image option, else check payload.data for image/imageUrl
+    const imageFromData = (payload.data && (payload.data as any).image) || (payload.data && (payload.data as any).imageUrl);
+    const imageToSend = options.image ?? imageFromData ?? undefined;
+    // Prefer explicit actions option, else check payload.data for actions
+    let actionsFromData: any = undefined;
+    if (payload.data && (payload.data as any).actions) {
+      const raw = (payload.data as any).actions;
+      if (typeof raw === 'string') {
+        try {
+          actionsFromData = JSON.parse(raw);
+        } catch {
+          actionsFromData = undefined;
+        }
+      } else {
+        actionsFromData = raw;
+      }
+    }
+    const actionsToSend = options.actions ?? actionsFromData ?? undefined;
+    const response = await sendWebPushNotification(tokens, { title: payload.title, body: payload.body, url: options.url, image: imageToSend, actions: actionsToSend });
     console.log(
       '[PUSH] sendNotificationToUser result',
       'userId=' + userId,
@@ -157,7 +177,7 @@ export async function sendNotificationToUsers(
   return results;
 }
 
-export async function sendToStaff(payload: { title: string; body: string; url?: string }, _options: NotificationSendOptions = {}) {
+export async function sendToStaff(payload: { title: string; body: string; url?: string; data?: Record<string, unknown> }, _options: NotificationSendOptions = {}) {
   console.log(
     '[PUSH] sendToStaff',
     'role=Vendor',
@@ -194,7 +214,23 @@ export async function sendToStaff(payload: { title: string; body: string; url?: 
   for (let i = 0; i < tokens.length; i += chunkSize) {
     const chunk = tokens.slice(i, i + chunkSize);
     // eslint-disable-next-line no-await-in-loop
-    const response = await sendWebPushNotification(chunk, { title: payload.title, body: payload.body, url: payload.url });
+    const imageFromData = (payload.data && (payload.data as any).image) || (payload.data && (payload.data as any).imageUrl);
+    const imageToSend = _options?.image ?? imageFromData ?? undefined;
+    let actionsFromData: any = undefined;
+    if (payload.data && (payload.data as any).actions) {
+      const raw = (payload.data as any).actions;
+      if (typeof raw === 'string') {
+        try {
+          actionsFromData = JSON.parse(raw);
+        } catch {
+          actionsFromData = undefined;
+        }
+      } else {
+        actionsFromData = raw;
+      }
+    }
+    const actionsToSend = _options?.actions ?? actionsFromData ?? undefined;
+    const response = await sendWebPushNotification(chunk, { title: payload.title, body: payload.body, url: payload.url, image: imageToSend, actions: actionsToSend });
     successCount += response.successCount;
     failureCount += response.failureCount;
     response.responses.forEach((resp, index) => {

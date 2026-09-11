@@ -263,10 +263,22 @@ export const getFirebaseUserByEmail = async (
   }
 };
 
+export const updateFirebasePhone = async (uid: string, phoneNumber: string) => {
+  initializeFirebase();
+  try {
+    return await admin.auth().updateUser(uid, { phoneNumber });
+  } catch (error: any) {
+    // Surface errors to caller
+    throw new Error(error?.message || 'Failed to update Firebase user phone');
+  }
+};
+
 export interface WebPushPayload {
   title: string;
   body: string;
   url?: string;
+  image?: string;
+  actions?: Array<{ action: string; title: string; icon?: string }>;
 }
 
 export const sendWebPushNotification = async (
@@ -291,17 +303,24 @@ export const sendWebPushNotification = async (
 
   return admin.messaging().sendEachForMulticast({
     tokens,
-    notification: {
-      title: payload.title,
-      body: payload.body,
-    },
-    webpush: {
       notification: {
         title: payload.title,
         body: payload.body,
       },
+    webpush: {
+      notification: {
+        title: payload.title,
+        body: payload.body,
+        // include web notification extras when present
+        ...(payload.image ? { image: payload.image } : {}),
+        ...(payload.actions ? { actions: payload.actions } : {}),
+      },
       fcmOptions: payload.url ? { link: payload.url } : undefined,
     },
-    data: payload.url ? { url: payload.url } : undefined,
+    data: {
+      ...(payload.url ? { url: payload.url } : {}),
+      ...(payload.image ? { image: payload.image } : {}),
+      ...(payload.actions ? { actions: JSON.stringify(payload.actions) } : {}),
+    },
   });
 };

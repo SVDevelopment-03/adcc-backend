@@ -2,10 +2,14 @@ import mongoose, { Schema, Document } from 'mongoose';
 import { generateUniqueSlug } from '@/utils/slug';
 
 export interface IEventEligibility {
-  helmetRequired: boolean;
-  roadBikeOnly: boolean;
-  experienceLevel: 'beginner' | 'intermediate' | 'advanced' | 'all';
+  helmetRequired?: boolean;
+  roadBikeOnly?: boolean;
+  experienceLevel?: 'beginner' | 'intermediate' | 'advanced' | 'all';
   gender?: 'male' | 'female' | 'other' | 'all';
+  label?: string;
+  text?: string;
+  requirement?: string;
+  value?: string;
 }
 
 export interface IEventSchedule {
@@ -211,6 +215,10 @@ const EventSchema = new Schema(
           enum: ['male', 'female', 'other', 'all'],
           default: 'all',
         },
+        label: { type: String, trim: true },
+        text: { type: String, trim: true },
+        requirement: { type: String, trim: true },
+        value: { type: String, trim: true },
       },
     ],
     maxParticipants: {

@@ -16,9 +16,12 @@ export interface IUserStats {
 
 export interface IUser extends Document {
   fullName: string;
-  firebaseUid: string;
+  firebaseUid?: string;
   phone?: string;
   email?: string;
+  passwordHash?: string;
+  resetPasswordCodeHash?: string;
+  resetPasswordExpiresAt?: Date;
   profileImage?: string;
   gender: 'Male' | 'Female';
   age?: number;
@@ -92,8 +95,8 @@ const UserSchema = new Schema(
     },
     firebaseUid: {
       type: String,
-      required: [true, 'Firebase UID is required'],
       unique: true,
+      sparse: true,
       index: true,
     },
     phone: {
@@ -108,6 +111,20 @@ const UserSchema = new Schema(
       sparse: true,
       trim: true,
       lowercase: true,
+    },
+    passwordHash: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    resetPasswordCodeHash: {
+      type: String,
+      trim: true,
+      default: null,
+    },
+    resetPasswordExpiresAt: {
+      type: Date,
+      default: null,
     },
     profileImage: {
       type: String,

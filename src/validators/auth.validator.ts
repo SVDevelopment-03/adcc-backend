@@ -41,6 +41,8 @@ const dobSchema = z
 export const registerUserSchema = z.object({
   fullName: z.string().min(1, 'Full name is required').trim(),
   email: z.preprocess(firstValue, z.string().trim().email('Invalid email')).optional(),
+  phone: z.preprocess(firstValue, z.string().trim().min(1, 'Phone number is required')).optional(),
+  password: z.preprocess(firstValue, z.string().min(6, 'Password must be at least 6 characters')).optional(),
   gender: z.enum(['Male', 'Female'], {
     message: 'Gender must be either Male or Female',
   }),
@@ -57,6 +59,43 @@ export const registerUserSchema = z.object({
   osVersion: optionalStringField('Invalid OS version'),
   appVersion: optionalStringField('Invalid app version'),
   appBuild: optionalStringField('Invalid app build'),
+}).strict();
+
+export const emailRegisterSchema = z.object({
+  fullName: z.string().min(1, 'Full name is required').trim(),
+  email: z.preprocess(firstValue, z.string().trim().email('Invalid email')),
+  password: z.preprocess(firstValue, z.string().min(6, 'Password must be at least 6 characters')),
+  gender: z.enum(['Male', 'Female'], {
+    message: 'Gender must be either Male or Female',
+  }).optional(),
+  age: z.coerce.number().int().min(0, 'Age cannot be negative').max(150, 'Age must be realistic').optional(),
+  dob: dobSchema.optional(),
+  country: z.string().min(1, 'Country is required').trim().optional(),
+  city: z.string().min(1, 'City is required').trim().optional(),
+  provider: z.string().min(1, 'Provider is required').trim().optional(),
+  fcmToken: optionalStringField('FCM token is required'),
+  userAgent: optionalStringField('Invalid user agent'),
+  platform: optionalPlatformField,
+  deviceId: optionalStringField('Invalid device id'),
+  deviceModel: optionalStringField('Invalid device model'),
+  osVersion: optionalStringField('Invalid OS version'),
+  appVersion: optionalStringField('Invalid app version'),
+  appBuild: optionalStringField('Invalid app build'),
+}).strict();
+
+export const emailLoginSchema = z.object({
+  email: z.preprocess(firstValue, z.string().trim().email('Invalid email')),
+  password: z.preprocess(firstValue, z.string().min(6, 'Password must be at least 6 characters')),
+}).strict();
+
+export const forgotPasswordSchema = z.object({
+  email: z.preprocess(firstValue, z.string().trim().email('Invalid email')),
+}).strict();
+
+export const resetPasswordSchema = z.object({
+  email: z.preprocess(firstValue, z.string().trim().email('Invalid email')),
+  code: z.preprocess(firstValue, z.string().trim().min(4, 'Reset code is required')),
+  password: z.preprocess(firstValue, z.string().min(6, 'Password must be at least 6 characters')),
 }).strict();
 
 export const refreshTokenSchema = z.object({

@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import crypto from 'node:crypto';
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 import User from '@/models/user.model';
 import EventResult from '@/models/eventResult.model';
 import CommunityMembership from '@/models/communityMembership.model';
@@ -35,6 +36,8 @@ import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { upsertUserFcmToken } from '@/services/push-token.service';
+import { getPhoneLookupVariants } from '@/utils/phone.util';
+import { sendEmail } from '@/services/email.service';
 
 /** Guest role and ID prefix - guest users are stateless (no DB record) */
 const GUEST_ROLE = 'Guest';
@@ -193,6 +196,346 @@ export const verifyFirebaseAuth = asyncHandler(
 );
 
 /**
+ * Email/password register
+ * POST /v1/auth/email/register
+ * Creates a user with an email/password pair using the app's own backend auth flow.
+ */
+const isProfileSetupComplete = (user: any) => {
+  return !!user && !!user.gender && !!user.dob && !!user.country && !!user.city;
+};
+
+export const emailRegister = asyncHandler(
+  async (req: Request, res: Response) => {
+    const lang = resolveRequestLanguage(req);
+    const {
+      fullName,
+      email,
+      password,
+      gender = 'Male',
+      age,
+      dob,
+      country,
+      city,
+      provider = 'email',
+    } = req.body as {
+      fullName: string;
+      email: string;
+      password: string;
+      gender?: 'Male' | 'Female';
+      age?: number;
+      dob?: string;
+      country?: string;
+      city?: string;
+      provider?: string;
+    };
+
+    const normalizedEmail = email?.toString().trim().toLowerCase();
+
+    if (!normalizedEmail || !fullName?.trim()) {
+      throw new AppError('Full name and email are required', 400);
+    }
+
+    if (!password || password.trim().length < 6) {
+      throw new AppError('Password must be at least 6 characters', 400);
+    }
+
+    const existingUser = await User.findOne({ email: normalizedEmail });
+    if (existingUser) {
+      if (!isProfileSetupComplete(existingUser)) {
+        const tokens = generateTokens({
+          id: existingUser._id.toString(),
+          uid: existingUser._id.toString(),
+          email: existingUser.email || '',
+          role: existingUser.role,
+          phone: existingUser.phone || '',
+        });
+
+        const expiresAt = new Date();
+        expiresAt.setDate(expiresAt.getDate() + 3);
+
+        existingUser.refreshTokens = existingUser.refreshTokens.filter(
+          (token) => token.expiresAt >= new Date()
+        );
+        existingUser.refreshTokens.push({
+          token: tokens.refreshToken,
+          expiresAt,
+          createdAt: new Date(),
+        });
+        await existingUser.save();
+
+        const incompletePayload = {
+          isNewUser: true,
+          isProfileIncomplete: true,
+          user: {
+            id: existingUser._id,
+            fullName: existingUser.fullName,
+            email: existingUser.email,
+            phone: existingUser.phone,
+            gender: existingUser.gender,
+            age: existingUser.age,
+            dob: existingUser.dob,
+            country: existingUser.country,
+            city: existingUser.city,
+            provider: existingUser.provider,
+            role: existingUser.role,
+            isVerified: existingUser.isVerified,
+          },
+          ...tokens,
+        };
+
+        sendSuccess(res, incompletePayload, 'Profile setup required');
+        return;
+      }
+
+      throw new AppError('Email already in use', 409);
+    }
+
+    const passwordHash = await bcrypt.hash(password, 12);
+
+    const user = await User.create({
+      fullName: fullName.trim(),
+      email: normalizedEmail,
+      passwordHash,
+      gender,
+      age,
+      dob: dob ? new Date(dob) : undefined,
+      country,
+      city,
+      provider,
+      isVerified: true,
+    });
+
+    const tokens = generateTokens({
+      id: user._id.toString(),
+      uid: user._id.toString(),
+      email: user.email || '',
+      role: user.role,
+      phone: user.phone || '',
+    });
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 3);
+
+    user.refreshTokens.push({
+      token: tokens.refreshToken,
+      expiresAt,
+      createdAt: new Date(),
+    });
+    await user.save();
+
+    sendSuccess(
+      res,
+      {
+        isNewUser: true,
+        user: {
+          id: user._id,
+          fullName: user.fullName,
+          email: user.email,
+          phone: user.phone,
+          gender: user.gender,
+          age: user.age,
+          dob: user.dob,
+          country: user.country,
+          city: user.city,
+          provider: user.provider,
+          role: user.role,
+          isVerified: user.isVerified,
+        },
+        ...tokens,
+      },
+      t(lang, 'auth.register_success')
+    );
+  }
+);
+
+/**
+ * Email/password login
+ * POST /v1/auth/email/login
+ * Authenticates using the app's backend email/password flow.
+ */
+export const emailLogin = asyncHandler(
+  async (req: Request, res: Response) => {
+    const lang = resolveRequestLanguage(req);
+    const {
+      email,
+      password,
+    } = req.body as {
+      email: string;
+      password: string;
+    };
+
+    const normalizedEmail = email?.toString().trim().toLowerCase();
+
+    if (!normalizedEmail || !password || password.trim().length < 6) {
+      throw new AppError('Invalid email or password', 401);
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      throw new AppError('No account found with this email. Please create an account first.', 404);
+    }
+
+    if (!user.passwordHash) {
+      throw new AppError('This email is linked to your account, but a password has not been set yet. Please complete setup first.', 400);
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isPasswordValid) {
+      throw new AppError('Incorrect password for this email. Please try again.', 401);
+    }
+
+    const isProfileIncomplete = !isProfileSetupComplete(user);
+
+    const now = new Date();
+    user.refreshTokens = user.refreshTokens.filter((token) => token.expiresAt >= now);
+
+    if (user.refreshTokens.length >= Number(process.env.MAX_REFRESH_TOKENS || 5)) {
+      throw new AppError(t(lang, 'auth.max_devices_reached', { max: process.env.MAX_REFRESH_TOKENS || '5' }), 403);
+    }
+
+    const tokens = generateTokens({
+      id: user._id.toString(),
+      uid: user._id.toString(),
+      email: user.email || '',
+      phone: user.phone || '',
+      role: user.role,
+    });
+
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 3);
+
+    user.refreshTokens.push({
+      token: tokens.refreshToken,
+      expiresAt,
+      createdAt: new Date(),
+    });
+    await user.save();
+
+    sendSuccess(
+      res,
+      {
+        isProfileIncomplete,
+        user: {
+          id: user._id,
+          fullName: user.fullName,
+          email: user.email,
+          phone: user.phone,
+          gender: user.gender,
+          age: user.age,
+          dob: user.dob,
+          country: user.country,
+          city: user.city,
+          provider: user.provider,
+          role: user.role,
+          isVerified: user.isVerified,
+        },
+        ...tokens,
+      },
+      isProfileIncomplete ? 'Profile setup required' : t(lang, 'auth.login_success')
+    );
+  }
+);
+
+export const forgotPassword = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { email } = req.body as { email: string };
+    const normalizedEmail = email?.toString().trim().toLowerCase();
+
+    if (!normalizedEmail) {
+      throw new AppError('Email is required', 400);
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      throw new AppError('No account found with this email.', 404);
+    }
+
+    if (!user.passwordHash) {
+      throw new AppError('This account does not have a password yet. Please sign in with phone OTP or complete setup.', 400);
+    }
+
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
+    user.resetPasswordCodeHash = await bcrypt.hash(code, 12);
+    user.resetPasswordExpiresAt = expiresAt;
+    await user.save();
+
+    try {
+      await sendEmail({
+        to: [normalizedEmail],
+        subject: 'ADCC - Password reset code',
+        text: `Your ADCC password reset code is: ${code}. It expires in 15 minutes.`,
+        html: `
+          <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <h3>ADCC password reset</h3>
+            <p>Your password reset code is:</p>
+            <p><strong style="font-size: 24px; letter-spacing: 2px;">${code}</strong></p>
+            <p>This code expires in 15 minutes.</p>
+          </div>
+        `,
+      });
+    } catch (error: any) {
+      user.resetPasswordCodeHash = undefined;
+      user.resetPasswordExpiresAt = undefined;
+      await user.save();
+      throw new AppError(`Unable to send reset email: ${error?.message || 'SMTP unavailable'}`, 500);
+    }
+
+    sendSuccess(res, { expiresInMinutes: 15 }, 'Reset code sent to your email.');
+  }
+);
+
+export const resetPassword = asyncHandler(
+  async (req: Request, res: Response) => {
+    const { email, code, password } = req.body as {
+      email: string;
+      code: string;
+      password: string;
+    };
+
+    const normalizedEmail = email?.toString().trim().toLowerCase();
+    if (!normalizedEmail) {
+      throw new AppError('Email is required', 400);
+    }
+    if (!code || code.trim().length < 4) {
+      throw new AppError('Reset code is required', 400);
+    }
+    if (!password || password.trim().length < 6) {
+      throw new AppError('Password must be at least 6 characters', 400);
+    }
+
+    const user = await User.findOne({ email: normalizedEmail });
+    if (!user) {
+      throw new AppError('No account found with this email.', 404);
+    }
+
+    if (!user.resetPasswordCodeHash || !user.resetPasswordExpiresAt) {
+      throw new AppError('No valid reset code was found for this account.', 400);
+    }
+
+    const isExpired = new Date(user.resetPasswordExpiresAt).getTime() < Date.now();
+    if (isExpired) {
+      user.resetPasswordCodeHash = undefined;
+      user.resetPasswordExpiresAt = undefined;
+      await user.save();
+      throw new AppError('Reset code has expired. Please request a new one.', 400);
+    }
+
+    const isValidCode = await bcrypt.compare(code.trim(), user.resetPasswordCodeHash);
+    if (!isValidCode) {
+      throw new AppError('Invalid reset code. Please try again.', 400);
+    }
+
+    user.passwordHash = await bcrypt.hash(password.trim(), 12);
+    user.resetPasswordCodeHash = undefined;
+    user.resetPasswordExpiresAt = undefined;
+    await user.save();
+
+    sendSuccess(res, null, 'Password reset successfully.');
+  }
+);
+
+/**
  * Register new user
  * POST /v1/auth/register
  * Creates user with fullName and gender
@@ -209,6 +552,7 @@ export const registerUser = asyncHandler(
       country,
       city,
       provider,
+      password,
       fcmToken,
       userAgent,
       platform,
@@ -225,6 +569,7 @@ export const registerUser = asyncHandler(
       country?: string;
       city?: string;
       provider?: string;
+      password?: string;
       fcmToken?: string;
       userAgent?: string;
       platform?: 'web' | 'android' | 'ios';
@@ -234,46 +579,85 @@ export const registerUser = asyncHandler(
       appVersion?: string;
       appBuild?: string;
       email?: string;
+      phone?: string;
     };
-    const uid = req.user?.uid; // From JWT (temporary token)
-    const phone = req.user?.phone; // Optional phone from JWT (for phone auth)
-    const email = req.user?.email; // Optional email from JWT (for email/password auth)
+
+    const uid = req.user?.uid ?? req.user?.id;
+    const phoneFromToken = req.user?.phone;
+    const emailFromToken = req.user?.email;
     const emailFromBody = (req.body as any).email
       ? (req.body as any).email.toString().toLowerCase().trim()
       : undefined;
+    const phoneFromBody = (req.body as any).phone
+      ? (req.body as any).phone.toString().trim()
+      : undefined;
+    const phone = phoneFromBody || phoneFromToken;
+    const email = emailFromBody || emailFromToken;
 
     if (!uid) {
       throw new AppError(t(lang, 'auth.firebase_uid_required'), 400);
     }
 
-    // Check if user already exists by UID
-    const existingUser = await User.findOne({ firebaseUid: uid });
-    if (existingUser) {
-      throw new AppError(t(lang, 'auth.already_registered'), 400);
+    const byUid = await User.findOne({ firebaseUid: uid });
+    const byEmail = email ? await User.findOne({ email }) : null;
+    const byPhone = phone
+      ? await User.findOne({
+          $or: getPhoneLookupVariants(phone).map((value) => ({ phone: value }))
+        })
+      : null;
+
+    const candidateUser = byUid || byEmail || byPhone;
+
+    if (byUid && byEmail && byUid._id.toString() !== byEmail._id.toString()) {
+      throw new AppError('Email already in use', 400);
     }
 
-    // If email provided in body, ensure it's not already taken
-    if (emailFromBody) {
-      const byEmail = await User.findOne({ email: emailFromBody });
-      if (byEmail) {
-        throw new AppError('Email already in use', 400);
+    if (byUid && byPhone && byUid._id.toString() !== byPhone._id.toString()) {
+      throw new AppError('Phone number already in use', 400);
+    }
+
+    if (byEmail && byPhone && byEmail._id.toString() !== byPhone._id.toString()) {
+      throw new AppError('Phone number already in use', 400);
+    }
+
+    const user = candidateUser
+      ? candidateUser
+      : await User.create({
+          fullName,
+          firebaseUid: uid,
+          phone: phone || undefined,
+          email: email || undefined,
+          gender,
+          age,
+          dob,
+          country,
+          city,
+          provider,
+          isVerified: true,
+        });
+
+    if (candidateUser) {
+      user.fullName = fullName || user.fullName;
+      user.firebaseUid = user.firebaseUid || uid;
+      user.phone = phone || user.phone || undefined;
+      user.email = email || user.email || undefined;
+      user.gender = gender || user.gender;
+      user.age = age ?? user.age;
+      user.dob = dob || user.dob;
+      user.country = country || user.country;
+      user.city = city || user.city;
+      user.provider = provider || user.provider;
+      user.isVerified = true;
+      if (password && password.trim().length >= 6) {
+        user.passwordHash = await bcrypt.hash(password.trim(), 12);
       }
+      await user.save();
+    } else {
+      if (password && password.trim().length >= 6) {
+        user.passwordHash = await bcrypt.hash(password.trim(), 12);
+      }
+      await user.save();
     }
-
-    // Create user with Firebase UID
-    const user = await User.create({
-      fullName,
-      firebaseUid: uid,
-      phone: phone || undefined,
-      email: emailFromBody || email || undefined,
-      gender,
-      age,
-      dob,
-      country,
-      city,
-      provider,
-      isVerified: true,
-    });
 
     if (fcmToken) {
       await upsertUserFcmToken(user._id.toString(), {
@@ -288,19 +672,16 @@ export const registerUser = asyncHandler(
       });
     }
 
-    // Generate new tokens with user ID
     const tokens = generateTokens({
       id: user._id.toString(),
-      uid: user.firebaseUid,
+      uid: user.firebaseUid || user._id.toString(),
       phone: user.phone || phone || '',
       email: user.email || email || '',
       role: user.role,
     });
 
-    // For new users, they start with 0 tokens, so no need to check limit
-    // Store refresh token
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 3); // 3 days
+    expiresAt.setDate(expiresAt.getDate() + 3);
 
     user.refreshTokens.push({
       token: tokens.refreshToken,

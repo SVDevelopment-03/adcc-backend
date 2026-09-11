@@ -116,13 +116,15 @@ export const unregisterWebPushToken = asyncHandler(
  */
 export const sendWebPushToStaff = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { title, body, url, audienceType, scheduleDate, scheduleTime } = req.body as {
+    const { title, body, url, audienceType, scheduleDate, scheduleTime, image, actions } = req.body as {
       title: string;
       body: string;
       url?: string;
       audienceType?: string;
       scheduleDate?: string;
       scheduleTime?: string;
+      image?: string; // optional image URL
+      actions?: string; // JSON stringified actions array
     };
     const staff = await User.find(
       {
@@ -173,7 +175,16 @@ export const sendWebPushToStaff = asyncHandler(
 
     for (let i = 0; i < tokens.length; i += chunkSize) {
       const chunk = tokens.slice(i, i + chunkSize);
-      const response = await sendWebPushNotification(chunk, { title, body, url });
+      let parsedActions: any = undefined;
+      if (actions) {
+        try {
+          parsedActions = JSON.parse(actions);
+        } catch {
+          parsedActions = undefined;
+        }
+      }
+
+      const response = await sendWebPushNotification(chunk, { title, body, url, image, actions: parsedActions });
 
       successCount += response.successCount;
       failureCount += response.failureCount;
@@ -221,6 +232,8 @@ export const sendWebPushToStaff = asyncHandler(
           title,
           body,
           url: url ?? null,
+          image: image ?? null,
+          actions: actions ? actions : null,
           audienceType: audienceType ?? null,
           scheduleDate: scheduleDate ?? null,
           scheduleTime: scheduleTime ?? null,
@@ -237,7 +250,7 @@ export const sendWebPushToStaff = asyncHandler(
  */
 export const sendTestBroadcast = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-      const { title, body, url, audienceType, deliveryType, externalEmails, selectedUserIds, communityId } = req.body as {
+      const { title, body, url, audienceType, deliveryType, externalEmails, selectedUserIds, communityId, image, actions } = req.body as {
         title: string;
         body: string;
         url?: string;
@@ -246,6 +259,8 @@ export const sendTestBroadcast = asyncHandler(
         externalEmails?: string; // comma separated
         selectedUserIds?: string; // comma separated
         communityId?: string;
+        image?: string;
+        actions?: string;
       };
 
     const parseIdList = (value?: string) =>
@@ -323,15 +338,16 @@ export const sendTestBroadcast = asyncHandler(
           return;
         }
 
+        const parsedActions = actions ? (() => { try { return JSON.parse(actions); } catch { return undefined; } })() : undefined;
         const results = await notificationService.sendNotificationToUsers(
           selectedUserIds,
           {
             title,
             body,
             type: communityId ? 'community' : undefined,
-            data: communityId ? { communityId } : undefined,
+            data: communityId ? { communityId, image, actions } : (image || actions ? { ...(image ? { image } : {}), ...(actions ? { actions } : {}) } : undefined),
           },
-          { url }
+          { url, image, actions: parsedActions }
         );
         sendSuccess(res, { sentToUserCount: results.length }, 'Test broadcast sent to selected users');
         return;
@@ -343,14 +359,16 @@ export const sendTestBroadcast = asyncHandler(
         const userIdsWithTokens = users.filter((u: any) => Array.isArray(u.fcmTokens) && u.fcmTokens.length > 0).map((u: any) => String(u._id));
 
         // create in-app notifications + attempt push per user with tokens
-        const results = await notificationService.sendNotificationToUsers(userIdsWithTokens, { title, body }, { url });
+        const parsedActionsAll = req.body.actions ? (() => { try { return JSON.parse(String(req.body.actions)); } catch { return undefined; } })() : undefined;
+        const results = await notificationService.sendNotificationToUsers(userIdsWithTokens, { title, body, data: (image || req.body.actions) ? { ...(image ? { image } : {}), ...(req.body.actions ? { actions: req.body.actions } : {}) } : undefined }, { url, image, actions: parsedActionsAll });
 
         sendSuccess(res, { sentToUserCount: results.length }, 'Test broadcast sent to all users (with tokens)');
         return;
       }
 
       // default: staff
-      const r = await notificationService.sendToStaff({ title, body, url });
+      const parsedActionsStaff = req.body.actions ? (() => { try { return JSON.parse(String(req.body.actions)); } catch { return undefined; } })() : undefined;
+      const r = await notificationService.sendToStaff({ title, body, url, data: (image || req.body.actions) ? { ...(image ? { image } : {}), ...(req.body.actions ? { actions: req.body.actions } : {}) } : undefined }, { image, actions: parsedActionsStaff });
       sendSuccess(res, { result: r }, 'Test broadcast sent to staff');
       return;
     }
@@ -359,15 +377,16 @@ export const sendTestBroadcast = asyncHandler(
 
 export const sendCampaignBroadcast = asyncHandler(
   async (req: AuthRequest, res: Response) => {
-    const { message, url, audienceType, deliveryType, externalEmails, selectedUserIds, communityId } = req.body as {
-      message: string;
-      url?: string;
-      audienceType?: string;
-      deliveryType?: 'app' | 'email' | 'both';
-      externalEmails?: string; // comma separated
-      selectedUserIds?: string; // comma separated
-      communityId?: string;
-    };
+    const { message, url, audienceType, deliveryType, externalEmails, selectedUserIds, communityId, image } = req.body as {
+        message: string;
+        url?: string;
+        audienceType?: string;
+        deliveryType?: 'app' | 'email' | 'both';
+        externalEmails?: string; // comma separated
+        selectedUserIds?: string; // comma separated
+        communityId?: string;
+        image?: string;
+      };
 
     const parseIdList = (value?: string) =>
       value
@@ -451,9 +470,9 @@ export const sendCampaignBroadcast = asyncHandler(
             title,
             body,
             type: communityId ? 'community' : undefined,
-            data: communityId ? { communityId } : undefined,
+            data: communityId ? { communityId, image } : (image ? { image } : undefined),
           },
-          { url }
+          { url, image }
         );
         sendSuccess(res, { sentToUserCount: results.length }, 'Campaign broadcast sent to selected users');
         return;
@@ -463,12 +482,12 @@ export const sendCampaignBroadcast = asyncHandler(
         const users = await User.find({}).select('_id fcmTokens').lean();
         const userIdsWithTokens = users.filter((u: any) => Array.isArray(u.fcmTokens) && u.fcmTokens.length > 0).map((u: any) => String(u._id));
 
-        const results = await notificationService.sendNotificationToUsers(userIdsWithTokens, { title, body }, { url });
+        const results = await notificationService.sendNotificationToUsers(userIdsWithTokens, { title, body, data: image ? { image } : undefined }, { url, image });
         sendSuccess(res, { sentToUserCount: results.length }, 'Campaign broadcast sent to all users (with tokens)');
         return;
       }
 
-      const r = await notificationService.sendToStaff({ title, body, url });
+      const r = await notificationService.sendToStaff({ title, body, url }, { image });
       sendSuccess(res, { result: r }, 'Campaign broadcast sent to staff');
       return;
     }

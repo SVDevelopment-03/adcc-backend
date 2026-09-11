@@ -3,6 +3,7 @@ import { asyncHandler } from '@/utils/async-handler';
 import { sendSuccess } from '@/utils/response';
 import { AppError } from '@/utils/app-error';
 import { setOtp, verifyOtp } from '@/services/otp.store';
+import { normalizePhone, getPhoneLookupVariants } from '@/utils/phone.util';
 import nexusService from '@/services/nexus.service';
 import crypto from 'node:crypto';
 import User from '@/models/user.model';
@@ -24,6 +25,8 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
 
   if (!recipient) throw new AppError('Recipient phone number is required', 400);
 
+  const normalizedRecipient = normalizePhone(recipient) || recipient;
+
 
   // Generate 6-digit code
   const code = (Math.floor(100000 + Math.random() * 900000)).toString();
@@ -33,6 +36,7 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
   const ttlMinutes = Math.floor(ttlSeconds / 60);
 
   // Default Royal Formal bilingual template (Arabic then English)
+  //TODO: change this template to your own branding and wording. You can also provide a custom template in the request body.
   const defaultTemplate =
     'نادي أبوظبي للدراجات (ADCC): رمز التحقق الخاص بك هو {code} — صالح لمدة {expiry} دقيقة. الرجاء عدم مشاركة هذا الرمز مع أي شخص.\n' +
     'ADCC — Abu Dhabi Cycling Club: Your verification code is {code}. It is valid for {expiry} minutes. Please do not share this code.';
@@ -48,12 +52,15 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
     .replace(/\{expiry\}/g, String(ttlMinutes));
 
   // Store OTP in memory with TTL
-  setOtp(recipient, code, ttlSeconds);
+  // Store OTP keyed by normalized recipient so verify uses same key
+  setOtp(normalizedRecipient, code, ttlSeconds);
 
   // Send via Nexus
-  await nexusService.sendSmsViaNexus({ msg: message, recipient, sender, category });
+  // TODO: SMS OTP send point — server forwards OTP SMS to Nexus gateway here.
+  // If you need to intercept or mock SMS delivery (tests/dev), patch here.
+  await nexusService.sendSmsViaNexus({ msg: message, recipient: normalizedRecipient, sender, category });
 
-  sendSuccess(res, { recipient, expiresIn: 300 }, 'OTP sent');
+  sendSuccess(res, { recipient: normalizedRecipient, expiresIn: 300 }, 'OTP sent');
 });
 
 /**
@@ -64,11 +71,34 @@ export const verifyOtpController = asyncHandler(async (req: Request, res: Respon
   const { recipient, code } = req.body as { recipient: string; code: string };
   if (!recipient || !code) throw new AppError('Recipient and code are required', 400);
 
-  const ok = verifyOtp(recipient, code);
+  // Normalize recipient same as sendOtp
+  const normalizeRecipient = (r: string) => {
+    if (!r) return r;
+    const raw = String(r).trim();
+    const digits = raw.replace(/\D/g, '');
+    if (!digits) return raw;
+
+    const dedupedDigits = digits.startsWith('971') ? digits.slice(3) : digits;
+    const finalDigits = dedupedDigits.startsWith('971') ? dedupedDigits.slice(3) : dedupedDigits;
+
+    if (/^5\d{8}$/.test(finalDigits)) return `+971${finalDigits}`;
+    if (/^\d{9}$/.test(finalDigits) && finalDigits.startsWith('5')) return `+971${finalDigits}`;
+    if (/^\d{9}$/.test(finalDigits) && finalDigits.startsWith('0')) return `+971${finalDigits.slice(1)}`;
+    if (/^971\d{8,9}$/.test(digits)) return `+${digits}`;
+    if (/^\d{8,9}$/.test(finalDigits)) return `+971${finalDigits}`;
+    return `+${digits}`;
+  };
+
+  const normalizedRecipient = normalizeRecipient(recipient);
+
+  const ok = verifyOtp(normalizedRecipient, code);
   if (!ok) throw new AppError('Invalid or expired OTP', 400);
 
   // If a user exists with this phone, issue JWT tokens; otherwise return isNewUser
-  const user = await User.findOne({ phone: recipient });
+  const variantPhones = getPhoneLookupVariants(normalizedRecipient);
+  const user = await User.findOne({
+    $or: variantPhones.map((phone) => ({ phone }))
+  });
   if (user) {
     const tokens = generateTokens({ id: user._id.toString(), uid: user._id.toString(), phone: user.phone || '' });
 

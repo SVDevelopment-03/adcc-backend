@@ -58,6 +58,19 @@ export const sendStaffWebPushSchema = z
       },
       { message: 'Invalid URL' }
     ),
+    image: optionalStringField('Invalid image URL').refine(
+      (val) => {
+        if (!val) return true;
+        try {
+          new URL(String(val), 'https://example.com');
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Invalid image URL' }
+    ),
+    actions: optionalStringField('Invalid actions payload').optional(),
   })
   .strict();
 
@@ -82,6 +95,18 @@ export const sendCampaignBroadcastSchema = z
         }
       },
       { message: 'Invalid URL' }
+    ),
+    image: optionalStringField('Invalid image URL').refine(
+      (val) => {
+        if (!val) return true;
+        try {
+          new URL(String(val), 'https://example.com');
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      { message: 'Invalid image URL' }
     ),
   })
   .strict();

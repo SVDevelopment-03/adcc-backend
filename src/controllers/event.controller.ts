@@ -37,6 +37,11 @@ import {
   notifyEventCancelled,
 } from '@/services/event-notification.service';
 import { notifyCommunityEventCreated } from '@/services/community-notification.service';
+import { sendEmail } from '@/services/email.service';
+import { eventRegistrationEmail } from '@/services/emailTemplates';
+import { createEvent as createIcsEvent } from 'ics';
+import fs from 'fs/promises';
+import AppConfig from '@/models/app-config.model';
 
 // const EVENT_LOCALIZED_FIELDS = {
 //   title: 'titleAr',
@@ -1128,6 +1133,73 @@ export const joinEvent = asyncHandler(async (req: AuthRequest, res: Response) =>
       eventId: String(eventId),
     });
 
+    // Send confirmation email (best-effort)
+    try {
+      const user = await User.findById(userId).select('fullName email').lean();
+      const cfg = await AppConfig.findOne({ key: 'default' }).select('config.supportEmail').lean();
+      const supportEmail = (cfg as any)?.config?.supportEmail || undefined;
+      const mail = eventRegistrationEmail({
+        name: (user as any)?.fullName || '',
+        eventName: event.title,
+        eventDate: event.eventDate ? dayjs(event.eventDate).format('dddd, D MMM YYYY HH:mm') : '',
+        eventLocation: event.address || '',
+        detailsLink: `${process.env.FRONTEND_BASE_URL || 'https://adcc-neon.vercel.app'}/events/${event._id}`,
+        calendarLink: undefined,
+        supportEmail,
+        lang,
+      });
+
+      // create ICS attachment
+      let icsAttachment: { filename: string; content: string } | null = null;
+      try {
+        if (event.eventDate) {
+          const d = new Date(event.eventDate);
+          const start = [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes()];
+          const ev = {
+            start,
+            duration: { minutes: 180 },
+            title: event.title || 'Event',
+            description: event.description || '',
+            location: event.address || '',
+          } as any;
+          const { error, value } = createIcsEvent(ev as any);
+          if (!error && value) {
+            icsAttachment = { filename: `${(event.title || 'event').replace(/[^a-z0-9]/gi, '_')}.ics`, content: value };
+          }
+        }
+      } catch (e) {
+        console.error('[EVENT] ICS generation failed:', (e as Error).message);
+      }
+
+      // inline logo from frontend public folder (best-effort)
+      const attachments: any[] = [];
+      try {
+        const potential = `${process.cwd().replace(/adcc-backend.*/i, 'adcc-frontend-web')}\\public\\img\\SPINEGLOW-LOGO-1.png`;
+        let logoBuffer: Buffer | null = null;
+        try {
+          logoBuffer = await fs.readFile(potential);
+        } catch {
+          logoBuffer = null;
+        }
+        if (logoBuffer) {
+          attachments.push({ filename: 'logo.png', content: logoBuffer, cid: 'logo@adcc' });
+          mail.html = mail.html.replace('<div class="top">', `<div class="top"><img src="cid:logo@adcc" alt="logo" style="height:44px;margin-bottom:8px"/>`);
+        }
+      } catch (e) {
+        console.error('[EVENT] logo attach failed:', (e as Error).message);
+      }
+
+      if (icsAttachment) {
+        attachments.push({ filename: icsAttachment.filename, content: icsAttachment.content, contentType: 'text/calendar' });
+      }
+
+      if ((user as any)?.email) {
+        await sendEmail({ to: [(user as any).email], subject: mail.subject, html: mail.html, text: mail.text, attachments });
+      }
+    } catch (err) {
+      console.error('[EVENT] Failed to send registration email:', (err as Error).message);
+    }
+
     return sendSuccess(
       res,
       eventJoin,
@@ -1155,6 +1227,73 @@ export const joinEvent = asyncHandler(async (req: AuthRequest, res: Response) =>
     eventTitle: event.title || 'Event',
     eventId: String(eventId),
   });
+
+  // Send confirmation email (best-effort)
+  try {
+    const user = await User.findById(userId).select('fullName email').lean();
+    const cfg = await AppConfig.findOne({ key: 'default' }).select('config.supportEmail').lean();
+    const supportEmail = (cfg as any)?.config?.supportEmail || undefined;
+    const mail = eventRegistrationEmail({
+      name: (user as any)?.fullName || '',
+      eventName: event.title,
+      eventDate: event.eventDate ? dayjs(event.eventDate).format('dddd, D MMM YYYY HH:mm') : '',
+      eventLocation: event.address || '',
+      detailsLink: `${process.env.FRONTEND_BASE_URL || 'https://adcc-neon.vercel.app'}/events/${event._id}`,
+      calendarLink: undefined,
+      supportEmail,
+      lang,
+    });
+
+    // create ICS attachment
+    let icsAttachment: { filename: string; content: string } | null = null;
+    try {
+      if (event.eventDate) {
+        const d = new Date(event.eventDate);
+        const start = [d.getUTCFullYear(), d.getUTCMonth() + 1, d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes()];
+        const ev = {
+          start,
+          duration: { minutes: 180 },
+          title: event.title || 'Event',
+          description: event.description || '',
+          location: event.address || '',
+        } as any;
+        const { error, value } = createIcsEvent(ev as any);
+        if (!error && value) {
+          icsAttachment = { filename: `${(event.title || 'event').replace(/[^a-z0-9]/gi, '_')}.ics`, content: value };
+        }
+      }
+    } catch (e) {
+      console.error('[EVENT] ICS generation failed:', (e as Error).message);
+    }
+
+    // inline logo from frontend public folder (best-effort)
+    const attachments: any[] = [];
+    try {
+      const potential = `${process.cwd().replace(/adcc-backend.*/i, 'adcc-frontend-web')}\\public\\img\\SPINEGLOW-LOGO-1.png`;
+      let logoBuffer: Buffer | null = null;
+      try {
+        logoBuffer = await fs.readFile(potential);
+      } catch {
+        logoBuffer = null;
+      }
+      if (logoBuffer) {
+        attachments.push({ filename: 'logo.png', content: logoBuffer, cid: 'logo@adcc' });
+        mail.html = mail.html.replace('<div class="top">', `<div class="top"><img src="cid:logo@adcc" alt="logo" style="height:44px;margin-bottom:8px"/>`);
+      }
+    } catch (e) {
+      console.error('[EVENT] logo attach failed:', (e as Error).message);
+    }
+
+    if (icsAttachment) {
+      attachments.push({ filename: icsAttachment.filename, content: icsAttachment.content, contentType: 'text/calendar' });
+    }
+
+    if ((user as any)?.email) {
+      await sendEmail({ to: [(user as any).email], subject: mail.subject, html: mail.html, text: mail.text, attachments });
+    }
+  } catch (err) {
+    console.error('[EVENT] Failed to send registration email:', (err as Error).message);
+  }
 
   return sendSuccess(
     res,
