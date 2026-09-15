@@ -273,6 +273,23 @@ export const updateFirebasePhone = async (uid: string, phoneNumber: string) => {
   }
 };
 
+/**
+ * Delete a Firebase user by UID.
+ * Used when removing a user from Mongo so the account is cleaned up in Firebase as well.
+ */
+export const deleteFirebaseUser = async (uid: string) => {
+  initializeFirebase();
+  try {
+    await admin.auth().deleteUser(uid);
+    return true;
+  } catch (error: any) {
+    if (error.code === 'auth/user-not-found') {
+      throw new Error('Firebase user not found');
+    }
+    throw new Error(`Failed to delete Firebase user: ${error.message || error.code || 'Unknown error'}`);
+  }
+};
+
 export interface WebPushPayload {
   title: string;
   body: string;

@@ -7,7 +7,7 @@ import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { upsertUserFcmToken } from '@/services/push-token.service';
-import { createFirebaseUser } from '@/services/firebase.service';
+import { createFirebaseUser, getFirebaseUserByEmail, deleteFirebaseUser } from '@/services/firebase.service';
 
 /** Fields to exclude from user response (sensitive data) */
 const USER_PROJECTION = '-refreshTokens';
@@ -44,7 +44,21 @@ export const createUser = asyncHandler(async (req: AuthRequest, res: Response) =
     const userRecord = await createFirebaseUser(normalizedEmail, password, fullName, true);
     userRecordUid = userRecord.uid;
   } catch (e: any) {
-    throw new AppError(e?.message || 'Failed to create Firebase user', 400);
+    // If Firebase says the email already exists, try to fetch the existing Firebase user
+    // and attach its UID to the new Mongo user instead of failing. This handles cases
+    // where the Firebase account was created previously (e.g., via web signup) but
+    // no corresponding Mongo user record exists yet.
+    const msg = e?.message || '';
+    if (msg.toLowerCase().includes('already exists')) {
+      try {
+        const existingFbUser = await getFirebaseUserByEmail(normalizedEmail);
+        userRecordUid = existingFbUser.uid;
+      } catch (innerErr: any) {
+        throw new AppError(innerErr?.message || 'Failed to resolve existing Firebase user', 400);
+      }
+    } else {
+      throw new AppError(e?.message || 'Failed to create Firebase user', 400);
+    }
   }
 
   const user = await User.create({
@@ -150,6 +164,28 @@ export const deleteUser = asyncHandler(async (req: AuthRequest, res: Response) =
   if (!user) {
     throw new AppError(t(lang, 'user.not_found'), 404);
   }
+
+  // Also attempt to delete the Firebase user to keep Firebase Auth in sync.
+  // Prefer deleting by attached firebaseUid; if missing, try to look up by email.
+  (async () => {
+    try {
+      if (user.firebaseUid) {
+        await deleteFirebaseUser(user.firebaseUid);
+      } else if (user.email) {
+        try {
+          const fbUser = await getFirebaseUserByEmail(user.email);
+          if (fbUser && fbUser.uid) {
+            await deleteFirebaseUser(fbUser.uid);
+          }
+        } catch (innerErr) {
+          // ignore errors when trying to find/delete by email
+          console.warn('Could not delete Firebase user by email:', innerErr?.message || innerErr);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to delete Firebase user for removed Mongo user:', err?.message || err);
+    }
+  })();
 
   sendSuccess(res, null, t(lang, 'user.deleted'), 200);
 });
