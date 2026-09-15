@@ -20,6 +20,10 @@ export interface IAppConfig extends Document {
       fromName: string;
       replyTo: string;
     };
+    gtm?: {
+      headCode: string;
+      bodyCode: string;
+    };
     features: Record<string, boolean>;
     notifications: Record<string, boolean>;
     security: Record<string, boolean>;
