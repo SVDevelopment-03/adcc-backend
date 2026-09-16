@@ -9,6 +9,7 @@ import {
   registerFcmToken,
   unregisterFcmToken,
   updateUserVerified,
+  updateUserPassword,
   updateUser,
 } from '@/controllers/user.controller';
 import { startPhoneChange, confirmPhoneChange } from '@/controllers/phone-change.controller';
@@ -18,6 +19,7 @@ import {
   registerFcmTokenSchema,
   unregisterFcmTokenSchema,
   updateUserVerifiedSchema,
+  updateUserPasswordSchema,
 } from '@/validators/user.validator';
 
 const router = express.Router();
@@ -45,6 +47,13 @@ router.patch(
   requireStaffPermission('manage_users'),
   validate(updateUserVerifiedSchema),
   updateUserVerified
+);
+router.patch(
+  '/:userId/password',
+  authenticate,
+  requireStaffPermission('manage_users'),
+  validate(updateUserPasswordSchema),
+  updateUserPassword
 );
 
 // FCM token registration for authenticated users

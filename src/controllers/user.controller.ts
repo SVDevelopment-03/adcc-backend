@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 import { t } from '@/utils/i18n';
 import User from '@/models/user.model';
 import { sendSuccess } from '@/utils/response';
@@ -227,6 +228,40 @@ export const updateUserVerified = asyncHandler(async (req: AuthRequest, res: Res
   }
 
   sendSuccess(res, user, t(lang, 'user.verified_updated'), 200);
+});
+
+/**
+ * Directly set a user's password (staff action — no existing password or
+ * reset code required, unlike the self-service forgot/reset-password flow).
+ * PATCH /user/:userId/password
+ * Requires manage_users.
+ */
+export const updateUserPassword = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as AuthRequest & { lang?: string }).lang || 'en') as string;
+  const userId =
+    typeof req.params.userId === 'string' ? req.params.userId : req.params.userId?.[0] ?? '';
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    throw new AppError(t(lang, 'user.not_found'), 404);
+  }
+
+  const { password } = req.body as { password: string };
+
+  const passwordHash = await bcrypt.hash(password.trim(), 12);
+
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { passwordHash },
+    { new: true, runValidators: true }
+  )
+    .select(USER_PROJECTION)
+    .lean();
+
+  if (!user) {
+    throw new AppError(t(lang, 'user.not_found'), 404);
+  }
+
+  sendSuccess(res, null, 'Password updated', 200);
 });
 
 /**
