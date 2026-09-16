@@ -32,8 +32,18 @@ export const createPermission = asyncHandler(async (req: AuthRequest, res: Respo
     sortOrder?: number;
   };
 
+  const normalizedKey = key?.toLowerCase().trim();
+  if (!normalizedKey) {
+    throw new AppError('Permission key is required', 400);
+  }
+
+  const existing = await Permission.findOne({ key: normalizedKey }).lean();
+  if (existing) {
+    throw new AppError('Permission key already exists', 409);
+  }
+
   const created = await Permission.create({
-    key: key.toLowerCase().trim(),
+    key: normalizedKey,
     name: name.trim(),
     description: description?.trim(),
     group: group?.trim(),
@@ -46,28 +56,38 @@ export const createPermission = asyncHandler(async (req: AuthRequest, res: Respo
 export const updatePermission = asyncHandler(async (req: AuthRequest, res: Response) => {
   const permissionId = getRouteParam(req.params.permissionId);
   const body = req.body as {
+    key?: string;
     name?: string;
     description?: string | null;
     group?: string | null;
     sortOrder?: number;
   };
 
-  const updated = await Permission.findByIdAndUpdate(
-    permissionId,
-    {
-      ...(body.name !== undefined && { name: body.name }),
-      ...(body.description !== undefined && { description: body.description ?? undefined }),
-      ...(body.group !== undefined && { group: body.group ?? undefined }),
-      ...(body.sortOrder !== undefined && { sortOrder: body.sortOrder }),
-    },
-    { new: true, runValidators: true }
-  ).lean();
-
-  if (!updated) {
+  const permission = await Permission.findById(permissionId);
+  if (!permission) {
     throw new AppError('Permission not found', 404);
   }
 
-  sendSuccess(res, updated, 'Permission updated');
+  if (body.key !== undefined) {
+    const normalizedKey = body.key.toLowerCase().trim();
+    if (!normalizedKey) {
+      throw new AppError('Permission key is required', 400);
+    }
+    const duplicate = await Permission.findOne({ _id: { $ne: permissionId }, key: normalizedKey }).lean();
+    if (duplicate) {
+      throw new AppError('Permission key already exists', 409);
+    }
+    permission.key = normalizedKey;
+  }
+
+  if (body.name !== undefined) permission.name = body.name.trim();
+  if (body.description !== undefined) permission.description = body.description ?? undefined;
+  if (body.group !== undefined) permission.group = body.group ?? undefined;
+  if (body.sortOrder !== undefined) permission.sortOrder = body.sortOrder;
+
+  await permission.save();
+
+  sendSuccess(res, permission.toObject(), 'Permission updated');
 });
 
 export const deletePermission = asyncHandler(async (req: AuthRequest, res: Response) => {
@@ -101,10 +121,11 @@ export const getRoleById = asyncHandler(async (req: AuthRequest, res: Response) 
 });
 
 export const createRole = asyncHandler(async (req: AuthRequest, res: Response) => {
-  const { name, slug, description, permissionIds } = req.body as {
+  const { name, slug, description, status, permissionIds } = req.body as {
     name: string;
     slug: string;
     description?: string;
+    status?: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
     permissionIds?: string[];
   };
 
@@ -112,6 +133,7 @@ export const createRole = asyncHandler(async (req: AuthRequest, res: Response) =
     name: name.trim(),
     slug: slug.toLowerCase().trim(),
     description: description?.trim(),
+    status: status ?? 'ACTIVE',
     isSystem: false,
     permissions: (permissionIds ?? []).map((id) => toId(id)),
   });
@@ -122,15 +144,44 @@ export const createRole = asyncHandler(async (req: AuthRequest, res: Response) =
 
 export const updateRole = asyncHandler(async (req: AuthRequest, res: Response) => {
   const roleId = getRouteParam(req.params.roleId);
-  const body = req.body as { name?: string; description?: string | null };
+  const body = req.body as {
+    name?: string;
+    slug?: string;
+    description?: string | null;
+    status?: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
+    permissionIds?: string[];
+  };
 
   const role = await Role.findById(roleId);
   if (!role) {
     throw new AppError('Role not found', 404);
   }
 
-  if (body.name !== undefined) role.name = body.name;
+  if (body.name !== undefined) role.name = body.name.trim();
+  if (body.slug !== undefined) {
+    const nextSlug = body.slug.toLowerCase().trim();
+    const duplicate = await Role.findOne({ _id: { $ne: roleId }, slug: nextSlug }).lean();
+    if (duplicate) {
+      throw new AppError('Role slug already exists', 409);
+    }
+    role.slug = nextSlug;
+  }
+  if (body.status !== undefined) {
+    const allowed = ['ACTIVE', 'INACTIVE', 'ARCHIVED'] as const;
+    if (!allowed.includes(body.status)) {
+      throw new AppError('Role status is invalid', 400);
+    }
+    role.status = body.status;
+  }
   if (body.description !== undefined) role.description = body.description ?? undefined;
+  if (body.permissionIds !== undefined) {
+    const ids = [...new Set(body.permissionIds.filter(Boolean))];
+    const count = await Permission.countDocuments({ _id: { $in: ids.map((id) => toId(id)) } });
+    if (count !== ids.length) {
+      throw new AppError('One or more permission ids are invalid', 400);
+    }
+    role.permissions = ids.map((id) => toId(id));
+  }
 
   await role.save();
 
@@ -168,14 +219,15 @@ export const setRolePermissions = asyncHandler(async (req: AuthRequest, res: Res
     throw new AppError('Role not found', 404);
   }
 
+  const uniqueIds = [...new Set((permissionIds ?? []).filter(Boolean))];
   const count = await Permission.countDocuments({
-    _id: { $in: permissionIds.map((id) => toId(id)) },
+    _id: { $in: uniqueIds.map((id) => toId(id)) },
   });
-  if (count !== permissionIds.length) {
+  if (count !== uniqueIds.length) {
     throw new AppError('One or more permission ids are invalid', 400);
   }
 
-  role.permissions = permissionIds.map((id) => toId(id));
+  role.permissions = uniqueIds.map((id) => toId(id));
   await role.save();
 
   const populated = await Role.findById(role._id).populate('permissions').lean();

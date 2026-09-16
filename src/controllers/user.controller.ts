@@ -179,11 +179,13 @@ export const deleteUser = asyncHandler(async (req: AuthRequest, res: Response) =
           }
         } catch (innerErr) {
           // ignore errors when trying to find/delete by email
-          console.warn('Could not delete Firebase user by email:', innerErr?.message || innerErr);
+          const message = innerErr instanceof Error ? innerErr.message : String(innerErr);
+          console.warn('Could not delete Firebase user by email:', message);
         }
       }
     } catch (err) {
-      console.error('Failed to delete Firebase user for removed Mongo user:', err?.message || err);
+      const message = err instanceof Error ? err.message : String(err);
+      console.error('Failed to delete Firebase user for removed Mongo user:', message);
     }
   })();
 

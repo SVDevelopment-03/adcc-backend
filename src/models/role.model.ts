@@ -4,6 +4,7 @@ export interface IRole extends Document {
   name: string;
   slug: string;
   description?: string;
+  status: 'ACTIVE' | 'INACTIVE' | 'ARCHIVED';
   /** Built-in roles (e.g. super-admin) cannot be deleted */
   isSystem: boolean;
   permissions: Types.ObjectId[];
@@ -30,6 +31,12 @@ const RoleSchema = new Schema(
     description: {
       type: String,
       trim: true,
+    },
+    status: {
+      type: String,
+      enum: ['ACTIVE', 'INACTIVE', 'ARCHIVED'],
+      default: 'ACTIVE',
+      index: true,
     },
     isSystem: {
       type: Boolean,

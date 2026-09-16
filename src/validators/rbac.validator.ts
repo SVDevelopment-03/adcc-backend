@@ -37,6 +37,12 @@ export const createPermissionSchema = z.object({
 });
 
 export const updatePermissionSchema = z.object({
+  key: z
+    .string()
+    .min(2)
+    .max(80)
+    .regex(/^[a-z0-9][a-z0-9_.-]*$/, 'Use lowercase letters, numbers, dots, underscores, hyphens')
+    .optional(),
   name: z.string().min(1).max(120).optional(),
   description: z.string().max(500).optional().nullable(),
   group: z.string().max(80).optional().nullable(),
@@ -55,12 +61,21 @@ export const createRoleSchema = z.object({
     .max(80)
     .regex(/^[a-z0-9][a-z0-9_-]*$/, 'Use lowercase letters, numbers, underscores, hyphens'),
   description: z.string().max(500).optional(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']).optional().default('ACTIVE'),
   permissionIds: z.preprocess(parsePermissionIdsInput, permissionIdArray.optional().default([])),
 });
 
 export const updateRoleSchema = z.object({
   name: z.string().min(1).max(120).optional(),
+  slug: z
+    .string()
+    .min(2)
+    .max(80)
+    .regex(/^[a-z0-9][a-z0-9_-]*$/, 'Use lowercase letters, numbers, underscores, hyphens')
+    .optional(),
   description: z.string().max(500).optional().nullable(),
+  status: z.enum(['ACTIVE', 'INACTIVE', 'ARCHIVED']).optional(),
+  permissionIds: z.preprocess(parsePermissionIdsInput, permissionIdArray.optional()),
 });
 
 export const roleIdParamsSchema = z.object({
