@@ -96,3 +96,11 @@ export const changePhoneStartSchema = z
   .strict();
 
 export type ChangePhoneStartInput = z.infer<typeof changePhoneStartSchema>;
+
+export const updateUserPasswordSchema = z
+  .object({
+    password: z.preprocess(firstValue, z.string().min(6, 'Password must be at least 6 characters')),
+  })
+  .strict();
+
+export type UpdateUserPasswordInput = z.infer<typeof updateUserPasswordSchema>;

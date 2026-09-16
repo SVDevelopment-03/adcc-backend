@@ -273,6 +273,15 @@ export const updateFirebasePhone = async (uid: string, phoneNumber: string) => {
   }
 };
 
+export const updateFirebasePassword = async (uid: string, password: string) => {
+  initializeFirebase();
+  try {
+    return await admin.auth().updateUser(uid, { password });
+  } catch (error: any) {
+    throw new Error(error?.message || 'Failed to update Firebase user password');
+  }
+};
+
 /**
  * Delete a Firebase user by UID.
  * Used when removing a user from Mongo so the account is cleaned up in Firebase as well.

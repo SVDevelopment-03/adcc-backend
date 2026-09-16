@@ -1,6 +1,7 @@
 import { Response } from 'express';
 import mongoose from 'mongoose';
 import { t } from '@/utils/i18n';
+import bcrypt from 'bcryptjs';
 import User from '@/models/user.model';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
@@ -8,6 +9,7 @@ import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { upsertUserFcmToken } from '@/services/push-token.service';
 import { createFirebaseUser, getFirebaseUserByEmail, deleteFirebaseUser } from '@/services/firebase.service';
+import { updateFirebasePassword } from '@/services/firebase.service';
 
 /** Fields to exclude from user response (sensitive data) */
 const USER_PROJECTION = '-refreshTokens';
@@ -234,6 +236,46 @@ export const updateUser = asyncHandler(async (req: AuthRequest, res: Response) =
   }
 
   sendSuccess(res, user, t(lang, 'user.updated'), 200);
+});
+
+/**
+ * Update user's password (admin action)
+ * PATCH /user/:userId/password
+ */
+export const updateUserPassword = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as AuthRequest & { lang?: string }).lang || 'en') as string;
+  const userId = typeof req.params.userId === 'string' ? req.params.userId : req.params.userId?.[0] ?? '';
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    throw new AppError(t(lang, 'user.not_found'), 404);
+  }
+
+  const { password } = req.body as { password?: string };
+  if (!password || typeof password !== 'string' || password.trim().length < 6) {
+    throw new AppError('Password must be at least 6 characters', 400);
+  }
+
+  const user = await User.findById(userId);
+  if (!user) {
+    throw new AppError(t(lang, 'user.not_found'), 404);
+  }
+
+  // Update Mongo password hash
+  user.passwordHash = await bcrypt.hash(password.trim(), 12);
+
+  // Also attempt to update Firebase user password when present
+  if (user.firebaseUid) {
+    try {
+      await updateFirebasePassword(user.firebaseUid, password.trim());
+    } catch (err) {
+      // Log but don't fail the whole request — keep Mongo hash updated
+      console.warn('Failed to update Firebase password for user', userId, err?.message || err);
+    }
+  }
+
+  await user.save();
+
+  sendSuccess(res, null, t(lang, 'user.password_updated'), 200);
 });
 
 /**

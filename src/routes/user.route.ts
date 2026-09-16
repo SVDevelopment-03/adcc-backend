@@ -47,6 +47,17 @@ router.patch(
   updateUserVerified
 );
 
+router.patch(
+  '/:userId/password',
+  authenticate,
+  requireStaffPermission('manage_users'),
+  (req, res, next) => {
+    const { updateUserPasswordSchema } = require('@/validators/user.validator');
+    return (require('@/middleware/validate.middleware').validate(updateUserPasswordSchema))(req, res, next);
+  },
+  updateUserPassword
+);
+
 // FCM token registration for authenticated users
 router.post(
   '/fcm-token',
