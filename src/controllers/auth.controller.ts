@@ -450,9 +450,12 @@ export const forgotPassword = asyncHandler(
       throw new AppError('No account found with this email.', 404);
     }
 
-    if (!user.passwordHash) {
-      throw new AppError('This account does not have a password yet. Please sign in with phone OTP or complete setup.', 400);
-    }
+    // Accounts that signed up via phone OTP / Google and never set a password
+    // still get a code here — resetPassword() below sets passwordHash either
+    // way, so this doubles as "set your first password" for them. Blocking
+    // it would leave accounts with no password permanently unable to use the
+    // email+password admin login, with no self-service way to add one.
+    const isFirstPassword = !user.passwordHash;
 
     const code = String(Math.floor(100000 + Math.random() * 900000));
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000);
@@ -463,12 +466,12 @@ export const forgotPassword = asyncHandler(
     try {
       await sendEmail({
         to: [normalizedEmail],
-        subject: 'ADCC - Password reset code',
-        text: `Your ADCC password reset code is: ${code}. It expires in 15 minutes.`,
+        subject: isFirstPassword ? 'ADCC - Set your password' : 'ADCC - Password reset code',
+        text: `Your ADCC ${isFirstPassword ? 'password setup' : 'password reset'} code is: ${code}. It expires in 15 minutes.`,
         html: `
           <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-            <h3>ADCC password reset</h3>
-            <p>Your password reset code is:</p>
+            <h3>ADCC ${isFirstPassword ? 'password setup' : 'password reset'}</h3>
+            <p>Your code is:</p>
             <p><strong style="font-size: 24px; letter-spacing: 2px;">${code}</strong></p>
             <p>This code expires in 15 minutes.</p>
           </div>

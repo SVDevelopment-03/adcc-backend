@@ -22,7 +22,8 @@ import {
   featureStoreItemSchema,
 } from '@/validators/store.validator';
 import { authenticate, optionalAuthenticate } from '@/middleware/auth.middleware';
-import { authenticatedOnly, isAdmin } from '@/middleware/role.middleware';
+import { authenticatedOnly } from '@/middleware/role.middleware';
+import { requireStaffPermission } from '@/middleware/rbac.middleware';
 import { requireParsedMultipartBody, uploadStoreItemImagesIfMultipart } from '@/middleware/upload.middleware';
 
 const router = express.Router();
@@ -118,9 +119,11 @@ router.delete('/items/:id', authenticate, authenticatedOnly, archiveStoreItem);
 router.post('/items/:id/sold', authenticate, authenticatedOnly, markStoreItemSold);
 
 // Admin moderation
-router.get('/admin/items', authenticate, isAdmin, validate(storeItemQuerySchema), getAdminStoreItems);
-router.post('/items/:id/approve', authenticate, isAdmin, validate(approveStoreItemSchema), approveStoreItem);
-router.post('/items/:id/reject', authenticate, isAdmin, validate(rejectStoreItemSchema), rejectStoreItem);
-router.post('/items/:id/feature', authenticate, isAdmin, validate(featureStoreItemSchema), featureStoreItem);
+const requireMarketplaceModeration = requireStaffPermission('moderate_content', 'admin.panel');
+
+router.get('/admin/items', authenticate, requireMarketplaceModeration, validate(storeItemQuerySchema), getAdminStoreItems);
+router.post('/items/:id/approve', authenticate, requireMarketplaceModeration, validate(approveStoreItemSchema), approveStoreItem);
+router.post('/items/:id/reject', authenticate, requireMarketplaceModeration, validate(rejectStoreItemSchema), rejectStoreItem);
+router.post('/items/:id/feature', authenticate, requireMarketplaceModeration, validate(featureStoreItemSchema), featureStoreItem);
 
 export default router;

@@ -1,7 +1,8 @@
 import express from 'express';
 import { validate } from '@/middleware/validate.middleware';
 import { authenticate, optionalAuthenticate } from '@/middleware/auth.middleware';
-import { isAdmin, authenticatedOnly } from '@/middleware/role.middleware';
+import { authenticatedOnly } from '@/middleware/role.middleware';
+import { requireStaffPermission } from '@/middleware/rbac.middleware';
 import {
   uploadFeedPostImageIfMultipart,
   uploadBodyIfMultipart,
@@ -46,12 +47,14 @@ router.post(
   createFeedPost
 );
 
-router.delete('/:id', authenticate, isAdmin, deleteFeedPost);
+const requireFeedModeration = requireStaffPermission('moderate_content', 'admin.panel');
+
+router.delete('/:id', authenticate, requireFeedModeration, deleteFeedPost);
 
 router.patch(
   '/:id/moderation',
   authenticate,
-  isAdmin,
+  requireFeedModeration,
   requireMultipartFormData,
   uploadBodyIfMultipart,
   requireParsedMultipartBody,
@@ -62,7 +65,7 @@ router.patch(
 router.patch(
   '/moderation/users/:userId/ban-feed-post',
   authenticate,
-  isAdmin,
+  requireFeedModeration,
   requireMultipartFormData,
   uploadBodyIfMultipart,
   requireParsedMultipartBody,

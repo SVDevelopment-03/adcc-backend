@@ -19,15 +19,16 @@ import {
   getChallengesQuerySchema,
 } from '@/validators/challenge.validator';
 import { authenticate, optionalAuthenticate } from '@/middleware/auth.middleware';
-import { isAdmin } from '@/middleware/role.middleware';
+import { requireStaffPermission } from '@/middleware/rbac.middleware';
 import { uploadChallengeImageIfMultipart, requireParsedMultipartBody } from '@/middleware/upload.middleware';
 
 const router = express.Router();
+const requireChallengeManagement = requireStaffPermission('manage_events', 'admin.panel');
 
 router.get('/leaderboard', getChallengeLeaderboard);
 router.get('/', validate(getChallengesQuerySchema), getAllChallenges);
 router.get('/:id', optionalAuthenticate, getChallengeById);
-router.get('/:id/participants', authenticate, isAdmin, getChallengeParticipants);
+router.get('/:id/participants', authenticate, requireChallengeManagement, getChallengeParticipants);
 router.get('/:id/member-status', authenticate, getChallengeMemberStatus);
 
 // Join a challenge (increment participants)
@@ -37,7 +38,7 @@ router.patch('/:id/progress', authenticate, validate(updateChallengeProgressSche
 router.post(
   '/',
   authenticate,
-  isAdmin,
+  requireChallengeManagement,
   uploadChallengeImageIfMultipart,
   requireParsedMultipartBody,
   validate(createChallengeSchema),
@@ -47,13 +48,13 @@ router.post(
 router.patch(
   '/:id',
   authenticate,
-  isAdmin,
+  requireChallengeManagement,
   uploadChallengeImageIfMultipart,
   requireParsedMultipartBody,
   validate(updateChallengeSchema),
   updateChallenge
 );
 
-router.delete('/:id', authenticate, isAdmin, deleteChallenge);
+router.delete('/:id', authenticate, requireChallengeManagement, deleteChallenge);
 
 export default router;
