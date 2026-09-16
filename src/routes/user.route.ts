@@ -10,6 +10,7 @@ import {
   unregisterFcmToken,
   updateUserVerified,
   updateUser,
+  updateUserPassword,
 } from '@/controllers/user.controller';
 import { startPhoneChange, confirmPhoneChange } from '@/controllers/phone-change.controller';
 import { getAllUsers, getUserById, deleteUser } from '@/controllers/user.controller';

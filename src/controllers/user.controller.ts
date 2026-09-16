@@ -267,7 +267,7 @@ export const updateUserPassword = asyncHandler(async (req: AuthRequest, res: Res
   if (user.firebaseUid) {
     try {
       await updateFirebasePassword(user.firebaseUid, password.trim());
-    } catch (err) {
+    } catch (err: any) {
       // Log but don't fail the whole request — keep Mongo hash updated
       console.warn('Failed to update Firebase password for user', userId, err?.message || err);
     }
