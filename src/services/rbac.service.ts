@@ -73,6 +73,13 @@ export const DEFAULT_PERMISSION_DEFINITIONS: Array<{
     group: 'System',
     sortOrder: 90,
   },
+  {
+    key: 'view_audit_log',
+    name: 'View Audit Log',
+    description: 'See the history of admin actions (roles, users, permissions)',
+    group: 'System',
+    sortOrder: 95,
+  },
 ];
 
 const DEFAULT_ROLE_MATRIX: Array<{

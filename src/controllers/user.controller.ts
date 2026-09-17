@@ -9,6 +9,7 @@ import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { upsertUserFcmToken } from '@/services/push-token.service';
 import { createFirebaseUser } from '@/services/firebase.service';
+import { recordAuditLog } from '@/services/audit-log.service';
 
 /** Fields to exclude from user response (sensitive data) */
 const USER_PROJECTION = '-refreshTokens';
@@ -61,6 +62,15 @@ export const createUser = asyncHandler(async (req: AuthRequest, res: Response) =
   });
 
   const safeUser = await User.findById(user._id).select(USER_PROJECTION).lean();
+
+  void recordAuditLog({
+    req,
+    action: 'user.create',
+    targetType: 'User',
+    targetId: user._id.toString(),
+    targetLabel: normalizedEmail,
+    metadata: { role: role || 'Member' },
+  });
 
   sendSuccess(res, safeUser, t(lang, 'user.created'), 201);
 });
@@ -152,6 +162,14 @@ export const deleteUser = asyncHandler(async (req: AuthRequest, res: Response) =
     throw new AppError(t(lang, 'user.not_found'), 404);
   }
 
+  void recordAuditLog({
+    req,
+    action: 'user.delete',
+    targetType: 'User',
+    targetId: userId,
+    targetLabel: user.email || user.fullName,
+  });
+
   sendSuccess(res, null, t(lang, 'user.deleted'), 200);
 });
 
@@ -196,6 +214,15 @@ export const updateUser = asyncHandler(async (req: AuthRequest, res: Response) =
     throw new AppError(t(lang, 'user.not_found'), 404);
   }
 
+  void recordAuditLog({
+    req,
+    action: 'user.update',
+    targetType: 'User',
+    targetId: userId,
+    targetLabel: user.email || user.fullName,
+    metadata: update,
+  });
+
   sendSuccess(res, user, t(lang, 'user.updated'), 200);
 });
 
@@ -215,17 +242,31 @@ export const updateUserVerified = asyncHandler(async (req: AuthRequest, res: Res
 
   const { isVerified } = req.body as { isVerified: boolean };
 
-  const user = await User.findByIdAndUpdate(
-    userId,
-    { isVerified },
-    { new: true, runValidators: true }
-  )
+  // Deactivating also clears refresh tokens so the account can't silently
+  // mint a new access token once its current (short-lived) one expires —
+  // the auth middleware itself rejects isVerified:false accounts on their
+  // very next request, so this is defense in depth for the token refresh path.
+  const update: Record<string, unknown> = { isVerified };
+  if (!isVerified) {
+    update.refreshTokens = [];
+  }
+
+  const user = await User.findByIdAndUpdate(userId, update, { new: true, runValidators: true })
     .select(USER_PROJECTION)
     .lean();
 
   if (!user) {
     throw new AppError(t(lang, 'user.not found'), 404);
   }
+
+  void recordAuditLog({
+    req,
+    action: 'user.verified.update',
+    targetType: 'User',
+    targetId: userId,
+    targetLabel: user.email || user.fullName,
+    metadata: { isVerified },
+  });
 
   sendSuccess(res, user, t(lang, 'user.verified_updated'), 200);
 });
@@ -260,6 +301,15 @@ export const updateUserPassword = asyncHandler(async (req: AuthRequest, res: Res
   if (!user) {
     throw new AppError(t(lang, 'user.not_found'), 404);
   }
+
+  // Never record the password itself — just that it changed.
+  void recordAuditLog({
+    req,
+    action: 'user.password.update',
+    targetType: 'User',
+    targetId: userId,
+    targetLabel: user.email || user.fullName,
+  });
 
   sendSuccess(res, null, 'Password updated', 200);
 });

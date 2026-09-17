@@ -384,6 +384,10 @@ export const emailLogin = asyncHandler(
       throw new AppError('Incorrect password for this email. Please try again.', 401);
     }
 
+    if (!user.isVerified) {
+      throw new AppError('This account has been deactivated. Contact an administrator.', 403);
+    }
+
     const isProfileIncomplete = !isProfileSetupComplete(user);
 
     const now = new Date();

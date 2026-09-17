@@ -62,6 +62,7 @@ export interface IEvent extends Document {
   schedule?: IEventSchedule[];
   eligibility?: IEventEligibility;
   youtubeLink?: string;
+  registrationLink?: string;
   category?: IEventCategory;
   currentParticipants: number;
   status: 'Open' | 'Draft' | 'Full' | 'Closed' | 'Disabled' | 'Completed' | 'Archived';
@@ -246,6 +247,10 @@ const EventSchema = new Schema(
       min: [0, 'Max age cannot be negative'],
     },
     youtubeLink: {
+      type: String,
+      trim: true,
+    },
+    registrationLink: {
       type: String,
       trim: true,
     },
