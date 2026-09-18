@@ -42,6 +42,7 @@ import { eventRegistrationEmail } from '@/services/emailTemplates';
 import { createEvent as createIcsEvent } from 'ics';
 import fs from 'fs/promises';
 import AppConfig from '@/models/app-config.model';
+import { recordAuditLog } from '@/services/audit-log.service';
 
 // const EVENT_LOCALIZED_FIELDS = {
 //   title: 'titleAr',
@@ -489,6 +490,15 @@ export const createEvent = asyncHandler(async (req: AuthRequest, res: Response) 
   const event = await Event.create(eventData);
   const localizedEvent = localizeEventPayload(event.toObject(), lang);
 
+  void recordAuditLog({
+    req,
+    action: 'event.create',
+    targetType: 'Event',
+    targetId: event._id.toString(),
+    targetLabel: event.title,
+    metadata: { status: event.status },
+  });
+
   if (event.status === 'Open') {
     void notifyEventPublished(String(event._id));
     if (event.communityId) {
@@ -856,6 +866,15 @@ export const updateEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     void notifyEventCancelled(String(event._id));
   }
 
+  void recordAuditLog({
+    req,
+    action: 'event.update',
+    targetType: 'Event',
+    targetId: event._id.toString(),
+    targetLabel: event.title,
+    metadata: { fields: Object.keys(updateData) },
+  });
+
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.updated"), 201);
 });
 
@@ -874,13 +893,22 @@ export const deleteEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     throw new AppError(t(lang, "event.not_found"), 404);
   }
 
+  void recordAuditLog({
+    req,
+    action: 'event.delete',
+    targetType: 'Event',
+    targetId: getRouteParam(id),
+    targetLabel: event.title,
+  });
+
   sendSuccess(res, null, t(lang, "event.deleted"), 201);
 });
 
 const updateEventStatus = async (
   eventId: string,
   status: 'Draft' | 'Open' | 'Full' | 'Closed' | 'Disabled' | 'Completed' | 'Archived',
-  lang: SupportedLanguage
+  lang: SupportedLanguage,
+  req: AuthRequest
 ) => {
   const previous = await Event.findById(eventId).select('status publishedNotificationSentAt resultsNotificationSentAt cancelledNotificationSentAt').lean();
   const event = await Event.findByIdAndUpdate(
@@ -916,6 +944,15 @@ const updateEventStatus = async (
     void notifyEventCancelled(String(event._id));
   }
 
+  void recordAuditLog({
+    req,
+    action: 'event.status.update',
+    targetType: 'Event',
+    targetId: String(event._id),
+    targetLabel: event.title,
+    metadata: { from: previous?.status, to: status },
+  });
+
   return event;
 };
 
@@ -930,7 +967,7 @@ export const closeEventRegistration = asyncHandler(async (req: AuthRequest, res:
     ? req.params.eventId[0]
     : req.params.eventId;
 
-  const event = await updateEventStatus(eventId, 'Closed', lang);
+  const event = await updateEventStatus(eventId, 'Closed', lang, req);
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.registration_closed"), 200);
 });
 
@@ -953,7 +990,7 @@ export const reopenEventRegistration = asyncHandler(async (req: AuthRequest, res
     throw new AppError(t(lang, 'event.cannot_reopen_past_event'), 400);
   }
 
-  const event = await updateEventStatus(eventId, 'Open', lang);
+  const event = await updateEventStatus(eventId, 'Open', lang, req);
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.registration_reopened"), 200);
 });
 
@@ -968,7 +1005,7 @@ export const completeEvent = asyncHandler(async (req: AuthRequest, res: Response
     ? req.params.eventId[0]
     : req.params.eventId;
 
-  const event = await updateEventStatus(eventId, 'Completed', lang);
+  const event = await updateEventStatus(eventId, 'Completed', lang, req);
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.marked_completed"), 200);
 });
 
@@ -983,7 +1020,7 @@ export const disableEvent = asyncHandler(async (req: AuthRequest, res: Response)
     ? req.params.eventId[0]
     : req.params.eventId;
 
-  const event = await updateEventStatus(eventId, 'Disabled', lang);
+  const event = await updateEventStatus(eventId, 'Disabled', lang, req);
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.disabled"), 200);
 });
 
@@ -1510,6 +1547,14 @@ export const markParticipantNoShow = asyncHandler(async (req: AuthRequest, res: 
 
   await eventResult.save();
 
+  void recordAuditLog({
+    req,
+    action: 'event.participant.no_show',
+    targetType: 'Event',
+    targetId: eventId,
+    metadata: { userId },
+  });
+
   sendSuccess(res, eventResult, t(lang, "event.participant_no_show"), 200);
 });
 
@@ -1543,6 +1588,14 @@ export const removeEventParticipant = asyncHandler(async (req: AuthRequest, res:
     );
     await decrementStatsOnCancel(userId);
   }
+
+  void recordAuditLog({
+    req,
+    action: 'event.participant.remove',
+    targetType: 'Event',
+    targetId: eventId,
+    metadata: { userId },
+  });
 
   sendSuccess(res, null, t(lang, "event.participant_removed"), 200);
 });

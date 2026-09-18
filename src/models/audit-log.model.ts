@@ -18,7 +18,7 @@ const AuditLogSchema = new Schema(
   {
     actorId: {
       type: Schema.Types.ObjectId,
-      ref: 'User',
+      ref: 'users',
       index: true,
     },
     actorEmail: { type: String, trim: true },
