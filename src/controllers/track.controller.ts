@@ -13,6 +13,42 @@ import { SupportedLanguage } from '@/utils/localization';
 import { localizeTrack } from '@/utils/track-payload';
 import { localizeEventPayload } from '@/utils/event-payload';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
+import {
+  getCachedLookupMap,
+  warmLookupCache,
+  LOOKUP_TYPE_TRACK_FACILITY,
+} from '@/services/lookup.service';
+
+/**
+ * Maps incoming facilities to their canonical lookup `value` and removes
+ * duplicates. Clients may send back the localized labels they were given
+ * ("Restrooms", "دورات المياه") instead of the stored value ("restrooms"),
+ * which previously caused the same facility to be saved several times.
+ */
+const normalizeFacilitiesInput = async (value: unknown): Promise<string[] | undefined> => {
+  if (!Array.isArray(value)) return undefined;
+  await warmLookupCache(LOOKUP_TYPE_TRACK_FACILITY);
+  const lookup = getCachedLookupMap(LOOKUP_TYPE_TRACK_FACILITY);
+  const byKey = new Map<string, string>();
+  for (const [stored, entry] of Object.entries(lookup)) {
+    byKey.set(stored.trim().toLowerCase(), stored);
+    if (entry.label) byKey.set(entry.label.trim().toLowerCase(), stored);
+    if (entry.labelAr) byKey.set(entry.labelAr.trim().toLowerCase(), stored);
+  }
+
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of value) {
+    if (typeof raw !== 'string' || !raw.trim()) continue;
+    const key = raw.trim().toLowerCase();
+    const canonical = byKey.get(key) ?? raw.trim();
+    const dedupeKey = canonical.toLowerCase();
+    if (seen.has(dedupeKey)) continue;
+    seen.add(dedupeKey);
+    result.push(canonical);
+  }
+  return result;
+};
 
 const normalizeGalleryImagesInput = (value: unknown): string[] => {
   if (!value) return [];
@@ -113,6 +149,8 @@ export const createTrack = asyncHandler(async (req: AuthRequest, res: Response) 
     teackData: req.body.teackData ? new Date(req.body.teackData) : undefined,
     createdBy: userId,
     };
+    const createFacilities = await normalizeFacilitiesInput(teackData.facilities);
+    if (createFacilities) teackData.facilities = createFacilities;
     await attachTrackImages(req, teackData);
     const bodyGalleryImages = normalizeGalleryImagesInput((req.body as any).galleryImages);
     const mergedGalleryImages = [...(teackData.galleryImages || []), ...bodyGalleryImages];
@@ -380,6 +418,8 @@ export const updateTrack = asyncHandler(async (req: AuthRequest, res: Response) 
     }
 
     const updateData = { ...req.body };
+    const updateFacilities = await normalizeFacilitiesInput(updateData.facilities);
+    if (updateFacilities) updateData.facilities = updateFacilities;
     await attachTrackImages(req, updateData);
 
     // console.log('req.body:', req.body);
