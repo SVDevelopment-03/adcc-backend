@@ -32,6 +32,7 @@ import { getStaticData } from '@/controllers/lookup.controller';
 import newsRoutes from './news.route';
 import mediaRoutes from './media.route';
 import contactMessageRoutes from './contact-message.route';
+import splashRoutes from './splash.route';
 // import publicStatsRoutes from './public-stats.route';
 const router = Router();
 
@@ -73,6 +74,7 @@ router.get('/static-data', getStaticData);
 router.use('/news', newsRoutes);
 router.use('/media', mediaRoutes);
 router.use('/contact', contactMessageRoutes);
+router.use('/splash', splashRoutes);
 
 // Add more routes here as you create them
 // router.use('/users', userRoutes);
