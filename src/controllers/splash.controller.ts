@@ -8,7 +8,7 @@ import { asyncHandler } from '@/utils/async-handler';
  * Response shape:
  * { url: string, type: 'image'|'video', duration?: number }
  */
-export const getSplashPublic = asyncHandler(async (req: Request, res: Response) => {
+export const getSplashPublic = asyncHandler(async (_req: Request, res: Response) => {
   // Prefer group 'splash-screen' and active items; return the first active item.
   const items = await GlobalSetting.find({ group: 'splash-screen', active: true })
     .select('group key title description image')
@@ -21,9 +21,11 @@ export const getSplashPublic = asyncHandler(async (req: Request, res: Response) 
 
   const item = items[0];
   const url = item.image || null;
-  if (!url) return sendSuccess(res, null, 'No splash configured', 200);
+  if (!url) {
+    return sendSuccess(res, null, 'No splash configured', 200);
+  }
 
-  const isVideoExtension = /\.(mp4|webm|mov|m3u8|gif)(?:\?|$)/i.test(url);
+  const isVideoExtension = /\.(mp4|webm|mov|m3u8)(?:\?|$)/i.test(url);
   const payload: Record<string, any> = {
     url,
     type: isVideoExtension ? 'video' : 'image',
@@ -49,7 +51,8 @@ export const getSplashPublic = asyncHandler(async (req: Request, res: Response) 
 
   if (payload.type === 'video') {
     delete payload.duration;
+    return sendSuccess(res, payload, 'Splash fetched', 200);
   }
 
-  sendSuccess(res, payload, 'Splash fetched', 200);
+  return sendSuccess(res, payload, 'Splash fetched', 200);
 });
