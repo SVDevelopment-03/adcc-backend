@@ -63,6 +63,9 @@ router.use('/admin-notifications', adminNotificationRoutes);
 router.use('/app-config', appConfigRoutes);
 router.use('/app-banners', bannerRoutes);
 router.use('/app-banners-ar', bannerArRoutes);
+// Backward-compatible aliases for older frontend bundles that call /banner
+router.use('/banner', bannerRoutes);
+router.use('/banner-ar', bannerArRoutes);
 router.use('/product-banners', productBannerRoutes);
 router.use('/product-banners-ar', productBannerArRoutes);
 router.use('/newsletter-subscriptions', newsletterSubscriptionRoutes);
