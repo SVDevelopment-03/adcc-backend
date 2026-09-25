@@ -23,22 +23,32 @@ export const getSplashPublic = asyncHandler(async (req: Request, res: Response) 
   const url = item.image || null;
   if (!url) return sendSuccess(res, null, 'No splash configured', 200);
 
-  // Simple heuristic: treat common video extensions as video
-  const isVideo = /\.(mp4|webm|mov|m3u8)(?:\?|$)/i.test(url);
-
+  const isVideoExtension = /\.(mp4|webm|mov|m3u8|gif)(?:\?|$)/i.test(url);
   const payload: Record<string, any> = {
     url,
-    type: isVideo ? 'video' : 'image',
+    type: isVideoExtension ? 'video' : 'image',
   };
 
-  // Allow optional duration in seconds encoded in description as JSON like {"duration":5}
   try {
     if (item.description) {
       const parsed = JSON.parse(item.description as string);
-      if (parsed && typeof parsed.duration === 'number') payload.duration = parsed.duration;
+      const explicitType = parsed && typeof parsed.type === 'string' ? parsed.type.toLowerCase() : undefined;
+      if (explicitType === 'video') {
+        payload.type = 'video';
+      } else if (explicitType === 'image' || explicitType === 'gif') {
+        payload.type = 'image';
+      }
+
+      if (payload.type !== 'video' && parsed && typeof parsed.duration === 'number') {
+        payload.duration = parsed.duration;
+      }
     }
   } catch {
     // ignore
+  }
+
+  if (payload.type === 'video') {
+    delete payload.duration;
   }
 
   sendSuccess(res, payload, 'Splash fetched', 200);
