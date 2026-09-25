@@ -9,9 +9,8 @@ import { asyncHandler } from '@/utils/async-handler';
  * { url: string, type: 'image'|'video', duration?: number }
  */
 export const getSplashPublic = asyncHandler(async (_req: Request, res: Response) => {
-  // Prefer group 'splash-screen' and active items; return the first active item.
-  const items = await GlobalSetting.find({ group: 'splash-screen', active: true })
-    .select('group key title description image')
+  const items = await GlobalSetting.find({ group: 'splash-screen' })
+    .select('group key title description image active updatedAt')
     .sort({ updatedAt: -1 })
     .lean();
 
@@ -19,7 +18,47 @@ export const getSplashPublic = asyncHandler(async (_req: Request, res: Response)
     return sendSuccess(res, null, 'No splash configured', 200);
   }
 
-  const item = items[0];
+  const selected = items
+    .map((item) => {
+      let priority = 1;
+      let status: string | undefined;
+      let enabled = item.active === true;
+
+      try {
+        const parsed = item.description ? JSON.parse(item.description as string) : null;
+        if (parsed && typeof parsed === 'object') {
+          const rawPriority = Number(parsed.priority ?? 1);
+          if (Number.isFinite(rawPriority)) priority = rawPriority;
+          if (typeof parsed.status === 'string') status = parsed.status.toLowerCase();
+          if (typeof parsed.enabled === 'boolean') enabled = parsed.enabled;
+        }
+      } catch {
+        // ignore malformed metadata
+      }
+
+      const isPublished = status === 'published' || status === 'scheduled';
+      const isLive = enabled || isPublished;
+
+      return {
+        item,
+        priority,
+        isLive,
+      };
+    })
+    .filter(({ item, isLive }) => {
+      if (!isLive) return false;
+      return item.image != null && item.image !== '';
+    })
+    .sort((a, b) => {
+      if (b.priority !== a.priority) return b.priority - a.priority;
+      return new Date(b.item.updatedAt ?? 0).getTime() - new Date(a.item.updatedAt ?? 0).getTime();
+    })[0];
+
+  if (!selected) {
+    return sendSuccess(res, null, 'No splash configured', 200);
+  }
+
+  const { item } = selected;
   const url = item.image || null;
   if (!url) {
     return sendSuccess(res, null, 'No splash configured', 200);
