@@ -57,9 +57,9 @@ export const getSplashPublic = asyncHandler(async (_req: Request, res: Response)
     })
     .sort((a, b) => {
       const statusWeight: Record<string, number> = {
+        current: 5,
         published: 4,
         scheduled: 3,
-        current: 2,
         draft: 1,
       };
 

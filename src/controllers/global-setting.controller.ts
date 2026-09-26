@@ -105,19 +105,36 @@ const syncCurrentSplashStatus = async (currentKey: string, currentDescription?: 
   await Promise.all(
     candidates.map(async (item) => {
       const meta = parseSplashMetadata(item.description);
+      const nextStatus =
+        meta.status === 'published' || meta.status === 'scheduled'
+          ? meta.status
+          : item.active === false
+            ? 'draft'
+            : 'published';
+
       const nextMeta = {
         ...meta,
-        status: typeof meta.enabled === 'boolean' ? (meta.enabled ? 'published' : 'draft') : (item.active === false ? 'draft' : 'published'),
-        enabled: typeof meta.enabled === 'boolean' ? meta.enabled : item.active !== false,
+        status: nextStatus,
+        enabled: item.active !== false,
       };
 
-      if (meta.status === 'current' || meta.status === 'published' || meta.status === 'scheduled' || meta.status === 'draft') {
-        await GlobalSetting.findByIdAndUpdate(item._id, {
-          description: JSON.stringify(nextMeta),
-          active: nextMeta.enabled,
-        });
-      }
+      await GlobalSetting.findByIdAndUpdate(item._id, {
+        description: JSON.stringify(nextMeta),
+        active: nextMeta.enabled,
+      });
     })
+  );
+
+  await GlobalSetting.findOneAndUpdate(
+    { group: 'splash-screen', key: currentKey },
+    {
+      active: true,
+      description: JSON.stringify({
+        ...currentMeta,
+        status: 'current',
+        enabled: true,
+      }),
+    }
   );
 };
 
