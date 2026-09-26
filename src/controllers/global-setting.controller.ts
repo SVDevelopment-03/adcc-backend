@@ -78,6 +78,49 @@ const parseBulkFileField = (fieldname: string): { key: string; type: 'image' | '
   return null;
 };
 
+const parseSplashMetadata = (description: unknown): Record<string, any> => {
+  if (typeof description !== 'string' || description.trim() === '') {
+    return {};
+  }
+
+  try {
+    const parsed = JSON.parse(description);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+};
+
+const syncCurrentSplashStatus = async (currentKey: string, currentDescription?: string) => {
+  const currentMeta = parseSplashMetadata(currentDescription);
+  if (typeof currentMeta.status !== 'string' || currentMeta.status.toLowerCase() !== 'current') {
+    return;
+  }
+
+  const candidates = await GlobalSetting.find({
+    group: 'splash-screen',
+    key: { $ne: currentKey },
+  }).select('_id key group description active').lean();
+
+  await Promise.all(
+    candidates.map(async (item) => {
+      const meta = parseSplashMetadata(item.description);
+      const nextMeta = {
+        ...meta,
+        status: typeof meta.enabled === 'boolean' ? (meta.enabled ? 'published' : 'draft') : (item.active === false ? 'draft' : 'published'),
+        enabled: typeof meta.enabled === 'boolean' ? meta.enabled : item.active !== false,
+      };
+
+      if (meta.status === 'current' || meta.status === 'published' || meta.status === 'scheduled' || meta.status === 'draft') {
+        await GlobalSetting.findByIdAndUpdate(item._id, {
+          description: JSON.stringify(nextMeta),
+          active: nextMeta.enabled,
+        });
+      }
+    })
+  );
+};
+
 const attachContentSettingImage = async (
   req: AuthRequest,
   payload: { image?: string; [key: string]: any }
@@ -414,6 +457,13 @@ export const createContentSetting = asyncHandler(async (req: AuthRequest, res: R
     active: active ?? true,
   });
 
+  if (group === 'splash-screen') {
+    const metadata = parseSplashMetadata(description);
+    if (metadata.status === 'current') {
+      await syncCurrentSplashStatus(key, description);
+    }
+  }
+
   sendSuccess(res, setting, t(lang, 'contentSetting.created'), 201);
 });
 
@@ -496,6 +546,13 @@ export const updateContentSetting = asyncHandler(async (req: AuthRequest, res: R
   )
     .select('group key label title description image active createdAt updatedAt')
     .lean();
+
+  if (updated?.group === 'splash-screen') {
+    const metadata = parseSplashMetadata(updated.description);
+    if (metadata.status === 'current') {
+      await syncCurrentSplashStatus(updated.key, updated.description);
+    }
+  }
 
   sendSuccess(res, updated, t(lang, 'contentSetting.updated'), 200);
 });
