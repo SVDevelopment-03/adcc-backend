@@ -21,7 +21,7 @@ export const getSplashPublic = asyncHandler(async (_req: Request, res: Response)
   const selected = items
     .map((item) => {
       let priority = 1;
-      let status: string | undefined;
+      let status = 'draft';
       let enabled = item.active === true;
 
       try {
@@ -36,12 +36,18 @@ export const getSplashPublic = asyncHandler(async (_req: Request, res: Response)
         // ignore malformed metadata
       }
 
-      const isPublished = status === 'published' || status === 'scheduled';
-      const isLive = enabled || isPublished;
+      const normalizedStatus = status === 'current' ? 'published' : status;
+      const isPublishedLike = normalizedStatus === 'published' || normalizedStatus === 'scheduled';
+      const isActiveCurrent = enabled && !isPublishedLike;
+      const isLive = enabled || isPublishedLike;
 
       return {
         item,
         priority,
+        status: normalizedStatus,
+        enabled,
+        isPublishedLike,
+        isActiveCurrent,
         isLive,
       };
     })
@@ -50,6 +56,17 @@ export const getSplashPublic = asyncHandler(async (_req: Request, res: Response)
       return item.image != null && item.image !== '';
     })
     .sort((a, b) => {
+      const statusWeight: Record<string, number> = {
+        published: 4,
+        scheduled: 3,
+        current: 2,
+        draft: 1,
+      };
+
+      const aWeight = statusWeight[a.status] ?? 1;
+      const bWeight = statusWeight[b.status] ?? 1;
+
+      if (bWeight !== aWeight) return bWeight - aWeight;
       if (b.priority !== a.priority) return b.priority - a.priority;
       return new Date(b.item.updatedAt ?? 0).getTime() - new Date(a.item.updatedAt ?? 0).getTime();
     })[0];
