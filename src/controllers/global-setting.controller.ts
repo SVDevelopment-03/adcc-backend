@@ -105,17 +105,13 @@ const syncCurrentSplashStatus = async (currentKey: string, currentDescription?: 
   await Promise.all(
     candidates.map(async (item) => {
       const meta = parseSplashMetadata(item.description);
-      const nextStatus =
-        meta.status === 'published' || meta.status === 'scheduled'
-          ? meta.status
-          : item.active === false
-            ? 'draft'
-            : 'published';
+      const shouldKeepPublished = meta.status === 'published' || meta.status === 'scheduled';
+      const nextStatus = shouldKeepPublished ? meta.status : item.active === false ? 'draft' : 'published';
 
       const nextMeta = {
         ...meta,
         status: nextStatus,
-        enabled: item.active !== false,
+        enabled: meta.enabled !== false,
       };
 
       await GlobalSetting.findByIdAndUpdate(item._id, {

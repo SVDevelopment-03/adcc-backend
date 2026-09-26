@@ -36,18 +36,14 @@ export const getSplashPublic = asyncHandler(async (_req: Request, res: Response)
         // ignore malformed metadata
       }
 
-      const normalizedStatus = status === 'current' ? 'published' : status;
-      const isPublishedLike = normalizedStatus === 'published' || normalizedStatus === 'scheduled';
-      const isActiveCurrent = enabled && !isPublishedLike;
-      const isLive = enabled || isPublishedLike;
+      const isStatusEnabled = status === 'current' || status === 'published' || status === 'scheduled';
+      const isLive = enabled && isStatusEnabled;
 
       return {
         item,
         priority,
-        status: normalizedStatus,
+        status,
         enabled,
-        isPublishedLike,
-        isActiveCurrent,
         isLive,
       };
     })
