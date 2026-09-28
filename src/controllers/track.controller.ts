@@ -198,7 +198,7 @@ export const createTrack = asyncHandler(async (req: AuthRequest, res: Response) 
     
     const tracks = await Track.find(query)
     .populate('createdBy', 'fullName email')
-    .sort({ eventDate: 1, createdAt: -1 })
+    .sort({ displayPriority: -1, createdAt: -1 })
     .skip(skip)
     .limit(limitNum);
     const localizedTracks = tracks.map((track) => localizeTrack(track.toObject(), lang));
