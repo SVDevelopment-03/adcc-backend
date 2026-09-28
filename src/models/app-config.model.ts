@@ -24,6 +24,20 @@ export interface IAppConfig extends Document {
       headCode: string;
       bodyCode: string;
     };
+    appUpdate?: {
+      android: {
+        minimumVersion: string;
+        forceUpdate: boolean;
+        storeUrl: string;
+        updateMessage: string;
+      };
+      ios: {
+        minimumVersion: string;
+        forceUpdate: boolean;
+        storeUrl: string;
+        updateMessage: string;
+      };
+    };
     features: Record<string, boolean>;
     notifications: Record<string, boolean>;
     security: Record<string, boolean>;
