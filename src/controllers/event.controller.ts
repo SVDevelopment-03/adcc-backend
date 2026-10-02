@@ -297,6 +297,26 @@ const getRouteParam = (value?: string | string[]): string => {
   return value ?? '';
 };
 
+// Statuses that must never appear in public (guest/member) event listings.
+const UNPUBLISHED_EVENT_STATUSES = ['Draft', 'Disabled', 'Archived'];
+
+// True for an active dashboard user (legacy Admin or any RBAC staff role).
+// Relies on optionalAuthenticate having populated req.user.
+const isStaffRequest = async (req: Request): Promise<boolean> => {
+  const authUser = (req as AuthRequest).user;
+  if (!authUser?.id || authUser.isGuest) return false;
+  if (!mongoose.Types.ObjectId.isValid(String(authUser.id))) return false;
+
+  const user = await User.findById(authUser.id).select('role roleId isVerified').lean();
+  if (!user || !user.isVerified) return false;
+  return user.role === 'Admin' || Boolean(user.roleId);
+};
+
+// A token was sent but optionalAuthenticate could not verify it (typically expired).
+// Answer 401 so the dashboard refreshes its token instead of silently getting the public view.
+const hasUnverifiedToken = (req: Request): boolean =>
+  Boolean(req.headers.authorization) && !(req as AuthRequest).user;
+
 const normalizeRegistrationFee = (data: Record<string, any>) => {
   const hasType = Object.prototype.hasOwnProperty.call(data, 'registrationFeeType');
   const incomingType = data.registrationFeeType;
@@ -543,6 +563,21 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
     filter.eventDate = { $gte: todayStart };
   }
 
+  // Draft/Disabled/Archived events are only listed for staff, and only when the
+  // dashboard asks for them explicitly — the public site and app never see them.
+  const wantsUnpublished = String(req.query.includeUnpublished) === 'true';
+  if (wantsUnpublished && hasUnverifiedToken(req)) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+  const includeUnpublished = wantsUnpublished && (await isStaffRequest(req));
+  if (!includeUnpublished) {
+    if (typeof status === 'string' && UNPUBLISHED_EVENT_STATUSES.includes(status)) {
+      filter.status = { $in: [] };
+    } else if (!filter.status) {
+      filter.status = { $nin: UNPUBLISHED_EVENT_STATUSES };
+    }
+  }
+
   if (typeof city === 'string') {
     filter.city = new RegExp(`^${escapeRegex(city)}$`, 'i');
   }
@@ -637,7 +672,7 @@ export const getHomeEvents = asyncHandler(async (req: Request, res: Response) =>
   let total = await Event.countDocuments(openFilter);
 
   if (events.length == 0) {
-    const allFilter: any = {};
+    const allFilter: any = { status: { $nin: UNPUBLISHED_EVENT_STATUSES } };
     events = await Event.find(allFilter)
       .populate('createdBy', 'fullName email')
       .populate('trackId', 'title titleAr')
@@ -770,6 +805,14 @@ export const getEventById = asyncHandler(async (req: Request, res: Response) => 
     .populate('communityId', 'title titleAr');
 
   if (!event) {
+    throw new AppError(t(lang, "event.not_found"), 404);
+  }
+
+  // A draft is not published yet: only staff may open it.
+  if (event.status === 'Draft' && !(await isStaffRequest(req))) {
+    if (hasUnverifiedToken(req)) {
+      throw new AppError(t(lang, 'auth.unauthorized'), 401);
+    }
     throw new AppError(t(lang, "event.not_found"), 404);
   }
 

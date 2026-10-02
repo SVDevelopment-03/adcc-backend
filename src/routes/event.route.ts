@@ -36,7 +36,7 @@ import {
   getEventsQuerySchema,
 } from '@/validators/event.validator';
 import { joinEventSchema } from '@/validators/event-result.validator';
-import { authenticate } from '@/middleware/auth.middleware';
+import { authenticate, optionalAuthenticate } from '@/middleware/auth.middleware';
 import { requireStaffPermission } from '@/middleware/rbac.middleware';
 import { requireParsedMultipartBody, uploadEventImagesIfMultipart } from '@/middleware/upload.middleware';
 
@@ -45,7 +45,8 @@ const router = express.Router();
 
 // Public routes – guest-accessible (no auth required)
 
-router.get('/', validate(getEventsQuerySchema), getAllEvents);
+// optionalAuthenticate lets staff see unpublished (Draft/Disabled/Archived) events.
+router.get('/', optionalAuthenticate, validate(getEventsQuerySchema), getAllEvents);
 router.get('/home', getHomeEvents);
 router.get(
   '/completed-stats',
@@ -53,7 +54,7 @@ router.get(
   // requireStaffPermission('manage_events'),
   getCompletedEventStats
 );
-router.get('/:id', getEventById);
+router.get('/:id', optionalAuthenticate, getEventById);
 router.post('/:eventId/results', authenticate, getEventResults);
 router.get('/:eventId/completed-summary', authenticate, getEventCompletedSummary);
 router.get('/:eventId/results',  authenticate, getEventResultsList);

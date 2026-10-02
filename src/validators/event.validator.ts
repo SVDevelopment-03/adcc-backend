@@ -275,6 +275,8 @@ export const getEventsQuerySchema = z.object({
     })
     .optional(),
   search: z.string().trim().min(1).optional(),
+  // Dashboard only: also list Draft/Disabled/Archived events (ignored for non-staff callers)
+  includeUnpublished: z.enum(['true', 'false']).optional(),
   page: z.string().regex(/^\d+$/).transform(Number).optional(),
   limit: z.string().regex(/^\d+$/).transform(Number).optional(),
 });
