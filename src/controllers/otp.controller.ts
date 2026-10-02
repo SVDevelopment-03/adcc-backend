@@ -16,7 +16,12 @@ import { resolveRequestLanguage } from '@/utils/localization';
  * body: { recipient, sender?, category?, msgTemplate? }
  */
 export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
-  const { recipient, sender = 'ADDARRAJA', category = 'TXN', msgTemplate } = req.body as {
+  const {
+    recipient,
+    sender = 'ADDARRAJA',
+    category = 'TXN',
+    msgTemplate,
+  } = req.body as {
     recipient: string;
     sender?: string;
     category?: string;
@@ -27,9 +32,8 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
 
   const normalizedRecipient = normalizePhone(recipient) || recipient;
 
-
   // Generate 6-digit code
-  const code = (Math.floor(100000 + Math.random() * 900000)).toString();
+  const code = Math.floor(100000 + Math.random() * 900000).toString();
 
   // TTL in seconds (default 5 minutes)
   const ttlSeconds = 300;
@@ -37,13 +41,14 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
 
   // Default bilingual template (English then Arabic). A custom template can also be provided in the request body.
   const defaultTemplate =
-    'Darraja: Your verification code is {code}. Do not share it with anyone.\n' +
+    'DARRAJA: Your verification code is {code}. Do not share it with anyone.\n' +
     'دراجة: رمز التحقق الخاص بك هو {code}. لا تشاركه مع أي شخص.';
 
   // Prepare message by replacing placeholders if provided template includes them
-  let messageTemplateToUse = msgTemplate && typeof msgTemplate === 'string' && msgTemplate.trim().length > 0
-    ? msgTemplate
-    : defaultTemplate;
+  let messageTemplateToUse =
+    msgTemplate && typeof msgTemplate === 'string' && msgTemplate.trim().length > 0
+      ? msgTemplate
+      : defaultTemplate;
 
   // Replace placeholders {code} and {expiry}
   const message = messageTemplateToUse
@@ -57,7 +62,12 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
   // Send via Nexus
   // TODO: SMS OTP send point — server forwards OTP SMS to Nexus gateway here.
   // If you need to intercept or mock SMS delivery (tests/dev), patch here.
-  await nexusService.sendSmsViaNexus({ msg: message, recipient: normalizedRecipient, sender, category });
+  await nexusService.sendSmsViaNexus({
+    msg: message,
+    recipient: normalizedRecipient,
+    sender,
+    category,
+  });
 
   sendSuccess(res, { recipient: normalizedRecipient, expiresIn: 300 }, 'OTP sent');
 });
@@ -82,7 +92,8 @@ export const verifyOtpController = asyncHandler(async (req: Request, res: Respon
 
     if (/^5\d{8}$/.test(finalDigits)) return `+971${finalDigits}`;
     if (/^\d{9}$/.test(finalDigits) && finalDigits.startsWith('5')) return `+971${finalDigits}`;
-    if (/^\d{9}$/.test(finalDigits) && finalDigits.startsWith('0')) return `+971${finalDigits.slice(1)}`;
+    if (/^\d{9}$/.test(finalDigits) && finalDigits.startsWith('0'))
+      return `+971${finalDigits.slice(1)}`;
     if (/^971\d{8,9}$/.test(digits)) return `+${digits}`;
     if (/^\d{8,9}$/.test(finalDigits)) return `+971${finalDigits}`;
     return `+${digits}`;
@@ -96,25 +107,41 @@ export const verifyOtpController = asyncHandler(async (req: Request, res: Respon
   // If a user exists with this phone, issue JWT tokens; otherwise return isNewUser
   const variantPhones = getPhoneLookupVariants(normalizedRecipient);
   const user = await User.findOne({
-    $or: variantPhones.map((phone) => ({ phone }))
+    $or: variantPhones.map((phone) => ({ phone })),
   });
   if (user) {
-    const tokens = generateTokens({ id: user._id.toString(), uid: user._id.toString(), phone: user.phone || '' });
+    const tokens = generateTokens({
+      id: user._id.toString(),
+      uid: user._id.toString(),
+      phone: user.phone || '',
+    });
 
     // Store refresh token in DB (simple expiry adding similar to auth flow)
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 3);
     user.refreshTokens = user.refreshTokens || [];
-    user.refreshTokens.push({ token: tokens.refreshToken, expiresAt, createdAt: new Date() } as any);
+    user.refreshTokens.push({
+      token: tokens.refreshToken,
+      expiresAt,
+      createdAt: new Date(),
+    } as any);
     await user.save();
 
     const lang = resolveRequestLanguage(req);
-    sendSuccess(res, { user: { id: user._id, phone: user.phone, fullName: user.fullName }, ...tokens }, t(lang, 'auth.login_success'));
+    sendSuccess(
+      res,
+      { user: { id: user._id, phone: user.phone, fullName: user.fullName }, ...tokens },
+      t(lang, 'auth.login_success')
+    );
   } else {
     // New user flow: return isNewUser with temporary tokens
     const uid = crypto.randomUUID();
     const tokens = generateTokens({ uid, phone: recipient });
     const lang = resolveRequestLanguage(req);
-    sendSuccess(res, { isNewUser: true, uid, phone: recipient, ...tokens }, t(lang, 'auth.verify_success'));
+    sendSuccess(
+      res,
+      { isNewUser: true, uid, phone: recipient, ...tokens },
+      t(lang, 'auth.verify_success')
+    );
   }
 });
