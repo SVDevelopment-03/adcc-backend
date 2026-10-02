@@ -13,6 +13,7 @@ import {
   LOOKUP_TYPE_CHALLENGE_TYPE,
   LOOKUP_TYPE_CHALLENGE_UNIT,
   LOOKUP_TYPE_NEWS_CATEGORY,
+  LOOKUP_TYPE_EVENT_ORGANIZER,
 } from '@/services/lookup.service';
 
 /**
@@ -193,6 +194,11 @@ export const localizeEventStatic = (event: Record<string, any>, lang: SupportedL
   }
   if (event.country) {
     event.country = resolveDynamicLabel(LOOKUP_TYPE_COUNTRY, event.country, lang);
+  }
+  if (event.organizedBy) {
+    // `organizedBy` stays the raw lookup value so the edit form's dropdown can
+    // match it; the display name for the requested language goes alongside.
+    event.organizedByName = resolveDynamicLabel(LOOKUP_TYPE_EVENT_ORGANIZER, event.organizedBy, lang);
   }
   if (event.amenities && Array.isArray(event.amenities)) {
     // Event amenities are dashboard-managed (see lookup.service.ts); fall back
