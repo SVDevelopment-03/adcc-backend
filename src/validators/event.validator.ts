@@ -98,6 +98,8 @@ export const createEventSchema = z
     minAge: z.preprocess(firstValue, z.coerce.number().int().min(0, 'Min age cannot be negative')).optional(),
     maxAge: z.preprocess(firstValue, z.coerce.number().int().min(0, 'Max age cannot be negative')).optional(),
     youtubeLink: z.preprocess(firstValue, z.string().url('Invalid YouTube URL')).optional().or(z.literal('')),
+    registrationLink: z.preprocess(firstValue, z.string().url('Invalid registration link URL')).optional().or(z.literal('')),
+    organizedBy: z.preprocess(firstValue, z.string().trim()).optional(),
     distance: optionalCoerceNumberField('Distance cannot be negative'),
     communityId: optionalObjectIdSchema,
     trackId: optionalObjectIdSchema,
@@ -188,6 +190,9 @@ export const updateEventSchema = z
     minAge: z.preprocess(firstValue, z.coerce.number().int().min(0, 'Min age cannot be negative')).optional(),
     maxAge: z.preprocess(firstValue, z.coerce.number().int().min(0, 'Max age cannot be negative')).optional(),
     youtubeLink: z.preprocess(firstValue, z.string().url('Invalid YouTube URL')).optional().or(z.literal('')),
+    registrationLink: z.preprocess(firstValue, z.string().url('Invalid registration link URL')).optional().or(z.literal('')),
+    // Empty string clears the organiser
+    organizedBy: z.preprocess(firstValue, z.string().trim()).optional(),
     status: z.preprocess(firstValue, z.enum(['Draft', 'Open', 'Full', 'Closed', 'Disabled', 'Completed', 'Archived'])).optional(),
     distance: optionalCoerceNumberField('Distance cannot be negative'),
     communityId: optionalObjectIdSchema,
@@ -273,6 +278,8 @@ export const getEventsQuerySchema = z.object({
     })
     .optional(),
   search: z.string().trim().min(1).optional(),
+  // Dashboard only: also list Draft/Disabled/Archived events (ignored for non-staff callers)
+  includeUnpublished: z.enum(['true', 'false']).optional(),
   page: z.string().regex(/^\d+$/).transform(Number).optional(),
   limit: z.string().regex(/^\d+$/).transform(Number).optional(),
 });

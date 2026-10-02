@@ -1,5 +1,6 @@
 import { Response } from 'express';
 import mongoose from 'mongoose';
+import bcrypt from 'bcryptjs';
 import { t } from '@/utils/i18n';
 import bcrypt from 'bcryptjs';
 import User from '@/models/user.model';
@@ -8,6 +9,8 @@ import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { upsertUserFcmToken } from '@/services/push-token.service';
+import { createFirebaseUser } from '@/services/firebase.service';
+import { recordAuditLog } from '@/services/audit-log.service';
 import { createFirebaseUser, getFirebaseUserByEmail, deleteFirebaseUser } from '@/services/firebase.service';
 import { updateFirebasePassword } from '@/services/firebase.service';
 
@@ -76,6 +79,15 @@ export const createUser = asyncHandler(async (req: AuthRequest, res: Response) =
   });
 
   const safeUser = await User.findById(user._id).select(USER_PROJECTION).lean();
+
+  void recordAuditLog({
+    req,
+    action: 'user.create',
+    targetType: 'User',
+    targetId: user._id.toString(),
+    targetLabel: normalizedEmail,
+    metadata: { role: role || 'Member' },
+  });
 
   sendSuccess(res, safeUser, t(lang, 'user.created'), 201);
 });
@@ -167,6 +179,13 @@ export const deleteUser = asyncHandler(async (req: AuthRequest, res: Response) =
     throw new AppError(t(lang, 'user.not_found'), 404);
   }
 
+  void recordAuditLog({
+    req,
+    action: 'user.delete',
+    targetType: 'User',
+    targetId: userId,
+    targetLabel: user.email || user.fullName,
+  });
   // Also attempt to delete the Firebase user to keep Firebase Auth in sync.
   // Prefer deleting by attached firebaseUid; if missing, try to look up by email.
   (async () => {
@@ -235,6 +254,15 @@ export const updateUser = asyncHandler(async (req: AuthRequest, res: Response) =
     throw new AppError(t(lang, 'user.not_found'), 404);
   }
 
+  void recordAuditLog({
+    req,
+    action: 'user.update',
+    targetType: 'User',
+    targetId: userId,
+    targetLabel: user.email || user.fullName,
+    metadata: update,
+  });
+
   sendSuccess(res, user, t(lang, 'user.updated'), 200);
 });
 
@@ -294,11 +322,16 @@ export const updateUserVerified = asyncHandler(async (req: AuthRequest, res: Res
 
   const { isVerified } = req.body as { isVerified: boolean };
 
-  const user = await User.findByIdAndUpdate(
-    userId,
-    { isVerified },
-    { new: true, runValidators: true }
-  )
+  // Deactivating also clears refresh tokens so the account can't silently
+  // mint a new access token once its current (short-lived) one expires —
+  // the auth middleware itself rejects isVerified:false accounts on their
+  // very next request, so this is defense in depth for the token refresh path.
+  const update: Record<string, unknown> = { isVerified };
+  if (!isVerified) {
+    update.refreshTokens = [];
+  }
+
+  const user = await User.findByIdAndUpdate(userId, update, { new: true, runValidators: true })
     .select(USER_PROJECTION)
     .lean();
 
@@ -306,7 +339,59 @@ export const updateUserVerified = asyncHandler(async (req: AuthRequest, res: Res
     throw new AppError(t(lang, 'user.not found'), 404);
   }
 
+  void recordAuditLog({
+    req,
+    action: 'user.verified.update',
+    targetType: 'User',
+    targetId: userId,
+    targetLabel: user.email || user.fullName,
+    metadata: { isVerified },
+  });
+
   sendSuccess(res, user, t(lang, 'user.verified_updated'), 200);
+});
+
+/**
+ * Directly set a user's password (staff action — no existing password or
+ * reset code required, unlike the self-service forgot/reset-password flow).
+ * PATCH /user/:userId/password
+ * Requires manage_users.
+ */
+export const updateUserPassword = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as AuthRequest & { lang?: string }).lang || 'en') as string;
+  const userId =
+    typeof req.params.userId === 'string' ? req.params.userId : req.params.userId?.[0] ?? '';
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    throw new AppError(t(lang, 'user.not_found'), 404);
+  }
+
+  const { password } = req.body as { password: string };
+
+  const passwordHash = await bcrypt.hash(password.trim(), 12);
+
+  const user = await User.findByIdAndUpdate(
+    userId,
+    { passwordHash },
+    { new: true, runValidators: true }
+  )
+    .select(USER_PROJECTION)
+    .lean();
+
+  if (!user) {
+    throw new AppError(t(lang, 'user.not_found'), 404);
+  }
+
+  // Never record the password itself — just that it changed.
+  void recordAuditLog({
+    req,
+    action: 'user.password.update',
+    targetType: 'User',
+    targetId: userId,
+    targetLabel: user.email || user.fullName,
+  });
+
+  sendSuccess(res, null, 'Password updated', 200);
 });
 
 /**

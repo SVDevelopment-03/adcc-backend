@@ -43,6 +43,15 @@ export const updateUserVerifiedSchema = z
   })
   .strict();
 
+export const updateUserPasswordSchema = z
+  .object({
+    password: stringField('Password must be at least 6 characters').refine(
+      (val) => val.trim().length >= 6,
+      'Password must be at least 6 characters'
+    ),
+  })
+  .strict();
+
 export const registerFcmTokenSchema = z
   .object({
     token: stringField('FCM token is required'),
@@ -76,6 +85,7 @@ export const createUserSchema = z
   .strict();
 
 export type UpdateUserVerifiedInput = z.infer<typeof updateUserVerifiedSchema>;
+export type UpdateUserPasswordInput = z.infer<typeof updateUserPasswordSchema>;
 export type RegisterFcmTokenInput = z.infer<typeof registerFcmTokenSchema>;
 export type UnregisterFcmTokenInput = z.infer<typeof unregisterFcmTokenSchema>;
 export type CreateUserInput = z.infer<typeof createUserSchema>;

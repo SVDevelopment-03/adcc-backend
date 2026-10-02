@@ -42,6 +42,7 @@ import { eventRegistrationEmail } from '@/services/emailTemplates';
 import { createEvent as createIcsEvent } from 'ics';
 import fs from 'fs/promises';
 import AppConfig from '@/models/app-config.model';
+import { recordAuditLog } from '@/services/audit-log.service';
 
 // const EVENT_LOCALIZED_FIELDS = {
 //   title: 'titleAr',
@@ -296,6 +297,26 @@ const getRouteParam = (value?: string | string[]): string => {
   return value ?? '';
 };
 
+// Statuses that must never appear in public (guest/member) event listings.
+const UNPUBLISHED_EVENT_STATUSES = ['Draft', 'Disabled', 'Archived'];
+
+// True for an active dashboard user (legacy Admin or any RBAC staff role).
+// Relies on optionalAuthenticate having populated req.user.
+const isStaffRequest = async (req: Request): Promise<boolean> => {
+  const authUser = (req as AuthRequest).user;
+  if (!authUser?.id || authUser.isGuest) return false;
+  if (!mongoose.Types.ObjectId.isValid(String(authUser.id))) return false;
+
+  const user = await User.findById(authUser.id).select('role roleId isVerified').lean();
+  if (!user || !user.isVerified) return false;
+  return user.role === 'Admin' || Boolean(user.roleId);
+};
+
+// A token was sent but optionalAuthenticate could not verify it (typically expired).
+// Answer 401 so the dashboard refreshes its token instead of silently getting the public view.
+const hasUnverifiedToken = (req: Request): boolean =>
+  Boolean(req.headers.authorization) && !(req as AuthRequest).user;
+
 const normalizeRegistrationFee = (data: Record<string, any>) => {
   const hasType = Object.prototype.hasOwnProperty.call(data, 'registrationFeeType');
   const incomingType = data.registrationFeeType;
@@ -489,6 +510,15 @@ export const createEvent = asyncHandler(async (req: AuthRequest, res: Response) 
   const event = await Event.create(eventData);
   const localizedEvent = localizeEventPayload(event.toObject(), lang);
 
+  void recordAuditLog({
+    req,
+    action: 'event.create',
+    targetType: 'Event',
+    targetId: event._id.toString(),
+    targetLabel: event.title,
+    metadata: { status: event.status },
+  });
+
   if (event.status === 'Open') {
     void notifyEventPublished(String(event._id));
     if (event.communityId) {
@@ -531,6 +561,21 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
   // Past events should not appear as "open" or "full" in listings
   if (status === 'Open' || status === 'Full') {
     filter.eventDate = { $gte: todayStart };
+  }
+
+  // Draft/Disabled/Archived events are only listed for staff, and only when the
+  // dashboard asks for them explicitly — the public site and app never see them.
+  const wantsUnpublished = String(req.query.includeUnpublished) === 'true';
+  if (wantsUnpublished && hasUnverifiedToken(req)) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+  const includeUnpublished = wantsUnpublished && (await isStaffRequest(req));
+  if (!includeUnpublished) {
+    if (typeof status === 'string' && UNPUBLISHED_EVENT_STATUSES.includes(status)) {
+      filter.status = { $in: [] };
+    } else if (!filter.status) {
+      filter.status = { $nin: UNPUBLISHED_EVENT_STATUSES };
+    }
   }
 
   if (typeof city === 'string') {
@@ -627,7 +672,7 @@ export const getHomeEvents = asyncHandler(async (req: Request, res: Response) =>
   let total = await Event.countDocuments(openFilter);
 
   if (events.length == 0) {
-    const allFilter: any = {};
+    const allFilter: any = { status: { $nin: UNPUBLISHED_EVENT_STATUSES } };
     events = await Event.find(allFilter)
       .populate('createdBy', 'fullName email')
       .populate('trackId', 'title titleAr')
@@ -763,6 +808,14 @@ export const getEventById = asyncHandler(async (req: Request, res: Response) => 
     throw new AppError(t(lang, "event.not_found"), 404);
   }
 
+  // A draft is not published yet: only staff may open it.
+  if (event.status === 'Draft' && !(await isStaffRequest(req))) {
+    if (hasUnverifiedToken(req)) {
+      throw new AppError(t(lang, 'auth.unauthorized'), 401);
+    }
+    throw new AppError(t(lang, "event.not_found"), 404);
+  }
+
   const localizedEvent = localizeEventPayload(event.toObject(), lang);
   localizedEvent.currentParticipants = await getRegisteredParticipantCount(String(event._id));
 
@@ -856,6 +909,15 @@ export const updateEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     void notifyEventCancelled(String(event._id));
   }
 
+  void recordAuditLog({
+    req,
+    action: 'event.update',
+    targetType: 'Event',
+    targetId: event._id.toString(),
+    targetLabel: event.title,
+    metadata: { fields: Object.keys(updateData) },
+  });
+
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.updated"), 201);
 });
 
@@ -874,13 +936,22 @@ export const deleteEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     throw new AppError(t(lang, "event.not_found"), 404);
   }
 
+  void recordAuditLog({
+    req,
+    action: 'event.delete',
+    targetType: 'Event',
+    targetId: getRouteParam(id),
+    targetLabel: event.title,
+  });
+
   sendSuccess(res, null, t(lang, "event.deleted"), 201);
 });
 
 const updateEventStatus = async (
   eventId: string,
   status: 'Draft' | 'Open' | 'Full' | 'Closed' | 'Disabled' | 'Completed' | 'Archived',
-  lang: SupportedLanguage
+  lang: SupportedLanguage,
+  req: AuthRequest
 ) => {
   const previous = await Event.findById(eventId).select('status publishedNotificationSentAt resultsNotificationSentAt cancelledNotificationSentAt').lean();
   const event = await Event.findByIdAndUpdate(
@@ -916,6 +987,15 @@ const updateEventStatus = async (
     void notifyEventCancelled(String(event._id));
   }
 
+  void recordAuditLog({
+    req,
+    action: 'event.status.update',
+    targetType: 'Event',
+    targetId: String(event._id),
+    targetLabel: event.title,
+    metadata: { from: previous?.status, to: status },
+  });
+
   return event;
 };
 
@@ -930,7 +1010,7 @@ export const closeEventRegistration = asyncHandler(async (req: AuthRequest, res:
     ? req.params.eventId[0]
     : req.params.eventId;
 
-  const event = await updateEventStatus(eventId, 'Closed', lang);
+  const event = await updateEventStatus(eventId, 'Closed', lang, req);
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.registration_closed"), 200);
 });
 
@@ -953,7 +1033,7 @@ export const reopenEventRegistration = asyncHandler(async (req: AuthRequest, res
     throw new AppError(t(lang, 'event.cannot_reopen_past_event'), 400);
   }
 
-  const event = await updateEventStatus(eventId, 'Open', lang);
+  const event = await updateEventStatus(eventId, 'Open', lang, req);
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.registration_reopened"), 200);
 });
 
@@ -968,7 +1048,7 @@ export const completeEvent = asyncHandler(async (req: AuthRequest, res: Response
     ? req.params.eventId[0]
     : req.params.eventId;
 
-  const event = await updateEventStatus(eventId, 'Completed', lang);
+  const event = await updateEventStatus(eventId, 'Completed', lang, req);
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.marked_completed"), 200);
 });
 
@@ -983,7 +1063,7 @@ export const disableEvent = asyncHandler(async (req: AuthRequest, res: Response)
     ? req.params.eventId[0]
     : req.params.eventId;
 
-  const event = await updateEventStatus(eventId, 'Disabled', lang);
+  const event = await updateEventStatus(eventId, 'Disabled', lang, req);
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.disabled"), 200);
 });
 
@@ -1510,6 +1590,14 @@ export const markParticipantNoShow = asyncHandler(async (req: AuthRequest, res: 
 
   await eventResult.save();
 
+  void recordAuditLog({
+    req,
+    action: 'event.participant.no_show',
+    targetType: 'Event',
+    targetId: eventId,
+    metadata: { userId },
+  });
+
   sendSuccess(res, eventResult, t(lang, "event.participant_no_show"), 200);
 });
 
@@ -1543,6 +1631,14 @@ export const removeEventParticipant = asyncHandler(async (req: AuthRequest, res:
     );
     await decrementStatsOnCancel(userId);
   }
+
+  void recordAuditLog({
+    req,
+    action: 'event.participant.remove',
+    targetType: 'Event',
+    targetId: eventId,
+    metadata: { userId },
+  });
 
   sendSuccess(res, null, t(lang, "event.participant_removed"), 200);
 });

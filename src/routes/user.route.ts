@@ -9,6 +9,7 @@ import {
   registerFcmToken,
   unregisterFcmToken,
   updateUserVerified,
+  updateUserPassword,
   updateUser,
   updateUserPassword,
 } from '@/controllers/user.controller';
@@ -19,6 +20,7 @@ import {
   registerFcmTokenSchema,
   unregisterFcmTokenSchema,
   updateUserVerifiedSchema,
+  updateUserPasswordSchema,
 } from '@/validators/user.validator';
 
 const router = express.Router();
@@ -46,6 +48,13 @@ router.patch(
   requireStaffPermission('manage_users'),
   validate(updateUserVerifiedSchema),
   updateUserVerified
+);
+router.patch(
+  '/:userId/password',
+  authenticate,
+  requireStaffPermission('manage_users'),
+  validate(updateUserPasswordSchema),
+  updateUserPassword
 );
 
 router.patch(

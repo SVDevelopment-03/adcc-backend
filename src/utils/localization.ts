@@ -13,6 +13,7 @@ import {
   LOOKUP_TYPE_CHALLENGE_TYPE,
   LOOKUP_TYPE_CHALLENGE_UNIT,
   LOOKUP_TYPE_NEWS_CATEGORY,
+  LOOKUP_TYPE_EVENT_ORGANIZER,
 } from '@/services/lookup.service';
 
 /**
@@ -194,6 +195,11 @@ export const localizeEventStatic = (event: Record<string, any>, lang: SupportedL
   if (event.country) {
     event.country = resolveDynamicLabel(LOOKUP_TYPE_COUNTRY, event.country, lang);
   }
+  if (event.organizedBy) {
+    // `organizedBy` stays the raw lookup value so the edit form's dropdown can
+    // match it; the display name for the requested language goes alongside.
+    event.organizedByName = resolveDynamicLabel(LOOKUP_TYPE_EVENT_ORGANIZER, event.organizedBy, lang);
+  }
   if (event.amenities && Array.isArray(event.amenities)) {
     // Event amenities are dashboard-managed (see lookup.service.ts); fall back
     // to the legacy hardcoded amenities keys (Arabic only) for values not
@@ -288,8 +294,18 @@ export const localizeTrackStatic = (track: Record<string, any>, lang: SupportedL
   if (track.facilities && Array.isArray(track.facilities)) {
     // Facilities are dashboard-managed (see lookup.service.ts); fall back to the
     // legacy hardcoded amenities keys (Arabic only) for values not (yet) in the cache.
+    // Match stored text against the lookup's value, English label or Arabic
+    // label, ignoring case — older saves stored labels ("Lighting") rather
+    // than values ("lighting"), which otherwise bypassed the lookup entirely.
+    const facilityLookup = getCachedLookupMap(LOOKUP_TYPE_TRACK_FACILITY);
+    const facilityByKey = new Map<string, (typeof facilityLookup)[string]>();
+    for (const [value, entry] of Object.entries(facilityLookup)) {
+      facilityByKey.set(value.trim().toLowerCase(), entry);
+      if (entry.label) facilityByKey.set(entry.label.trim().toLowerCase(), entry);
+      if (entry.labelAr) facilityByKey.set(entry.labelAr.trim().toLowerCase(), entry);
+    }
     track.facilities = track.facilities.map((facility: string) => {
-      const dynamicEntry = getCachedLookupMap(LOOKUP_TYPE_TRACK_FACILITY)[facility];
+      const dynamicEntry = facilityByKey.get(String(facility).trim().toLowerCase());
       const dynamicLabel = lang === 'ar' ? dynamicEntry?.labelAr : dynamicEntry?.label;
       if (dynamicLabel) return dynamicLabel;
       if (lang !== 'ar') return facility;
@@ -303,6 +319,15 @@ export const localizeTrackStatic = (track: Record<string, any>, lang: SupportedL
         return t(lang, 'amenities.changingRooms');
       }
       return t(lang, `amenities.${facilityKey}`) || facility;
+    });
+    // Older saves could store the same facility more than once (as value and
+    // as label) — collapse them so each facility is listed once.
+    const seenFacilities = new Set<string>();
+    track.facilities = track.facilities.filter((label: string) => {
+      const key = String(label).trim().toLowerCase();
+      if (seenFacilities.has(key)) return false;
+      seenFacilities.add(key);
+      return true;
     });
   }
 

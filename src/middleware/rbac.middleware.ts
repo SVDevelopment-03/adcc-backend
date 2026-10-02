@@ -28,12 +28,23 @@ export const requireStaffPermission =
     }
 
     try {
-      const user = await User.findById(userId).select('role roleId');
+      const user = await User.findById(userId).select('role roleId isVerified');
 
       if (!user) {
         res.status(404).json({
           success: false,
           message: 'User not found',
+        });
+        return;
+      }
+
+      // Deactivated staff accounts lose admin-panel access immediately (on
+      // their very next request) rather than waiting out the short-lived
+      // access token — this is the enforcement side of "Deactivate & Logout".
+      if (!user.isVerified) {
+        res.status(401).json({
+          success: false,
+          message: 'This account has been deactivated',
         });
         return;
       }

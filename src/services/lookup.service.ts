@@ -52,6 +52,7 @@ export const LOOKUP_TYPE_EVENT_AMENITY = 'event_amenity';
 export const LOOKUP_TYPE_CHALLENGE_TYPE = 'challenge_type';
 export const LOOKUP_TYPE_CHALLENGE_UNIT = 'challenge_unit';
 export const LOOKUP_TYPE_NEWS_CATEGORY = 'news_category';
+export const LOOKUP_TYPE_EVENT_ORGANIZER = 'event_organizer';
 
 export const ALL_LOOKUP_TYPES = [
   LOOKUP_TYPE_EVENT_CATEGORY,
@@ -65,6 +66,7 @@ export const ALL_LOOKUP_TYPES = [
   LOOKUP_TYPE_CHALLENGE_TYPE,
   LOOKUP_TYPE_CHALLENGE_UNIT,
   LOOKUP_TYPE_NEWS_CATEGORY,
+  LOOKUP_TYPE_EVENT_ORGANIZER,
 ];
 
 // ─── Seed data ───────────────────────────────────────────────────────────
@@ -238,6 +240,12 @@ const NEWS_CATEGORY_SEED: SeedEntry[] = [
   { label: 'Announcements', labelAr: 'إعلانات', order: 5 },
 ];
 
+// Event organisers ("Organised by" on an event). Starts with the club itself,
+// which is what the public event page showed before organisers were selectable.
+const EVENT_ORGANIZER_SEED: SeedEntry[] = [
+  { value: 'ADCC', label: 'ADCC', labelAr: 'نادي أبوظبي للدراجات', order: 0 },
+];
+
 const SEED_BY_TYPE: Record<string, SeedEntry[]> = {
   [LOOKUP_TYPE_EVENT_CATEGORY]: EVENT_CATEGORY_SEED,
   [LOOKUP_TYPE_COMMUNITY_CATEGORY]: COMMUNITY_CATEGORY_SEED,
@@ -250,6 +258,7 @@ const SEED_BY_TYPE: Record<string, SeedEntry[]> = {
   [LOOKUP_TYPE_CHALLENGE_TYPE]: CHALLENGE_TYPE_SEED,
   [LOOKUP_TYPE_CHALLENGE_UNIT]: CHALLENGE_UNIT_SEED,
   [LOOKUP_TYPE_NEWS_CATEGORY]: NEWS_CATEGORY_SEED,
+  [LOOKUP_TYPE_EVENT_ORGANIZER]: EVENT_ORGANIZER_SEED,
 };
 
 /**

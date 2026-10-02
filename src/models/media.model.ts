@@ -28,7 +28,7 @@ const MediaSchema = new Schema<IMedia>(
     name: { type: String, required: true, trim: true },
     mimeType: { type: String, trim: true },
     size: { type: Number },
-    uploadedBy: { type: Schema.Types.ObjectId, ref: 'User' },
+    uploadedBy: { type: Schema.Types.ObjectId, ref: 'users' },
   },
   { timestamps: true }
 );

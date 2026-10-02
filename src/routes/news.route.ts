@@ -11,17 +11,18 @@ import {
 import { validate } from '@/middleware/validate.middleware';
 import { createNewsSchema, updateNewsSchema, getNewsQuerySchema } from '@/validators/news.validator';
 import { authenticate } from '@/middleware/auth.middleware';
-import { isAdmin } from '@/middleware/role.middleware';
+import { requireStaffPermission } from '@/middleware/rbac.middleware';
 import { uploadNewsImageIfMultipart, requireParsedMultipartBody } from '@/middleware/upload.middleware';
 
 const router = express.Router();
+const requireCmsManagement = requireStaffPermission('manage_cms', 'admin.panel');
 
 // Public: Published-only listing/detail
 router.get('/', validate(getNewsQuerySchema), getAllNews);
 
 // Admin / content-manager dashboard: any status (Draft/Published/Trash)
-router.get('/admin/all', authenticate, isAdmin, validate(getNewsQuerySchema), getAdminNews);
-router.get('/admin/:id', authenticate, isAdmin, getAdminNewsById);
+router.get('/admin/all', authenticate, requireCmsManagement, validate(getNewsQuerySchema), getAdminNews);
+router.get('/admin/:id', authenticate, requireCmsManagement, getAdminNewsById);
 
 router.get('/:id', getNewsById);
 
@@ -29,7 +30,7 @@ router.get('/:id', getNewsById);
 router.post(
   '/',
   authenticate,
-  isAdmin,
+  requireCmsManagement,
   uploadNewsImageIfMultipart,
   requireParsedMultipartBody,
   validate(createNewsSchema),
@@ -39,13 +40,13 @@ router.post(
 router.patch(
   '/:id',
   authenticate,
-  isAdmin,
+  requireCmsManagement,
   uploadNewsImageIfMultipart,
   requireParsedMultipartBody,
   validate(updateNewsSchema),
   updateNews
 );
 
-router.delete('/:id', authenticate, isAdmin, deleteNews);
+router.delete('/:id', authenticate, requireCmsManagement, deleteNews);
 
 export default router;

@@ -31,9 +31,14 @@ const PORT = process.env.PORT || 3000;
 const API_VERSION = process.env.API_VERSION || 'v1';
 const allowedOrigins = (process.env.ALLOWED_ORIGINS || '')
   .split(',')
-  .map((origin) => origin.trim())
+  .map((origin) => origin.trim().replace(/\/+$/, ''))
   .filter(Boolean);
 const allowAllOrigins = process.env.ALLOW_ALL_ORIGINS === 'true';
+// Production web origins are always allowed, even if ALLOWED_ORIGINS is missing them on the server
+const webOrigins = new Set([
+  'https://adcyclingclub.ae',
+  'https://www.adcyclingclub.ae',
+]);
 const mobileOrigins = new Set([
   'capacitor://localhost',
   'ionic://localhost',
@@ -52,7 +57,12 @@ const corsOptions: cors.CorsOptions = {
       return;
     }
 
-    if (allowAllOrigins || allowedOrigins.includes(origin) || mobileOrigins.has(origin)) {
+    if (
+      allowAllOrigins ||
+      allowedOrigins.includes(origin) ||
+      webOrigins.has(origin) ||
+      mobileOrigins.has(origin)
+    ) {
       callback(null, true);
       return;
     }

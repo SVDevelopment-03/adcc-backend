@@ -12,6 +12,7 @@ import {
   getEffectivePermissionKeys,
   seedDefaultRbac,
 } from '@/services/rbac.service';
+import { recordAuditLog } from '@/services/audit-log.service';
 
 const toId = (id: string) => new mongoose.Types.ObjectId(id);
 
@@ -50,6 +51,14 @@ export const createPermission = asyncHandler(async (req: AuthRequest, res: Respo
     sortOrder: sortOrder ?? 0,
   });
 
+  void recordAuditLog({
+    req,
+    action: 'permission.create',
+    targetType: 'Permission',
+    targetId: created._id.toString(),
+    targetLabel: created.name,
+  });
+
   sendSuccess(res, created.toObject(), 'Permission created', 201);
 });
 
@@ -68,6 +77,16 @@ export const updatePermission = asyncHandler(async (req: AuthRequest, res: Respo
     throw new AppError('Permission not found', 404);
   }
 
+  void recordAuditLog({
+    req,
+    action: 'permission.update',
+    targetType: 'Permission',
+    targetId: permissionId,
+    targetLabel: updated.name,
+    metadata: body,
+  });
+
+  sendSuccess(res, updated, 'Permission updated');
   if (body.key !== undefined) {
     const normalizedKey = body.key.toLowerCase().trim();
     if (!normalizedKey) {
@@ -102,6 +121,14 @@ export const deletePermission = asyncHandler(async (req: AuthRequest, res: Respo
   if (!deleted) {
     throw new AppError('Permission not found', 404);
   }
+
+  void recordAuditLog({
+    req,
+    action: 'permission.delete',
+    targetType: 'Permission',
+    targetId: permissionId,
+    targetLabel: deleted.name,
+  });
 
   sendSuccess(res, null, 'Permission deleted');
 });
@@ -139,6 +166,16 @@ export const createRole = asyncHandler(async (req: AuthRequest, res: Response) =
   });
 
   const populated = await Role.findById(role._id).populate('permissions').lean();
+
+  void recordAuditLog({
+    req,
+    action: 'role.create',
+    targetType: 'Role',
+    targetId: role._id.toString(),
+    targetLabel: role.name,
+    metadata: { permissionCount: (permissionIds ?? []).length },
+  });
+
   sendSuccess(res, populated, 'Role created', 201);
 });
 
@@ -186,6 +223,16 @@ export const updateRole = asyncHandler(async (req: AuthRequest, res: Response) =
   await role.save();
 
   const populated = await Role.findById(role._id).populate('permissions').lean();
+
+  void recordAuditLog({
+    req,
+    action: 'role.update',
+    targetType: 'Role',
+    targetId: roleId,
+    targetLabel: role.name,
+    metadata: body,
+  });
+
   sendSuccess(res, populated, 'Role updated');
 });
 
@@ -207,6 +254,15 @@ export const deleteRole = asyncHandler(async (req: AuthRequest, res: Response) =
   }
 
   await Role.findByIdAndDelete(roleId);
+
+  void recordAuditLog({
+    req,
+    action: 'role.delete',
+    targetType: 'Role',
+    targetId: roleId,
+    targetLabel: role.name,
+  });
+
   sendSuccess(res, null, 'Role deleted');
 });
 
@@ -231,6 +287,16 @@ export const setRolePermissions = asyncHandler(async (req: AuthRequest, res: Res
   await role.save();
 
   const populated = await Role.findById(role._id).populate('permissions').lean();
+
+  void recordAuditLog({
+    req,
+    action: 'role.permissions.set',
+    targetType: 'Role',
+    targetId: roleId,
+    targetLabel: role.name,
+    metadata: { permissionCount: permissionIds.length },
+  });
+
   sendSuccess(res, populated, 'Role permissions updated');
 });
 
@@ -256,6 +322,16 @@ export const addPermissionToRole = asyncHandler(async (req: AuthRequest, res: Re
   await Role.updateOne({ _id: role._id }, { $addToSet: { permissions: pid } });
 
   const populated = await Role.findById(role._id).populate('permissions').lean();
+
+  void recordAuditLog({
+    req,
+    action: 'role.permissions.add',
+    targetType: 'Role',
+    targetId: roleId,
+    targetLabel: role.name,
+    metadata: { permissionKey: perm.key },
+  });
+
   sendSuccess(res, populated, 'Permission added to role');
 });
 
@@ -286,6 +362,16 @@ export const removePermissionFromRole = asyncHandler(async (req: AuthRequest, re
   await Role.updateOne({ _id: role._id }, { $pull: { permissions: pid } });
 
   const populated = await Role.findById(role._id).populate('permissions').lean();
+
+  void recordAuditLog({
+    req,
+    action: 'role.permissions.remove',
+    targetType: 'Role',
+    targetId: roleId,
+    targetLabel: role.name,
+    metadata: { permissionKey: perm.key },
+  });
+
   sendSuccess(res, populated, 'Permission removed from role');
 });
 
@@ -384,6 +470,7 @@ export const assignUserRole = asyncHandler(async (req: AuthRequest, res: Respons
     throw new AppError('User not found', 404);
   }
 
+  let assignedRoleName: string | null = null;
   if (roleId === null) {
     await User.findByIdAndUpdate(userId, { $unset: { roleId: 1 } }, { runValidators: true });
   } else {
@@ -391,6 +478,7 @@ export const assignUserRole = asyncHandler(async (req: AuthRequest, res: Respons
     if (!role) {
       throw new AppError('Role not found', 404);
     }
+    assignedRoleName = role.name;
     // RBAC role assignment is separate from legacy `role` enum (Admin/Vendor/Member).
     // Keep legacy role compatible with schema while RBAC permissions drive authorization.
     await User.findByIdAndUpdate(
@@ -404,6 +492,15 @@ export const assignUserRole = asyncHandler(async (req: AuthRequest, res: Respons
     .select('-refreshTokens')
     .populate('roleId')
     .lean();
+
+  void recordAuditLog({
+    req,
+    action: 'user.role.assign',
+    targetType: 'User',
+    targetId: userId,
+    targetLabel: target.email || target.fullName,
+    metadata: { assignedRoleName },
+  });
 
   sendSuccess(res, updated, 'User role updated');
 });

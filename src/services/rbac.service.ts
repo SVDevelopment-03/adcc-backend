@@ -48,6 +48,13 @@ export const DEFAULT_PERMISSION_DEFINITIONS: Array<{
     sortOrder: 60,
   },
   {
+    key: 'manage_cms',
+    name: 'Manage CMS Content',
+    description: 'News, contact messages, newsletter subscribers, and site content',
+    group: 'Content',
+    sortOrder: 65,
+  },
+  {
     key: 'app_configuration',
     name: 'App Configuration',
     group: 'System',
@@ -65,6 +72,13 @@ export const DEFAULT_PERMISSION_DEFINITIONS: Array<{
     name: 'Manage Roles & Permissions',
     group: 'System',
     sortOrder: 90,
+  },
+  {
+    key: 'view_audit_log',
+    name: 'View Audit Log',
+    description: 'See the history of admin actions (roles, users, permissions)',
+    group: 'System',
+    sortOrder: 95,
   },
 ];
 
@@ -87,7 +101,7 @@ const DEFAULT_ROLE_MATRIX: Array<{
     slug: 'content-manager',
     description: 'Events and content moderation',
     isSystem: true,
-    permissionKeys: ['view_dashboard', 'manage_events', 'moderate_content'],
+    permissionKeys: ['view_dashboard', 'manage_events', 'moderate_content', 'manage_cms'],
   },
   {
     name: 'Community Manager',
