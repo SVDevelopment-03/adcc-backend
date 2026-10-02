@@ -77,16 +77,6 @@ export const updatePermission = asyncHandler(async (req: AuthRequest, res: Respo
     throw new AppError('Permission not found', 404);
   }
 
-  void recordAuditLog({
-    req,
-    action: 'permission.update',
-    targetType: 'Permission',
-    targetId: permissionId,
-    targetLabel: updated.name,
-    metadata: body,
-  });
-
-  sendSuccess(res, updated, 'Permission updated');
   if (body.key !== undefined) {
     const normalizedKey = body.key.toLowerCase().trim();
     if (!normalizedKey) {
@@ -105,6 +95,15 @@ export const updatePermission = asyncHandler(async (req: AuthRequest, res: Respo
   if (body.sortOrder !== undefined) permission.sortOrder = body.sortOrder;
 
   await permission.save();
+
+  void recordAuditLog({
+    req,
+    action: 'permission.update',
+    targetType: 'Permission',
+    targetId: permissionId,
+    targetLabel: permission.name,
+    metadata: body,
+  });
 
   sendSuccess(res, permission.toObject(), 'Permission updated');
 });
