@@ -33,6 +33,7 @@ import newsRoutes from './news.route';
 import mediaRoutes from './media.route';
 import contactMessageRoutes from './contact-message.route';
 import auditLogRoutes from './audit-log.route';
+import splashRoutes from './splash.route';
 // import publicStatsRoutes from './public-stats.route';
 const router = Router();
 
@@ -63,6 +64,9 @@ router.use('/admin-notifications', adminNotificationRoutes);
 router.use('/app-config', appConfigRoutes);
 router.use('/app-banners', bannerRoutes);
 router.use('/app-banners-ar', bannerArRoutes);
+// Backward-compatible aliases for older frontend bundles that call /banner
+router.use('/banner', bannerRoutes);
+router.use('/banner-ar', bannerArRoutes);
 router.use('/product-banners', productBannerRoutes);
 router.use('/product-banners-ar', productBannerArRoutes);
 router.use('/newsletter-subscriptions', newsletterSubscriptionRoutes);
@@ -75,6 +79,7 @@ router.use('/news', newsRoutes);
 router.use('/media', mediaRoutes);
 router.use('/contact', contactMessageRoutes);
 router.use('/audit-logs', auditLogRoutes);
+router.use('/splash', splashRoutes);
 
 // Add more routes here as you create them
 // router.use('/users', userRoutes);

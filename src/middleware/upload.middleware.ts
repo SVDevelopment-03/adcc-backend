@@ -36,6 +36,21 @@ const upload = multer({
   fileFilter,
 });
 
+// Allow both images and videos for settings uploads (CMS may upload videos for splash)
+const settingsFileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  if (IMAGE_MIME_TYPES.has(file.mimetype) || VIDEO_MIME_TYPES.has(file.mimetype)) {
+    cb(null, true);
+    return;
+  }
+  cb(new Error('Only image or video files are allowed for this upload'));
+};
+
+const uploadWithVideos = multer({
+  storage,
+  limits: { fileSize: MAX_FILE_SIZE_BYTES },
+  fileFilter: settingsFileFilter,
+});
+
 const storeItemFileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
   if (file.fieldname === 'video') {
     if (!VIDEO_MIME_TYPES.has(file.mimetype)) {
@@ -168,7 +183,8 @@ export const uploadFeedPostImageIfMultipart = (req: any, res: any, next: any) =>
 export const uploadSettingsImages = (req: any, res: any, next: any) => {
   const contentType = (req.headers['content-type'] || '').toString();
   if (contentType.includes('multipart/form-data')) {
-    return upload.any()(req, res, next);
+    // Use the relaxed uploader that accepts images AND videos for CMS settings
+    return uploadWithVideos.any()(req, res, next);
   }
   return next();
 };
@@ -176,7 +192,7 @@ export const uploadSettingsImages = (req: any, res: any, next: any) => {
 export const uploadSettingsBulkImages = (req: any, res: any, next: any) => {
   const contentType = (req.headers['content-type'] || '').toString();
   if (contentType.includes('multipart/form-data')) {
-    return upload.any()(req, res, next);
+    return uploadWithVideos.any()(req, res, next);
   }
   return next();
 };

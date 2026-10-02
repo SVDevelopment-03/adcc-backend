@@ -11,6 +11,7 @@ import {
   updateUserVerified,
   updateUserPassword,
   updateUser,
+  updateUserPassword,
 } from '@/controllers/user.controller';
 import { startPhoneChange, confirmPhoneChange } from '@/controllers/phone-change.controller';
 import { getAllUsers, getUserById, deleteUser } from '@/controllers/user.controller';
@@ -53,6 +54,17 @@ router.patch(
   authenticate,
   requireStaffPermission('manage_users'),
   validate(updateUserPasswordSchema),
+  updateUserPassword
+);
+
+router.patch(
+  '/:userId/password',
+  authenticate,
+  requireStaffPermission('manage_users'),
+  (req, res, next) => {
+    const { updateUserPasswordSchema } = require('@/validators/user.validator');
+    return (require('@/middleware/validate.middleware').validate(updateUserPasswordSchema))(req, res, next);
+  },
   updateUserPassword
 );
 

@@ -40,6 +40,18 @@ const gtmSchema = z.object({
   bodyCode: z.string(),
 });
 
+const appUpdatePlatformSchema = z.object({
+  minimumVersion: z.string().trim().min(1),
+  forceUpdate: z.boolean(),
+  storeUrl: z.string().trim().min(1).or(z.literal('')),
+  updateMessage: z.string().trim().min(1).or(z.literal('')),
+});
+
+const appUpdateSchema = z.object({
+  android: appUpdatePlatformSchema,
+  ios: appUpdatePlatformSchema,
+});
+
 export const appConfigSchema = z.object({
   appName: z.string().trim().min(1),
   supportEmail: z.string().trim().email(),
@@ -47,6 +59,7 @@ export const appConfigSchema = z.object({
   defaultLanguage: z.enum(['English', 'Arabic']),
   emailSettings: emailSettingsSchema.optional(),
   gtm: gtmSchema.optional(),
+  appUpdate: appUpdateSchema.optional(),
   features: featuresSchema,
   notifications: notificationsSchema,
   security: securitySchema,

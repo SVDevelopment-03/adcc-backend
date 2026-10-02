@@ -26,6 +26,20 @@ const DEFAULT_APP_CONFIG = {
     headCode: '',
     bodyCode: '',
   },
+  appUpdate: {
+    android: {
+      minimumVersion: '2.2.7',
+      forceUpdate: false,
+      storeUrl: 'https://play.google.com/store/apps/details?id=com.technation.adcc',
+      updateMessage: 'A new version is available. Please update the app for the best experience.',
+    },
+    ios: {
+      minimumVersion: '2.2.7',
+      forceUpdate: false,
+      storeUrl: 'https://apps.apple.com/ae/app/adcycling/id1481435670',
+      updateMessage: 'A new version is available. Please update the app for the best experience.',
+    },
+  },
   features: {
     marketplace: true,
     communities: true,
@@ -73,6 +87,16 @@ function mergeAppConfig(config: Record<string, any> | undefined) {
     gtm: {
       ...DEFAULT_APP_CONFIG.gtm,
       ...(config?.gtm || {}),
+    },
+    appUpdate: {
+      android: {
+        ...DEFAULT_APP_CONFIG.appUpdate.android,
+        ...(config?.appUpdate?.android || {}),
+      },
+      ios: {
+        ...DEFAULT_APP_CONFIG.appUpdate.ios,
+        ...(config?.appUpdate?.ios || {}),
+      },
     },
   };
 }
