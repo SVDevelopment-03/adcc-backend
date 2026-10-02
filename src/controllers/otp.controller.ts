@@ -35,11 +35,10 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
   const ttlSeconds = 300;
   const ttlMinutes = Math.floor(ttlSeconds / 60);
 
-  // Default Royal Formal bilingual template (Arabic then English)
-  //TODO: change this template to your own branding and wording. You can also provide a custom template in the request body.
+  // Default bilingual template (English then Arabic). A custom template can also be provided in the request body.
   const defaultTemplate =
-    'نادي أبوظبي للدراجات (ADCC): رمز التحقق الخاص بك هو {code} — صالح لمدة {expiry} دقيقة. الرجاء عدم مشاركة هذا الرمز مع أي شخص.\n' +
-    'ADCC — Abu Dhabi Cycling Club: Your verification code is {code}. It is valid for {expiry} minutes. Please do not share this code.';
+    'Darraja: Your verification code is {code}. Do not share it with anyone.\n' +
+    'دراجة: رمز التحقق الخاص بك هو {code}. لا تشاركه مع أي شخص.';
 
   // Prepare message by replacing placeholders if provided template includes them
   let messageTemplateToUse = msgTemplate && typeof msgTemplate === 'string' && msgTemplate.trim().length > 0
