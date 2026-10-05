@@ -295,6 +295,8 @@ export const getFeedPosts = asyncHandler(async (req: Request, res: Response) => 
   const [posts, total] = await Promise.all([
     FeedPost.find(filter)
       .populate('createdBy', feedPostSelect)
+      // Commenter names/avatars for the admin moderation comment list
+      .populate('comments.user', 'fullName profileImage')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limitNum)
@@ -580,6 +582,36 @@ export const updateUserFeedPostBan = asyncHandler(async (req: AuthRequest, res: 
   }
 
   sendSuccess(res, user, t(lang, 'feedPost.user_ban_updated'));
+});
+
+/**
+ * Admin delete of any comment on a feed post, regardless of who wrote it or
+ * the post's moderation status.
+ * DELETE /v1/feed-posts/:id/comments/:commentId
+ */
+export const deleteFeedCommentAsAdmin = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = getLang(req);
+  const { id, commentId } = req.params;
+
+  const postId = ensureObjectId(id, 'Invalid post ID');
+  const parsedCommentId = ensureObjectId(commentId, 'Invalid comment ID');
+
+  const updated = await FeedPost.findOneAndUpdate(
+    { _id: postId, 'comments._id': parsedCommentId },
+    { $pull: { comments: { _id: parsedCommentId } } },
+    { new: true }
+  )
+    .populate('createdBy', feedPostSelect)
+    .populate('comments.user', 'fullName profileImage')
+    .lean();
+
+  if (!updated) {
+    const postExists = await FeedPost.exists({ _id: postId });
+    throw new AppError(postExists ? 'Comment not found' : t(lang, 'feedPost.not_found'), 404);
+  }
+
+  const mappedPost = await mapAndTranslateFeedPostForClient(updated, req.user?.id, lang);
+  sendSuccess(res, mappedPost, 'Comment deleted successfully');
 });
 
 /**

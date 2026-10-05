@@ -20,6 +20,7 @@ import {
   addFeedComment,
   createFeedPost,
   deleteFeedComment,
+  deleteFeedCommentAsAdmin,
   deleteFeedPost,
   getMyFeedPosts,
   getPublicFeedPostById,
@@ -50,6 +51,12 @@ router.post(
 const requireFeedModeration = requireStaffPermission('moderate_content', 'admin.panel');
 
 router.delete('/:id', authenticate, requireFeedModeration, deleteFeedPost);
+router.delete(
+  '/:id/comments/:commentId',
+  authenticate,
+  requireFeedModeration,
+  deleteFeedCommentAsAdmin
+);
 
 router.patch(
   '/:id/moderation',
