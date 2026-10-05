@@ -1,3 +1,4 @@
+import dayjs from 'dayjs';
 import { Request, Response } from 'express';
 import { t } from "@/utils/i18n";
 import Event from '@/models/event.model';
@@ -365,6 +366,8 @@ export const getTrackEvents = asyncHandler(async (req: Request, res: Response) =
   };
 
   filter.status = {$nin: ['Completed', 'Closed', 'Draft', 'Disabled', 'Archived']} 
+  // Upcoming only: an event whose date has passed is over even if its status was never updated
+  filter.eventDate = { $gte: dayjs().startOf('day').toDate() };
   const eventsQuery = Event.find(filter)
     .populate('createdBy', 'fullName email')
     .populate('communityId', 'title titleAr')

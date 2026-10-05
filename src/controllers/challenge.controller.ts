@@ -1,3 +1,4 @@
+import dayjs from 'dayjs';
 import { Request, Response } from 'express';
 import Challenge from '@/models/challenge.model';
 import ChallengeJoin from '@/models/challengeJoin.model';
@@ -63,6 +64,7 @@ export const getAllChallenges = asyncHandler(async (req: Request, res: Response)
   const lang = ((req as any).lang || 'en') as any;
   const { status, type, featured, communityId, search, page = 1, limit = 10 } = req.query as any;
 
+  const todayStart = dayjs().startOf('day').toDate();
   const filter: any = {};
   if (status) filter.status = status;
   if (type) filter.type = type;
@@ -81,19 +83,45 @@ export const getAllChallenges = asyncHandler(async (req: Request, res: Response)
   const limitNum = Math.min(100, Math.max(1, Number(limit) || 10));
   const skip = (pageNum - 1) * limitNum;
 
-  const challengesQuery = Challenge.find(filter)
-    .populate('createdBy', 'fullName email')
-    .populate('communities', 'title')
-    .populate('rewardBadge', 'name nameAr icon image category rarity')
-    .sort({ startDate: 1, createdAt: -1 })
-    .skip(skip)
-    .limit(limitNum)
-    .lean();
+  // Challenges that are over (end date passed, or Completed) are listed after
+  // the ones still running or to come: open ones earliest-start first, then
+  // closed ones most recently ended first. Paginated as one continuous list.
+  const openFilter = {
+    $and: [filter, { endDate: { $gte: todayStart }, status: { $ne: 'Completed' } }],
+  };
+  const closedFilter = {
+    $and: [filter, { $or: [{ endDate: { $lt: todayStart } }, { status: 'Completed' }] }],
+  };
 
-  const [challenges, total] = await Promise.all([
-    challengesQuery,
-    Challenge.countDocuments(filter),
+  const findChallenges = (
+    query: Record<string, any>,
+    sort: Record<string, 1 | -1>,
+    skipCount: number,
+    take: number
+  ) =>
+    Challenge.find(query)
+      .populate('createdBy', 'fullName email')
+      .populate('communities', 'title')
+      .populate('rewardBadge', 'name nameAr icon image category rarity')
+      .sort(sort)
+      .skip(skipCount)
+      .limit(take)
+      .lean();
+
+  const [openTotal, closedTotal] = await Promise.all([
+    Challenge.countDocuments(openFilter),
+    Challenge.countDocuments(closedFilter),
   ]);
+  const total = openTotal + closedTotal;
+
+  const openChallenges =
+    skip < openTotal ? await findChallenges(openFilter, { startDate: 1, createdAt: -1 }, skip, limitNum) : [];
+  const remaining = limitNum - openChallenges.length;
+  const closedChallenges =
+    remaining > 0
+      ? await findChallenges(closedFilter, { endDate: -1, createdAt: -1 }, Math.max(0, skip - openTotal), remaining)
+      : [];
+  const challenges = [...openChallenges, ...closedChallenges];
 
   challenges.forEach((challenge) => localizeChallengeStatic(challenge as Record<string, any>, lang));
 
