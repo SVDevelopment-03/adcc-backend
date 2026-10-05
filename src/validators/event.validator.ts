@@ -167,8 +167,9 @@ export const updateEventSchema = z
     titleAr: optionalStringField('Arabic event title is required'),
     description: optionalStringField('Event description is required'),
     descriptionAr: optionalStringField('Arabic event description is required'),
-    mainImage: z.preprocess(firstValue, z.string().url('Invalid image URL')).optional(),
-    eventImage: z.preprocess(firstValue, z.string().url('Invalid image URL')).optional(),
+    // An empty string clears the cover image (admin removed it without uploading a new one)
+    mainImage: z.preprocess(firstValue, z.literal('').or(z.string().url('Invalid image URL'))).optional(),
+    eventImage: z.preprocess(firstValue, z.literal('').or(z.string().url('Invalid image URL'))).optional(),
     eventDate: z.preprocess(firstValue, z.string().or(z.date()))
       .refine(
         (val) => {
