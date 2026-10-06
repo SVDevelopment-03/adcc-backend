@@ -6,6 +6,8 @@ import {
   getCommunityById,
   updateCommunity,
   deleteCommunity,
+  restoreCommunity,
+  permanentlyDeleteCommunity,
   joinCommunity,
   leaveCommunity,
   getCommunityMembers,
@@ -37,10 +39,10 @@ const router = express.Router();
 
 // Public routes
 router.get('/metadata/cities', getAvailableCities);
-router.get('/', validate(getCommunitiesQuerySchema), getAllCommunities);
+// optionalAuthenticate lets staff list the Trash (?trashed=true).
+router.get('/', optionalAuthenticate, validate(getCommunitiesQuerySchema), getAllCommunities);
 router.get('/:id/gallery', getGalleryImages);
 router.get('/:id', getCommunityById);
-router.get('/', optionalAuthenticate, validate(getCommunitiesQuerySchema), getAllCommunities);
 
 
 // Authenticated routes
@@ -62,7 +64,10 @@ router.post(
   createCommunity
 );
 router.patch('/:id', authenticate, requireStaffPermission('manage_communities'), uploadCommunityImages, requireParsedMultipartBody, validate(updateCommunitySchema), updateCommunity);
+// DELETE moves the community to the Trash; from there it can be restored or permanently deleted.
 router.delete('/:id', authenticate, requireStaffPermission('manage_communities'), deleteCommunity);
+router.patch('/:id/restore', authenticate, requireStaffPermission('manage_communities'), restoreCommunity);
+router.delete('/:id/permanent', authenticate, requireStaffPermission('manage_communities'), permanentlyDeleteCommunity);
 router.post('/:id/gallery', authenticate, requireStaffPermission('manage_communities'), requireMultipartFormData, uploadCommunityGalleryImages, addGalleryImages);
 router.delete(
   '/:id/gallery',

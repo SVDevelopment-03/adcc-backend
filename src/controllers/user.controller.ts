@@ -8,7 +8,7 @@ import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { upsertUserFcmToken } from '@/services/push-token.service';
-import { recordAuditLog } from '@/services/audit-log.service';
+import { recordAuditLog, diffChanges } from '@/services/audit-log.service';
 import {
   createFirebaseUser,
   getFirebaseUserByEmail,
@@ -248,6 +248,7 @@ export const updateUser = asyncHandler(async (req: AuthRequest, res: Response) =
     throw new AppError(t(lang, 'common.bad_request'), 400);
   }
 
+  const previousUser = await User.findById(userId).select('fullName phone gender profileImage role').lean();
   const user = await User.findByIdAndUpdate(userId, update, { new: true, runValidators: true })
     .select(USER_PROJECTION)
     .lean();
@@ -262,7 +263,9 @@ export const updateUser = asyncHandler(async (req: AuthRequest, res: Response) =
     targetType: 'User',
     targetId: userId,
     targetLabel: user.email || user.fullName,
-    metadata: update,
+    metadata: {
+      changes: diffChanges(previousUser, { ...previousUser, ...update }, Object.keys(update)),
+    },
   });
 
   sendSuccess(res, user, t(lang, 'user.updated'), 200);

@@ -1,6 +1,6 @@
 import express from 'express';
 import { validate } from '@/middleware/validate.middleware';
-import { authenticate } from '@/middleware/auth.middleware';
+import { authenticate, optionalAuthenticate } from '@/middleware/auth.middleware';
 import { requireStaffPermission } from '@/middleware/rbac.middleware';
 import { requireMultipartFormData, uploadTrackImages, requireParsedMultipartBody } from '@/middleware/upload.middleware';
 
@@ -15,6 +15,8 @@ import {
     getTrackEvents,
     updateTrack,
     deleteTrack,
+    restoreTrack,
+    permanentlyDeleteTrack,
     getTrackResults,
     trackCommunityPhotos,
     trackCommunityResults,
@@ -43,7 +45,8 @@ const normalizeTrackFormData = (req: express.Request, _res: express.Response, ne
   next();
 };
 
-router.get('/', getAllTracks);
+// optionalAuthenticate lets staff list the Trash (?status=trash).
+router.get('/', optionalAuthenticate, getAllTracks);
 router.get('/:trackId', getTrackById);
 router.get('/:trackId/events', getTrackEvents);
 router.get('/:trackId/events/results', authenticate, getTrackResults);  // Track-related event results
@@ -62,7 +65,10 @@ router.post(
   createTrack
 );
 router.patch('/:trackId', authenticate, requireStaffPermission('manage_events'), uploadTrackImages, normalizeTrackFormData, validate(updateTrackSchema) , updateTrack);
+// DELETE moves the track to the Trash; from there it can be restored or permanently deleted.
 router.delete('/:trackId', authenticate, requireStaffPermission('manage_events'), deleteTrack);
+router.patch('/:trackId/restore', authenticate, requireStaffPermission('manage_events'), restoreTrack);
+router.delete('/:trackId/permanent', authenticate, requireStaffPermission('manage_events'), permanentlyDeleteTrack);
 router.post(
   '/:trackId/gallery',
   authenticate,

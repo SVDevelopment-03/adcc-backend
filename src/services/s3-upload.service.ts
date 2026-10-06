@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import crypto from 'crypto';
 import path from 'path';
 import { AppError } from '@/utils/app-error';
@@ -139,6 +139,20 @@ export const resolveUploadFolder = (folderKey: string) => {
   return folder;
 };
 
+export const hashFileBuffer = (fileBuffer: Buffer): string =>
+  crypto.createHash('sha256').update(fileBuffer).digest('hex');
+
+/** Reads a stored object back from the bucket (used to hand a library image to an upload field). */
+export const getS3ObjectBuffer = async (key: string): Promise<{ buffer: Buffer; contentType?: string }> => {
+  const { bucket } = getAwsConfig();
+  const response = await getS3Client().send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (!response.Body) {
+    throw new AppError('File not found in storage', 404);
+  }
+  const bytes = await response.Body.transformToByteArray();
+  return { buffer: Buffer.from(bytes), contentType: response.ContentType };
+};
+
 export const uploadImageBufferToS3 = async (
   fileBuffer: Buffer,
   mimeType: string,
@@ -150,6 +164,20 @@ export const uploadImageBufferToS3 = async (
     const { bucket, region } = getAwsConfig();
     const client = getS3Client();
     const folder = resolveUploadFolder(folderKey);
+
+    // The same file is often submitted more than once — e.g. an image picked
+    // from the Media Library and then saved with a form. Reuse the stored copy
+    // instead of adding a duplicate object and a duplicate library entry.
+    const hash = hashFileBuffer(fileBuffer);
+    try {
+      const existing = await Media.findOne({ hash }).select('key url').lean();
+      if (existing) {
+        return { key: existing.key, url: existing.url };
+      }
+    } catch (lookupError) {
+      console.error('Media library duplicate check failed:', lookupError);
+    }
+
     const extension = getExtension(originalName, mimeType);
     const safeName = sanitizeFileName(path.basename(originalName, path.extname(originalName)));
     const uniquePart = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
@@ -182,6 +210,7 @@ export const uploadImageBufferToS3 = async (
         name: originalName,
         mimeType,
         size: fileBuffer.length,
+        hash,
         uploadedBy: uploadedBy || undefined,
       });
     } catch (catalogError) {
