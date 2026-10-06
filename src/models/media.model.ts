@@ -15,6 +15,8 @@ export interface IMedia extends Document {
   name: string;
   mimeType?: string;
   size?: number;
+  /** SHA-256 of the file's bytes — lets an identical file reuse this entry instead of being stored twice. */
+  hash?: string;
   uploadedBy?: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -28,6 +30,7 @@ const MediaSchema = new Schema<IMedia>(
     name: { type: String, required: true, trim: true },
     mimeType: { type: String, trim: true },
     size: { type: Number },
+    hash: { type: String, index: true, sparse: true },
     uploadedBy: { type: Schema.Types.ObjectId, ref: 'users' },
   },
   { timestamps: true }

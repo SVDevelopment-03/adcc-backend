@@ -267,6 +267,8 @@ export const getEventsQuerySchema = z.object({
       'Archived',
       'Upcoming',
       'Ongoing',
+      // Dashboard only: soft-deleted events (staff + includeUnpublished)
+      'Trash',
     ])
     .optional(),
   city: z.string().trim().min(1).optional(),

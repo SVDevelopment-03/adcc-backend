@@ -14,10 +14,22 @@ import { communityMembershipService } from '@/services';
 import { localizeDocumentFields, SupportedLanguage, localizeCommunityStatic } from '@/utils/localization';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import { notifyCommunityGalleryAdded } from '@/services/community-notification.service';
+import { recordAuditLog, diffChanges } from '@/services/audit-log.service';
+import { isStaffRequest, hasUnverifiedToken } from '@/utils/staff-request';
+import { ONLY_TRASHED, moveToTrash, restoreFromTrash, deleteFromTrash } from '@/utils/soft-delete';
 
 interface JoinCommunityParams {
   communityId: string;
 }
+
+// Fields compared before/after an edit to describe "what was changed" in the audit log.
+const COMMUNITY_AUDIT_FIELDS = [
+  'title', 'titleAr', 'description', 'descriptionAr', 'type', 'category', 'purposeType',
+  'location', 'area', 'city', 'country', 'image', 'logo', 'gallery', 'manager', 'joinMode',
+  'isActive', 'isPublic', 'status', 'isFeatured', 'allowPosts', 'allowGallery', 'foundedYear',
+  'trackId',
+];
+const COMMUNITY_STATUS_FIELDS = ['isActive', 'status'];
 
 const COMMUNITY_LOCALIZED_FIELDS = {
   title: 'titleAr',
@@ -313,6 +325,15 @@ export const createCommunity = asyncHandler(async (req: AuthRequest, res: Respon
   const community = await Community.create(communityData);
   const localizedCommunity = localizeCommunity(community.toObject(), lang);
 
+  void recordAuditLog({
+    req,
+    action: 'community.create',
+    targetType: 'Community',
+    targetId: community._id.toString(),
+    targetLabel: community.title,
+    metadata: { isActive: community.isActive },
+  });
+
   sendSuccess(res, localizedCommunity, t(lang,"community.created"), 201);
 });
 
@@ -372,6 +393,18 @@ export const getAllCommunities = asyncHandler(async (req: Request, res: Response
   // Text search
   if (search && typeof search === 'string') {
     query.$text = { $search: search };
+  }
+
+  // Dashboard only: list the Trash (soft-deleted communities) instead of the live ones.
+  if (String(req.query.trashed) === 'true') {
+    if (hasUnverifiedToken(req)) {
+      throw new AppError(t(lang, 'auth.unauthorized'), 401);
+    }
+    if (await isStaffRequest(req)) {
+      Object.assign(query, ONLY_TRASHED);
+    } else {
+      query._id = { $in: [] };
+    }
   }
 
   const pageNum = Number(page);
@@ -516,6 +549,8 @@ export const updateCommunity = asyncHandler(async (req: AuthRequest, res: Respon
     throw new AppError(t(lang, "community.not_found"), 404);
   }
 
+  const beforeUpdate = community.toObject();
+
   // Update fields
   if (req.body.title && !req.body.titleAr && !community.titleAr) {
     req.body.titleAr = req.body.title;
@@ -571,6 +606,18 @@ export const updateCommunity = asyncHandler(async (req: AuthRequest, res: Respon
   Object.assign(community, req.body);
   await community.save();
 
+  const changes = diffChanges(beforeUpdate, community.toObject(), COMMUNITY_AUDIT_FIELDS);
+  const statusOnly =
+    changes.length > 0 && changes.every((change) => COMMUNITY_STATUS_FIELDS.includes(change.field));
+  void recordAuditLog({
+    req,
+    action: statusOnly ? 'community.status.update' : 'community.update',
+    targetType: 'Community',
+    targetId: community._id.toString(),
+    targetLabel: community.title,
+    metadata: { changes },
+  });
+
   const updatedCommunity = await Community.findById(id)
     .populate('createdBy', 'fullName email')
     .populate('trackId', 'title titleAr distance difficulty trackType category image city description descriptionAr')
@@ -597,8 +644,18 @@ export const updateCommunity = asyncHandler(async (req: AuthRequest, res: Respon
      throw new AppError('Community not found', 404);
    }
 
+   const wasFeatured = community.isFeatured;
    community.isFeatured = isFeatured;
    await community.save();
+
+   void recordAuditLog({
+     req,
+     action: 'community.feature.update',
+     targetType: 'Community',
+     targetId: community._id.toString(),
+     targetLabel: community.title,
+     metadata: { changes: [{ field: 'isFeatured', from: wasFeatured, to: isFeatured }] },
+   });
 
    const updatedCommunity = await Community.findById(id)
      .populate('createdBy', 'fullName email')
@@ -691,21 +748,81 @@ export const updateCommunity = asyncHandler(async (req: AuthRequest, res: Respon
    );
  });
  
- /* Delete community
+ /* Delete community — moves it to the Trash (it can be restored or permanently deleted from there)
  * DELETE /v1/communities/:id
  * Admin only
  */
 export const deleteCommunity = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
-  const { id } = req.params;
+  const id = String(req.params.id);
 
-  const community = await Community.findByIdAndDelete(id);
+  const community = await moveToTrash(Community, id, req.user?.id);
 
   if (!community) {
     throw new AppError(t(lang, "community.not_found"), 404);
   }
 
+  void recordAuditLog({
+    req,
+    action: 'community.delete',
+    targetType: 'Community',
+    targetId: id,
+    targetLabel: community.title,
+  });
+
   sendSuccess(res, null, t(lang, "community.deleted"), 201);
+});
+
+/**
+ * Restore community from the Trash
+ * PATCH /v1/communities/:id/restore
+ * Admin only
+ */
+export const restoreCommunity = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as SupportedLanguage;
+  const id = String(req.params.id);
+
+  const community = await restoreFromTrash(Community, id);
+
+  if (!community) {
+    throw new AppError(t(lang, "community.not_found"), 404);
+  }
+
+  void recordAuditLog({
+    req,
+    action: 'community.restore',
+    targetType: 'Community',
+    targetId: id,
+    targetLabel: community.title,
+  });
+
+  sendSuccess(res, localizeCommunity(community.toObject(), lang), 'Community restored successfully', 200);
+});
+
+/**
+ * Permanently delete a community that is in the Trash
+ * DELETE /v1/communities/:id/permanent
+ * Admin only
+ */
+export const permanentlyDeleteCommunity = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as SupportedLanguage;
+  const id = String(req.params.id);
+
+  const community = await deleteFromTrash(Community, id);
+
+  if (!community) {
+    throw new AppError(t(lang, "community.not_found"), 404);
+  }
+
+  void recordAuditLog({
+    req,
+    action: 'community.delete.permanent',
+    targetType: 'Community',
+    targetId: id,
+    targetLabel: community.title,
+  });
+
+  sendSuccess(res, null, 'Community permanently deleted', 200);
 });
 
 /**
@@ -901,6 +1018,15 @@ export const addGalleryImages = asyncHandler(async (req: AuthRequest, res: Respo
 
   const localizedCommunity = localizeCommunity(updatedCommunity.toObject(), lang);
 
+  void recordAuditLog({
+    req,
+    action: 'community.gallery.add',
+    targetType: 'Community',
+    targetId: String(id),
+    targetLabel: updatedCommunity.title,
+    metadata: { images: newImages.length },
+  });
+
   void notifyCommunityGalleryAdded({
     communityId: String(id),
     imageCount: newImages.length,
@@ -963,6 +1089,15 @@ export const removeGalleryImages = asyncHandler(async (req: AuthRequest, res: Re
   }
 
   const localizedCommunity = localizeCommunity(updatedCommunity.toObject(), lang);
+
+  void recordAuditLog({
+    req,
+    action: 'community.gallery.remove',
+    targetType: 'Community',
+    targetId: String(id),
+    targetLabel: updatedCommunity.title,
+    metadata: { images: removedCount },
+  });
 
   sendSuccess(
     res,

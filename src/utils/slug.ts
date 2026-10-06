@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { WITH_TRASHED } from '@/utils/soft-delete';
 
 /** Turn a title into a URL-safe, lowercase, hyphenated slug. */
 export const slugify = (value: string): string =>
@@ -23,7 +24,8 @@ export const generateUniqueSlug = async (
   let suffix = 2;
 
   for (;;) {
-    const query: Record<string, unknown> = { slug: candidate };
+    // Trashed documents keep their slug (it is unique in the collection), so count them too
+    const query: Record<string, unknown> = { slug: candidate, ...WITH_TRASHED };
     if (excludeId) query._id = { $ne: excludeId };
     const exists = await model.exists(query);
     if (!exists) return candidate;

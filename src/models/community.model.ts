@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import { generateUniqueSlug } from '@/utils/slug';
+import { softDeletePlugin } from '@/utils/soft-delete';
 
 export interface ICommunity extends Document {
   title: string;
@@ -39,6 +40,9 @@ export interface ICommunity extends Document {
   trackId?: mongoose.Types.ObjectId[];
   createdBy: mongoose.Types.ObjectId;
   manager?: string;
+  /** Set while the document is in the Trash (soft-deleted). */
+  deletedAt?: Date | null;
+  deletedBy?: mongoose.Types.ObjectId | null;
 }
 
 const CommunitySchema = new Schema(
@@ -194,6 +198,8 @@ const CommunitySchema = new Schema(
   }
   
 );
+
+CommunitySchema.plugin(softDeletePlugin);
 
 // Indexes for search and filtering
 CommunitySchema.index({ type: 1, location: 1 });

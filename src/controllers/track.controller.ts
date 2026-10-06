@@ -14,11 +14,48 @@ import { SupportedLanguage } from '@/utils/localization';
 import { localizeTrack } from '@/utils/track-payload';
 import { localizeEventPayload } from '@/utils/event-payload';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
+import { recordAuditLog, diffChanges } from '@/services/audit-log.service';
+import { isStaffRequest, hasUnverifiedToken } from '@/utils/staff-request';
+import { ONLY_TRASHED, moveToTrash, restoreFromTrash, deleteFromTrash } from '@/utils/soft-delete';
 import {
   getCachedLookupMap,
   warmLookupCache,
   LOOKUP_TYPE_TRACK_FACILITY,
 } from '@/services/lookup.service';
+
+// Fields compared before/after an edit to describe "what was changed" in the audit log.
+const TRACK_AUDIT_FIELDS = [
+  'title', 'titleAr', 'description', 'descriptionAr', 'image', 'coverImage', 'city', 'area',
+  'country', 'address', 'zipcode', 'latitude', 'longitude', 'distance', 'elevation', 'trackType',
+  'avgtime', 'pace', 'estimatedTime', 'facilities', 'status', 'surfaceType', 'safetyNotes',
+  'helmetRequired', 'nightRidingAllowed', 'visibility', 'difficulty', 'category',
+  'displayPriority', 'loopOptions', 'galleryImages',
+];
+
+const getTrackIdParam = (req: Request): string =>
+  Array.isArray(req.params.trackId) ? req.params.trackId[0] : req.params.trackId;
+
+/** Shared by archive/disable/enable: sets the status and records the change in the audit log. */
+const setTrackStatus = async (req: AuthRequest, status: string, lang: SupportedLanguage) => {
+  const trackId = getTrackIdParam(req);
+  const previous = await Track.findById(trackId).select('status').lean();
+  const track = await Track.findByIdAndUpdate(trackId, { status }, { new: true });
+
+  if (!track) {
+    throw new AppError(t(lang, "track.not_found"), 404);
+  }
+
+  void recordAuditLog({
+    req,
+    action: 'track.status.update',
+    targetType: 'Track',
+    targetId: String(track._id),
+    targetLabel: track.title,
+    metadata: { from: previous?.status, to: status },
+  });
+
+  return track;
+};
 
 /**
  * Maps incoming facilities to their canonical lookup `value` and removes
@@ -159,6 +196,14 @@ export const createTrack = asyncHandler(async (req: AuthRequest, res: Response) 
       teackData.galleryImages = mergedGalleryImages;
     }
     const event = await Track.create(teackData);
+    void recordAuditLog({
+      req,
+      action: 'track.create',
+      targetType: 'Track',
+      targetId: String(event._id),
+      targetLabel: event.title,
+      metadata: { status: event.status },
+    });
     sendSuccess(res, localizeTrack(event.toObject(), lang), t(lang, "track.created"), 201);
 });
 
@@ -172,7 +217,17 @@ export const createTrack = asyncHandler(async (req: AuthRequest, res: Response) 
     const { status, city, type, difficulty, visibility, publicOnly, search, page = 1, limit = 10 } = req.query;
     
     const query: any = {};
-    if (status) query.status = status;
+    // "trash" is not a stored status: it lists soft-deleted tracks (dashboard staff only).
+    if (status === 'trash') {
+      if (hasUnverifiedToken(req)) {
+        throw new AppError(t(lang, 'auth.unauthorized'), 401);
+      }
+      if (await isStaffRequest(req)) {
+        Object.assign(query, ONLY_TRASHED);
+      } else {
+        query._id = { $in: [] };
+      }
+    } else if (status) query.status = status;
     if (city) query.city = city;
     if (type && ['circuit', 'road', 'costal', 'coastal', 'desert', 'urban', 'loop', 'mixed', 'out-and-back', 'point-to-point'].includes(type as string)) {
       query.trackType = type === 'coastal' ? 'costal' : type;
@@ -425,31 +480,99 @@ export const updateTrack = asyncHandler(async (req: AuthRequest, res: Response) 
     if (updateFacilities) updateData.facilities = updateFacilities;
     await attachTrackImages(req, updateData);
 
-    // console.log('req.body:', req.body);
+    const previousTrack = await Track.findById(trackId).lean();
     const track = await Track.findByIdAndUpdate(trackId, updateData, { new: true });
     if (!track) {
          throw new AppError(t(lang, "track.not_found"), 404);
     }
 
+    void recordAuditLog({
+      req,
+      action: 'track.update',
+      targetType: 'Track',
+      targetId: String(track._id),
+      targetLabel: track.title,
+      metadata: { changes: diffChanges(previousTrack, track.toObject(), TRACK_AUDIT_FIELDS) },
+    });
+
     return sendSuccess(res, localizeTrack(track.toObject(), lang), t(lang, "track.updated"), 201);
 });
 
 /**
- * Delete track
+ * Delete track — moves it to the Trash (it can be restored or permanently deleted from there)
  * DELETE /v1/tracks/:trackId
  * Admin only
  * */
 export const deleteTrack = asyncHandler(async (req: AuthRequest, res: Response) => {
     const lang = ((req as any).lang || 'en') as SupportedLanguage;
-    const trackId = Array.isArray(req.params.trackId)
-    ? req.params.trackId[0]
-    : req.params.trackId;
+    const trackId = getTrackIdParam(req);
 
-    const track = await Track.findByIdAndDelete(trackId);
+    const track = await moveToTrash(Track, trackId, req.user?.id);
     if (!track) {
             throw new AppError(t(lang, "track.not_found"), 404);
     }
+
+    void recordAuditLog({
+      req,
+      action: 'track.delete',
+      targetType: 'Track',
+      targetId: trackId,
+      targetLabel: track.title,
+      metadata: { status: track.status },
+    });
+
     return sendSuccess(res, null, t(lang, "track.deleted"), 201);
+});
+
+/**
+ * Restore track from the Trash
+ * PATCH /v1/tracks/:trackId/restore
+ * Admin only
+ * */
+export const restoreTrack = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const lang = ((req as any).lang || 'en') as SupportedLanguage;
+    const trackId = getTrackIdParam(req);
+
+    const track = await restoreFromTrash(Track, trackId);
+    if (!track) {
+            throw new AppError(t(lang, "track.not_found"), 404);
+    }
+
+    void recordAuditLog({
+      req,
+      action: 'track.restore',
+      targetType: 'Track',
+      targetId: trackId,
+      targetLabel: track.title,
+      metadata: { status: track.status },
+    });
+
+    return sendSuccess(res, localizeTrack(track.toObject(), lang), 'Track restored successfully', 200);
+});
+
+/**
+ * Permanently delete a track that is in the Trash
+ * DELETE /v1/tracks/:trackId/permanent
+ * Admin only
+ * */
+export const permanentlyDeleteTrack = asyncHandler(async (req: AuthRequest, res: Response) => {
+    const lang = ((req as any).lang || 'en') as SupportedLanguage;
+    const trackId = getTrackIdParam(req);
+
+    const track = await deleteFromTrash(Track, trackId);
+    if (!track) {
+            throw new AppError(t(lang, "track.not_found"), 404);
+    }
+
+    void recordAuditLog({
+      req,
+      action: 'track.delete.permanent',
+      targetType: 'Track',
+      targetId: trackId,
+      targetLabel: track.title,
+    });
+
+    return sendSuccess(res, null, 'Track permanently deleted', 200);
 });
 
 
@@ -461,17 +584,7 @@ export const deleteTrack = asyncHandler(async (req: AuthRequest, res: Response) 
 export const disableTrack = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const supportedLang = ((req as any).lang || 'en') as SupportedLanguage;
-    const { trackId } = req.params;
-
-    const track = await Track.findByIdAndUpdate(
-      trackId,
-      { status: 'disabled' },
-      { new: true }
-    );
-
-    if (!track) {
-      throw new AppError(t(supportedLang, "track.not_found"), 404);
-    }
+    const track = await setTrackStatus(req, 'disabled', supportedLang);
 
     return sendSuccess(res, localizeTrack(track.toObject(), supportedLang), t(supportedLang, "track.disabled"), 200);
   }
@@ -486,17 +599,8 @@ export const disableTrack = asyncHandler(
 export const enableTrack = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const lang = ((req as any).lang || 'en') as SupportedLanguage;
-    const { trackId } = req.params;
-
-    const track = await Track.findByIdAndUpdate(
-      trackId,
-      { status: 'active' },
-      { new: true }
-    );
-
-    if (!track) {
-      throw new AppError(t(lang, "track.not_found"), 404);
-    }
+    // 'open' is the live status tracks are created with (there is no 'active' track status)
+    const track = await setTrackStatus(req, 'open', lang);
 
     return sendSuccess(res, localizeTrack(track.toObject(), lang), t(lang, "track.enabled"), 200);
   }
@@ -694,17 +798,7 @@ export const trackCommunityResults = asyncHandler(async (req: AuthRequest, res: 
 export const archiveTrack = asyncHandler(
   async (req: AuthRequest, res: Response) => {
     const supportedLang = ((req as any).lang || 'en') as SupportedLanguage;
-    // console.log('archive-params',req.params);
-    const { trackId } = req.params;
-    const track = await Track.findByIdAndUpdate(
-      trackId,
-      { status: 'archived' },
-      { new: true }
-    );
-
-    if (!track) {
-      throw new AppError(t(supportedLang, "track.not_found"), 404);
-    }
+    const track = await setTrackStatus(req, 'archived', supportedLang);
 
     return sendSuccess(res, localizeTrack(track.toObject(), supportedLang), t(supportedLang, "track.archived"), 200);
   }
@@ -750,6 +844,15 @@ export const deleteGalleryImage = asyncHandler(async (req: AuthRequest, res: Res
   if (!updatedTrack) {
     throw new AppError(t(lang, "track.not_found"), 404);
   }
+
+  void recordAuditLog({
+    req,
+    action: 'track.gallery.remove',
+    targetType: 'Track',
+    targetId: String(updatedTrack._id),
+    targetLabel: updatedTrack.title,
+    metadata: { images: removedImages.length },
+  });
 
   return sendSuccess(
     res,
@@ -818,6 +921,15 @@ export const addTrackGalleryImages = asyncHandler(async (req: AuthRequest, res: 
   if (!updatedTrack) {
     throw new AppError(t(lang, 'track.not_found'), 500);
   }
+
+  void recordAuditLog({
+    req,
+    action: 'track.gallery.add',
+    targetType: 'Track',
+    targetId: String(updatedTrack._id),
+    targetLabel: updatedTrack.title,
+    metadata: { images: newImages.length },
+  });
 
   sendSuccess(
     res,

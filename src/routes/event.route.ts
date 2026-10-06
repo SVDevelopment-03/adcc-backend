@@ -7,6 +7,8 @@ import {
   getEventById,
   updateEvent,
   deleteEvent,
+  restoreEvent,
+  permanentlyDeleteEvent,
   joinEvent,
   cancelRegistration,
   getEventResults,
@@ -108,7 +110,10 @@ router.patch(
   validate(updateEventSchema),
   updateEvent
 );
+// DELETE moves the event to the Trash; from there it can be restored or permanently deleted.
 router.delete('/:id', authenticate, requireStaffPermission('manage_events'), deleteEvent);
+router.patch('/:id/restore', authenticate, requireStaffPermission('manage_events'), restoreEvent);
+router.delete('/:id/permanent', authenticate, requireStaffPermission('manage_events'), permanentlyDeleteEvent);
 router.patch('/:eventId/close-registration', authenticate, requireStaffPermission('manage_events'), closeEventRegistration);
 router.patch('/:eventId/reopen-registration', authenticate, requireStaffPermission('manage_events'), reopenEventRegistration);
 router.patch('/:eventId/complete', authenticate, requireStaffPermission('manage_events'), completeEvent);

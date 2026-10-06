@@ -241,6 +241,8 @@ export const getCommunitiesQuerySchema = z.object({
   isActive: z.string().transform((val) => val === 'true').optional(),
   isPublic: z.string().transform((val) => val === 'true').optional(),
   isFeatured: z.string().transform((val) => val === 'true').optional(),
+  // Dashboard only: list soft-deleted communities (ignored for non-staff callers)
+  trashed: z.enum(['true', 'false']).optional(),
 });
 
 export const addGalleryImagesSchema = z

@@ -42,7 +42,9 @@ import { eventRegistrationEmail } from '@/services/emailTemplates';
 import { createEvent as createIcsEvent } from 'ics';
 import fs from 'fs/promises';
 import AppConfig from '@/models/app-config.model';
-import { recordAuditLog } from '@/services/audit-log.service';
+import { recordAuditLog, diffChanges } from '@/services/audit-log.service';
+import { isStaffRequest, hasUnverifiedToken } from '@/utils/staff-request';
+import { ONLY_TRASHED, moveToTrash, restoreFromTrash, deleteFromTrash } from '@/utils/soft-delete';
 
 // const EVENT_LOCALIZED_FIELDS = {
 //   title: 'titleAr',
@@ -302,22 +304,15 @@ const UNPUBLISHED_EVENT_STATUSES = ['Draft', 'Disabled', 'Archived'];
 // Statuses that mean an event is over regardless of its date.
 const CLOSED_EVENT_STATUSES = ['Completed', 'Closed', 'Archived'];
 
-// True for an active dashboard user (legacy Admin or any RBAC staff role).
-// Relies on optionalAuthenticate having populated req.user.
-const isStaffRequest = async (req: Request): Promise<boolean> => {
-  const authUser = (req as AuthRequest).user;
-  if (!authUser?.id || authUser.isGuest) return false;
-  if (!mongoose.Types.ObjectId.isValid(String(authUser.id))) return false;
-
-  const user = await User.findById(authUser.id).select('role roleId isVerified').lean();
-  if (!user || !user.isVerified) return false;
-  return user.role === 'Admin' || Boolean(user.roleId);
-};
-
-// A token was sent but optionalAuthenticate could not verify it (typically expired).
-// Answer 401 so the dashboard refreshes its token instead of silently getting the public view.
-const hasUnverifiedToken = (req: Request): boolean =>
-  Boolean(req.headers.authorization) && !(req as AuthRequest).user;
+// Fields compared before/after an edit to describe "what was changed" in the audit log.
+const EVENT_AUDIT_FIELDS = [
+  'title', 'titleAr', 'description', 'descriptionAr', 'status', 'category', 'eventDate',
+  'eventTime', 'endTime', 'address', 'addressAr', 'city', 'country', 'communityId', 'trackId',
+  'maxParticipants', 'registrationFeeType', 'registrationFeeAmount', 'minAge', 'maxAge',
+  'distance', 'difficulty', 'isFeatured', 'allowCancellation', 'isPurposeBased', 'organizedBy',
+  'youtubeLink', 'registrationLink', 'mainImage', 'eventImage', 'galleryImages', 'amenities',
+  'schedule', 'eligibility', 'rewards',
+];
 
 const normalizeRegistrationFee = (data: Record<string, any>) => {
   const hasType = Object.prototype.hasOwnProperty.call(data, 'registrationFeeType');
@@ -550,7 +545,22 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
   // Build filter object
   const filter: any = {};
 
-  if (status === 'Upcoming') {
+  // "Trash" is not a stored status: it lists soft-deleted events (staff only, see below).
+  const isTrash = status === 'Trash';
+
+  if (isTrash) {
+    // no status filter: everything in the Trash, whatever status it had
+  } else if (status === 'Closed') {
+    // Past Open/Full events are reported as Closed (see localizeEventPayload), so list them too.
+    filter.$and = [
+      {
+        $or: [
+          { status: 'Closed' },
+          { status: { $in: ['Open', 'Full'] }, eventDate: { $lt: todayStart } },
+        ],
+      },
+    ];
+  } else if (status === 'Upcoming') {
     filter.status = { $in: ['Open', 'Full'] };
     filter.eventDate = { $gte: todayStart };
   } else if (status === 'Ongoing') {
@@ -573,7 +583,7 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
   }
   const includeUnpublished = wantsUnpublished && (await isStaffRequest(req));
   if (!includeUnpublished) {
-    if (typeof status === 'string' && UNPUBLISHED_EVENT_STATUSES.includes(status)) {
+    if (isTrash || (typeof status === 'string' && UNPUBLISHED_EVENT_STATUSES.includes(status))) {
       filter.status = { $in: [] };
     } else if (!filter.status) {
       filter.status = { $nin: UNPUBLISHED_EVENT_STATUSES };
@@ -621,10 +631,13 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
   const closedCondition = {
     $or: [{ eventDate: { $lt: todayStart } }, { status: { $in: CLOSED_EVENT_STATUSES } }],
   };
+  // Kept at the top level of the query so the soft-delete plugin sees it.
+  const trashScope = isTrash ? ONLY_TRASHED : {};
   const openFilter = {
+    ...trashScope,
     $and: [filter, { eventDate: { $gte: todayStart }, status: { $nin: CLOSED_EVENT_STATUSES } }],
   };
-  const closedFilter = { $and: [filter, closedCondition] };
+  const closedFilter = { ...trashScope, $and: [filter, closedCondition] };
 
   const findEvents = (
     query: Record<string, any>,
@@ -863,7 +876,7 @@ export const getEventById = asyncHandler(async (req: Request, res: Response) => 
 export const updateEvent = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
   const { id } = req.params;
-  const previousEvent = await Event.findById(id).select('status publishedNotificationSentAt resultsNotificationSentAt cancelledNotificationSentAt rewards').lean();
+  const previousEvent = await Event.findById(id).lean();
   const updateData = { ...req.body };
   updateData.rewards = normalizeRewardsInput(req.body, updateData.rewards || previousEvent?.rewards || {});
   if ('registrationFeeType' in updateData || 'registrationFeeAmount' in updateData) {
@@ -948,22 +961,24 @@ export const updateEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     targetType: 'Event',
     targetId: event._id.toString(),
     targetLabel: event.title,
-    metadata: { fields: Object.keys(updateData) },
+    metadata: {
+      changes: diffChanges(previousEvent, event.toObject({ depopulate: true }), EVENT_AUDIT_FIELDS),
+    },
   });
 
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.updated"), 201);
 });
 
 /**
- * Delete event
+ * Delete event — moves it to the Trash (it can be restored or permanently deleted from there)
  * DELETE /v1/events/:id
  * Admin only
  */
 export const deleteEvent = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
-  const { id } = req.params;
+  const id = getRouteParam(req.params.id);
 
-  const event = await Event.findByIdAndDelete(id);
+  const event = await moveToTrash(Event, id, req.user?.id);
 
   if (!event) {
     throw new AppError(t(lang, "event.not_found"), 404);
@@ -973,18 +988,73 @@ export const deleteEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     req,
     action: 'event.delete',
     targetType: 'Event',
-    targetId: getRouteParam(id),
+    targetId: id,
     targetLabel: event.title,
+    metadata: { status: event.status },
   });
 
   sendSuccess(res, null, t(lang, "event.deleted"), 201);
+});
+
+/**
+ * Restore event from the Trash
+ * PATCH /v1/events/:id/restore
+ * Admin only
+ */
+export const restoreEvent = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as SupportedLanguage;
+  const id = getRouteParam(req.params.id);
+
+  const event = await restoreFromTrash(Event, id);
+
+  if (!event) {
+    throw new AppError(t(lang, "event.not_found"), 404);
+  }
+
+  void recordAuditLog({
+    req,
+    action: 'event.restore',
+    targetType: 'Event',
+    targetId: id,
+    targetLabel: event.title,
+    metadata: { status: event.status },
+  });
+
+  sendSuccess(res, localizeEventPayload(event.toObject(), lang), 'Event restored successfully', 200);
+});
+
+/**
+ * Permanently delete an event that is in the Trash
+ * DELETE /v1/events/:id/permanent
+ * Admin only
+ */
+export const permanentlyDeleteEvent = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as SupportedLanguage;
+  const id = getRouteParam(req.params.id);
+
+  const event = await deleteFromTrash(Event, id);
+
+  if (!event) {
+    throw new AppError(t(lang, "event.not_found"), 404);
+  }
+
+  void recordAuditLog({
+    req,
+    action: 'event.delete.permanent',
+    targetType: 'Event',
+    targetId: id,
+    targetLabel: event.title,
+  });
+
+  sendSuccess(res, null, 'Event permanently deleted', 200);
 });
 
 const updateEventStatus = async (
   eventId: string,
   status: 'Draft' | 'Open' | 'Full' | 'Closed' | 'Disabled' | 'Completed' | 'Archived',
   lang: SupportedLanguage,
-  req: AuthRequest
+  req: AuthRequest,
+  action = 'event.status.update'
 ) => {
   const previous = await Event.findById(eventId).select('status publishedNotificationSentAt resultsNotificationSentAt cancelledNotificationSentAt').lean();
   const event = await Event.findByIdAndUpdate(
@@ -1022,7 +1092,7 @@ const updateEventStatus = async (
 
   void recordAuditLog({
     req,
-    action: 'event.status.update',
+    action,
     targetType: 'Event',
     targetId: String(event._id),
     targetLabel: event.title,
@@ -1043,7 +1113,7 @@ export const closeEventRegistration = asyncHandler(async (req: AuthRequest, res:
     ? req.params.eventId[0]
     : req.params.eventId;
 
-  const event = await updateEventStatus(eventId, 'Closed', lang, req);
+  const event = await updateEventStatus(eventId, 'Closed', lang, req, 'event.close');
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.registration_closed"), 200);
 });
 
@@ -1066,7 +1136,7 @@ export const reopenEventRegistration = asyncHandler(async (req: AuthRequest, res
     throw new AppError(t(lang, 'event.cannot_reopen_past_event'), 400);
   }
 
-  const event = await updateEventStatus(eventId, 'Open', lang, req);
+  const event = await updateEventStatus(eventId, 'Open', lang, req, 'event.reopen');
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.registration_reopened"), 200);
 });
 
@@ -1472,8 +1542,7 @@ export const markParticipantCheckedIn = asyncHandler(async (req: AuthRequest, re
   const eventId = getRouteParam(req.params.eventId);
   const userId = getRouteParam(req.params.userId);
 
-  // console.log('body',req.body);
-  await ensureEventExists(eventId, lang);
+  const event = await ensureEventExists(eventId, lang);
 
   const eventResult = await EventResult.findOne({ eventId, userId });
   if (!eventResult) {
@@ -1492,6 +1561,15 @@ export const markParticipantCheckedIn = asyncHandler(async (req: AuthRequest, re
 
   await eventResult.save();
 
+  void recordAuditLog({
+    req,
+    action: 'event.participant.check_in',
+    targetType: 'Event',
+    targetId: eventId,
+    targetLabel: event.title,
+    metadata: { userId },
+  });
+
   sendSuccess(res, eventResult, t(lang, "event.participant_checked_in"), 200);
 });
 
@@ -1505,7 +1583,7 @@ export const adminUpdateParticipantResult = asyncHandler(async (req: AuthRequest
   const eventId = getRouteParam(req.params.eventId);
   const userId = getRouteParam(req.params.userId);
 
-  await ensureEventExists(eventId, lang);
+  const auditEvent = await ensureEventExists(eventId, lang);
 
   const eventResult = await EventResult.findOne({ eventId, userId });
   if (!eventResult) {
@@ -1591,6 +1669,15 @@ export const adminUpdateParticipantResult = asyncHandler(async (req: AuthRequest
     }
   }
 
+  void recordAuditLog({
+    req,
+    action: 'event.participant.result.update',
+    targetType: 'Event',
+    targetId: eventId,
+    targetLabel: auditEvent.title,
+    metadata: { userId, ...patch },
+  });
+
   sendSuccess(res, eventResult, t(lang, 'event.updated'), 200);
 });
 
@@ -1604,7 +1691,7 @@ export const markParticipantNoShow = asyncHandler(async (req: AuthRequest, res: 
   const eventId = getRouteParam(req.params.eventId);
   const userId = getRouteParam(req.params.userId);
 
-  await ensureEventExists(eventId, lang);
+  const participantEvent = await ensureEventExists(eventId, lang);
 
   const eventResult = await EventResult.findOne({ eventId, userId });
   if (!eventResult) {
@@ -1628,6 +1715,7 @@ export const markParticipantNoShow = asyncHandler(async (req: AuthRequest, res: 
     action: 'event.participant.no_show',
     targetType: 'Event',
     targetId: eventId,
+    targetLabel: participantEvent.title,
     metadata: { userId },
   });
 
@@ -1644,7 +1732,7 @@ export const removeEventParticipant = asyncHandler(async (req: AuthRequest, res:
   const eventId = getRouteParam(req.params.eventId);
   const userId = getRouteParam(req.params.userId);
 
-  await ensureEventExists(eventId, lang);
+  const participantEvent = await ensureEventExists(eventId, lang);
 
   const eventResult = await EventResult.findOne({ eventId, userId });
   if (!eventResult) {
@@ -1670,6 +1758,7 @@ export const removeEventParticipant = asyncHandler(async (req: AuthRequest, res:
     action: 'event.participant.remove',
     targetType: 'Event',
     targetId: eventId,
+    targetLabel: participantEvent.title,
     metadata: { userId },
   });
 
@@ -1685,7 +1774,7 @@ export const checkInAllRegisteredParticipants = asyncHandler(async (req: AuthReq
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
   const eventId = getRouteParam(req.params.eventId);
   
-  await ensureEventExists(eventId, lang);
+  const bulkEvent = await ensureEventExists(eventId, lang);
 
   const now = new Date();
   const result = await EventResult.updateMany(
@@ -1694,6 +1783,15 @@ export const checkInAllRegisteredParticipants = asyncHandler(async (req: AuthReq
       $set: { status: 'checked_in', checkedInAt: now, noShowAt: null }
     }
   );
+
+  void recordAuditLog({
+    req,
+    action: 'event.participants.check_in_all',
+    targetType: 'Event',
+    targetId: eventId,
+    targetLabel: bulkEvent.title,
+    metadata: { participants: result.modifiedCount },
+  });
 
   let messageKey = "event.participants_checked_in";
 
@@ -1720,7 +1818,7 @@ export const markAllParticipantsNoShow = asyncHandler(async (req: AuthRequest, r
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
   const eventId = getRouteParam(req.params.eventId);
 
-  await ensureEventExists(eventId, lang);
+  const bulkEvent = await ensureEventExists(eventId, lang);
 
   const now = new Date();
   const result = await EventResult.updateMany(
@@ -1729,6 +1827,15 @@ export const markAllParticipantsNoShow = asyncHandler(async (req: AuthRequest, r
       $set: { status: 'no_show', noShowAt: now, checkedInAt: null }
     }
   );
+  void recordAuditLog({
+    req,
+    action: 'event.participants.no_show_all',
+    targetType: 'Event',
+    targetId: eventId,
+    targetLabel: bulkEvent.title,
+    metadata: { participants: result.modifiedCount },
+  });
+
   let messageKey = "event.participants_no_show";
 
   if (result.matchedCount === 0) {
@@ -1899,6 +2006,15 @@ export const addEventGalleryImages = asyncHandler(async (req: AuthRequest, res: 
   if (!updatedEvent) {
     throw new AppError(t(lang, 'event.not_found'), 500);
   }
+
+  void recordAuditLog({
+    req,
+    action: 'event.gallery.add',
+    targetType: 'Event',
+    targetId: String(updatedEvent._id),
+    targetLabel: updatedEvent.title,
+    metadata: { images: newImages.length },
+  });
 
   sendSuccess(
     res,
@@ -2313,6 +2429,15 @@ export const deleteGalleryImage = asyncHandler(async (req: AuthRequest, res: Res
   if (!updatedEvent) {
     throw new AppError(t(lang, "event.not_found"), 404);
   }
+
+  void recordAuditLog({
+    req,
+    action: 'event.gallery.remove',
+    targetType: 'Event',
+    targetId: String(updatedEvent._id),
+    targetLabel: updatedEvent.title,
+    metadata: { images: removedImages.length },
+  });
 
   return sendSuccess(
     res,

@@ -6,6 +6,9 @@ import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { backfillMediaFromContent } from '@/services/media-backfill.service';
+import { getS3ObjectBuffer, hashFileBuffer } from '@/services/s3-upload.service';
+
+const MAX_REMOTE_IMAGE_BYTES = 15 * 1024 * 1024;
 
 /**
  * GET /v1/media?search=&folder=&page=&limit=
@@ -45,6 +48,56 @@ export const listMedia = asyncHandler(async (req: Request, res: Response) => {
     },
     'Media retrieved'
   );
+});
+
+/**
+ * GET /v1/media/:id/file
+ * Returns the bytes of a library image. The dashboard's upload fields open the
+ * Media Library instead of the computer's file dialog; when an existing image
+ * is chosen, its file is fetched here and handed to the form as if it had been
+ * picked from disk (the browser can't read bucket files directly — no CORS).
+ */
+export const getMediaFile = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+  if (!mongoose.Types.ObjectId.isValid(id)) {
+    throw new AppError('Invalid media id', 400);
+  }
+
+  const item = await Media.findById(id);
+  if (!item) {
+    throw new AppError('Media not found', 404);
+  }
+
+  let buffer: Buffer;
+  let contentType: string | undefined;
+  try {
+    ({ buffer, contentType } = await getS3ObjectBuffer(item.key));
+  } catch {
+    // Entries added by the "scan existing content" backfill can point at
+    // images hosted outside our bucket — fetch those by their public URL.
+    if (!/^https:\/\//i.test(item.url)) {
+      throw new AppError('This image could not be loaded from storage', 502);
+    }
+    const remote = await fetch(item.url);
+    contentType = remote.headers.get('content-type') || undefined;
+    if (!remote.ok || !contentType?.startsWith('image/')) {
+      throw new AppError('This image could not be loaded from storage', 502);
+    }
+    buffer = Buffer.from(await remote.arrayBuffer());
+    if (buffer.length > MAX_REMOTE_IMAGE_BYTES) {
+      throw new AppError('This image is too large to reuse', 413);
+    }
+  }
+
+  // Remember the file's fingerprint so re-submitting it reuses this entry (see uploadImageBufferToS3).
+  if (!item.hash) {
+    item.hash = hashFileBuffer(buffer);
+    await item.save().catch((error) => console.error('Failed to store media hash:', error));
+  }
+
+  res.setHeader('Content-Type', item.mimeType || contentType || 'application/octet-stream');
+  res.setHeader('Cache-Control', 'private, max-age=300');
+  res.status(200).send(buffer);
 });
 
 /**

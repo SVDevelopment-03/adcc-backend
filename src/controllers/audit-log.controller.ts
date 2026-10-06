@@ -7,7 +7,8 @@ import { AuthRequest } from '@/middleware/auth.middleware';
 /**
  * GET /audit-logs
  * Paginated, most-recent-first history of admin actions. Optional filters:
- * action (exact key), targetType, actorId, from/to (ISO date, on createdAt).
+ * action (exact key), targetType (module), actorId, from/to (ISO date, on
+ * createdAt), search (matches target name, actor email or action key).
  */
 export const listAuditLogs = asyncHandler(async (req: AuthRequest, res: Response) => {
   const page = Math.max(1, Number(req.query.page) || 1);
@@ -22,6 +23,10 @@ export const listAuditLogs = asyncHandler(async (req: AuthRequest, res: Response
   }
   if (typeof req.query.actorId === 'string' && req.query.actorId.trim()) {
     filter.actorId = req.query.actorId.trim();
+  }
+  if (typeof req.query.search === 'string' && req.query.search.trim()) {
+    const search = new RegExp(req.query.search.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    filter.$or = [{ targetLabel: search }, { actorEmail: search }, { action: search }];
   }
   const from = typeof req.query.from === 'string' ? new Date(req.query.from) : null;
   const to = typeof req.query.to === 'string' ? new Date(req.query.to) : null;
@@ -52,8 +57,15 @@ export const listAuditLogs = asyncHandler(async (req: AuthRequest, res: Response
   );
 });
 
-/** Distinct action keys seen so far, for the filter dropdown. */
+/** Distinct action keys and modules (targetType) seen so far, for the filter dropdowns. */
 export const listAuditLogActions = asyncHandler(async (_req: AuthRequest, res: Response) => {
-  const actions = await AuditLog.distinct('action');
-  sendSuccess(res, { actions: actions.sort() }, 'Audit log actions retrieved');
+  const [actions, modules] = await Promise.all([
+    AuditLog.distinct('action'),
+    AuditLog.distinct('targetType'),
+  ]);
+  sendSuccess(
+    res,
+    { actions: actions.sort(), modules: modules.filter(Boolean).sort() },
+    'Audit log actions retrieved'
+  );
 });

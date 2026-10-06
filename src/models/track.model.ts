@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import { generateUniqueSlug } from '@/utils/slug';
+import { softDeletePlugin } from '@/utils/soft-delete';
 
 
 // Dashboard-managed via the `lookups` collection (type "track_facility").
@@ -45,6 +46,9 @@ export interface ITrack extends Document {
   galleryImages?: string[];
   createdAt?: Date;
   updatedAt?: Date;
+  /** Set while the document is in the Trash (soft-deleted). */
+  deletedAt?: Date | null;
+  deletedBy?: mongoose.Types.ObjectId | null;
 }
 
 const TrackSchema = new Schema(
@@ -105,6 +109,8 @@ const TrackSchema = new Schema(
   },
   { timestamps: true }
 );
+
+TrackSchema.plugin(softDeletePlugin);
 
 // Auto-generate a URL-friendly slug from the title on first save. Existing
 // tracks keep their slug forever once set — it's never regenerated on a

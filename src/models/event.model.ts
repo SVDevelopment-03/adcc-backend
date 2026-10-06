@@ -1,5 +1,6 @@
 import mongoose, { Schema, Document } from 'mongoose';
 import { generateUniqueSlug } from '@/utils/slug';
+import { softDeletePlugin } from '@/utils/soft-delete';
 
 export interface IEventEligibility {
   helmetRequired?: boolean;
@@ -89,6 +90,9 @@ export interface IEvent extends Document {
   reminder24hSentAt?: Date | null;
   reminder1hSentAt?: Date | null;
   communityNotificationSentAt?: Date | null;
+  /** Set while the document is in the Trash (soft-deleted). */
+  deletedAt?: Date | null;
+  deletedBy?: mongoose.Types.ObjectId | null;
 }
 
 const EventSchema = new Schema(
@@ -336,6 +340,8 @@ const EventSchema = new Schema(
     timestamps: true,
   }
 );
+
+EventSchema.plugin(softDeletePlugin);
 
 // Index for filtering
 EventSchema.index({ eventDate: 1, status: 1 });
