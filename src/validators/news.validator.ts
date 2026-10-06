@@ -33,7 +33,8 @@ export const updateNewsSchema = z
     content: z.preprocess(firstValue, z.string().min(1, 'News content is required')).optional(),
     contentAr: z.preprocess(firstValue, z.string()).optional(),
     category: z.preprocess(firstValue, z.string()).optional(),
-    coverImage: z.preprocess(firstValue, z.string().url('Invalid image URL')).optional(),
+    // Empty string = the dashboard removed the cover image
+    coverImage: z.preprocess(firstValue, z.union([z.literal(''), z.string().url('Invalid image URL')])).optional(),
     author: z.preprocess(firstValue, z.string()).optional(),
     status: z.preprocess(firstValue, z.enum(['Draft', 'Published', 'Trash'])).optional(),
     publishedAt: dateField('Invalid publish date').optional(),

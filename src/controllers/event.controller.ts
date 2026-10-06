@@ -299,6 +299,8 @@ const getRouteParam = (value?: string | string[]): string => {
 
 // Statuses that must never appear in public (guest/member) event listings.
 const UNPUBLISHED_EVENT_STATUSES = ['Draft', 'Disabled', 'Archived'];
+// Statuses that mean an event is over regardless of its date.
+const CLOSED_EVENT_STATUSES = ['Completed', 'Closed', 'Archived'];
 
 // True for an active dashboard user (legacy Admin or any RBAC staff role).
 // Relies on optionalAuthenticate having populated req.user.
@@ -613,17 +615,47 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
   const limitNum = Math.min(100, Math.max(1, Number(limit) || 10));
   const skip = (pageNum - 1) * limitNum;
 
-  const eventsQuery = Event.find(filter as any)
-    .populate('createdBy', 'fullName email')
-    .populate('trackId', 'title titleAr')
-    .populate('communityId', 'title titleAr')
-    .sort({ eventDate: 1, createdAt: -1 })
-    .skip(skip)
-    .limit(limitNum)
-    .lean();
+  // Events that are over (date passed, or status says so) are listed after the
+  // ones still to come: open events soonest-first, then closed events most
+  // recently ended first. Paginated as one continuous list.
+  const closedCondition = {
+    $or: [{ eventDate: { $lt: todayStart } }, { status: { $in: CLOSED_EVENT_STATUSES } }],
+  };
+  const openFilter = {
+    $and: [filter, { eventDate: { $gte: todayStart }, status: { $nin: CLOSED_EVENT_STATUSES } }],
+  };
+  const closedFilter = { $and: [filter, closedCondition] };
 
-  // Run list + count in parallel to reduce endpoint latency.
-  const [events, total] = await Promise.all([eventsQuery, Event.countDocuments(filter as any)]);
+  const findEvents = (
+    query: Record<string, any>,
+    sort: Record<string, 1 | -1>,
+    skipCount: number,
+    take: number
+  ) =>
+    Event.find(query as any)
+      .populate('createdBy', 'fullName email')
+      .populate('trackId', 'title titleAr')
+      .populate('communityId', 'title titleAr')
+      .sort(sort)
+      .skip(skipCount)
+      .limit(take)
+      .lean();
+
+  // Run counts in parallel to reduce endpoint latency.
+  const [openTotal, closedTotal] = await Promise.all([
+    Event.countDocuments(openFilter as any),
+    Event.countDocuments(closedFilter as any),
+  ]);
+  const total = openTotal + closedTotal;
+
+  const openEvents =
+    skip < openTotal ? await findEvents(openFilter, { eventDate: 1, createdAt: -1 }, skip, limitNum) : [];
+  const remaining = limitNum - openEvents.length;
+  const closedEvents =
+    remaining > 0
+      ? await findEvents(closedFilter, { eventDate: -1, createdAt: -1 }, Math.max(0, skip - openTotal), remaining)
+      : [];
+  const events = [...openEvents, ...closedEvents];
 
   const localizedEvents = await Promise.all(
     events.map(async (event) => {
@@ -673,11 +705,12 @@ export const getHomeEvents = asyncHandler(async (req: Request, res: Response) =>
 
   if (events.length == 0) {
     const allFilter: any = { status: { $nin: UNPUBLISHED_EVENT_STATUSES } };
+    // No upcoming events: fall back to everything, most recent first
     events = await Event.find(allFilter)
       .populate('createdBy', 'fullName email')
       .populate('trackId', 'title titleAr')
       .populate('communityId', 'title titleAr')
-      .sort({ eventDate: 1, createdAt: -1 })
+      .sort({ eventDate: -1, createdAt: -1 })
       .skip(skip)
       .limit(limitNum)
       .lean();

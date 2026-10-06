@@ -92,7 +92,10 @@ export const createMerchandiseCategorySchema = z.object({
   ).optional().default([]),
 });
 
-export const updateMerchandiseCategorySchema = createMerchandiseCategorySchema.partial();
+// On update an empty image string means the dashboard removed the image.
+export const updateMerchandiseCategorySchema = createMerchandiseCategorySchema.partial().extend({
+  image: z.string().optional(),
+});
 
 export const createMerchandiseOrderSchema = z.object({
   items: z.array(

@@ -198,9 +198,10 @@ export const updateCommunitySchema = z
     joinMode: z.preprocess(firstValue, z.string()).optional(),
     location: z.preprocess(firstValue, z.enum(['Abu Dhabi', 'Dubai', 'Al Ain', 'Sharjah'])).optional(),
     country: z.preprocess(firstValue, z.string()).optional(),
-    image: z.preprocess(firstValue, imageStringSchema).optional(),
+    // Empty string = the dashboard removed the image
+    image: z.preprocess(firstValue, z.union([z.literal(''), imageStringSchema])).optional(),
     coverImage: z.preprocess(firstValue, imageStringSchema).optional(),
-    logo: z.preprocess(firstValue, imageStringSchema).optional(),
+    logo: z.preprocess(firstValue, z.union([z.literal(''), imageStringSchema])).optional(),
     gallery: z.preprocess(arrayFromStringOrJson, z.array(imageStringSchema)).optional(),
     galleryImages: z.preprocess(arrayFromStringOrJson, z.array(imageStringSchema)).optional(),
     trackName: z.preprocess(firstValue, z.string()).optional(),
