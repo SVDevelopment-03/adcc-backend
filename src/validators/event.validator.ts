@@ -71,6 +71,23 @@ const optionalObjectIdSchema = z.preprocess(
   objectIdSchema.optional()
 );
 
+// Like optionalObjectIdSchema, but an explicitly empty value becomes null so an
+// update can clear the reference instead of leaving it untouched.
+const clearableObjectIdSchema = z.preprocess(
+  (val) => {
+    const value = firstValue(val);
+    if (value === undefined) return undefined;
+    if (value === null) return null;
+    if (typeof value === 'string') {
+      const normalized = value.trim().toLowerCase();
+      if (!normalized || normalized === 'null') return null;
+      if (normalized === 'undefined') return undefined;
+    }
+    return value;
+  },
+  objectIdSchema.nullable().optional()
+);
+
 export const createEventSchema = z
   .object({
     title: stringField('Event title is required'),
@@ -196,7 +213,8 @@ export const updateEventSchema = z
     organizedBy: z.preprocess(firstValue, z.string().trim()).optional(),
     status: z.preprocess(firstValue, z.enum(['Draft', 'Open', 'Full', 'Closed', 'Disabled', 'Completed', 'Archived'])).optional(),
     distance: optionalCoerceNumberField('Distance cannot be negative'),
-    communityId: optionalObjectIdSchema,
+    // Empty string clears the community (it is optional on an event)
+    communityId: clearableObjectIdSchema,
     trackId: optionalObjectIdSchema,
     amenities: z.preprocess(
       jsonOrValue,

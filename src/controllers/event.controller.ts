@@ -923,6 +923,12 @@ export const updateEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     }));
   }
 
+  // Community is optional: a null communityId means the admin cleared it
+  if (updateData.communityId === null) {
+    delete updateData.communityId;
+    updateData.$unset = { ...(updateData.$unset || {}), communityId: 1 };
+  }
+
   const event = await Event.findByIdAndUpdate(id, updateData, {
     new: true,
     runValidators: true,
