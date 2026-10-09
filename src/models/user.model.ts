@@ -23,7 +23,7 @@ export interface IUser extends Document {
   resetPasswordCodeHash?: string;
   resetPasswordExpiresAt?: Date;
   profileImage?: string;
-  gender: 'Male' | 'Female';
+  gender?: 'Male' | 'Female';
   age?: number;
   dob?: Date;
   country?: string;
@@ -132,7 +132,6 @@ const UserSchema = new Schema(
     },
     gender: {
       type: String,
-      required: [true, 'Gender is required'],
       enum: ['Male', 'Female'],
     },
     age: {

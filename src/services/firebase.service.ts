@@ -343,6 +343,16 @@ export const sendWebPushNotification = async (
       },
       fcmOptions: payload.url ? { link: payload.url } : undefined,
     },
+    // Mobile apps: show the image in the system notification as well
+    ...(payload.image && /^https?:\/\//i.test(payload.image)
+      ? {
+          android: { notification: { imageUrl: payload.image } },
+          apns: {
+            payload: { aps: { mutableContent: true } },
+            fcmOptions: { imageUrl: payload.image },
+          },
+        }
+      : {}),
     data: {
       ...(payload.url ? { url: payload.url } : {}),
       ...(payload.image ? { image: payload.image } : {}),

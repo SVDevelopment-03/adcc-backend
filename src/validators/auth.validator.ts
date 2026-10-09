@@ -43,11 +43,12 @@ export const registerUserSchema = z.object({
   email: z.preprocess(firstValue, z.string().trim().email('Invalid email')).optional(),
   phone: z.preprocess(firstValue, z.string().trim().min(1, 'Phone number is required')).optional(),
   password: z.preprocess(firstValue, z.string().min(6, 'Password must be at least 6 characters')).optional(),
+  // The app's profile setup only asks for name, email and phone
   gender: z.enum(['Male', 'Female'], {
     message: 'Gender must be either Male or Female',
-  }),
+  }).optional(),
   age: z.coerce.number().int().min(0, 'Age cannot be negative').max(150, 'Age must be realistic').optional(),
-  dob: dobSchema,
+  dob: dobSchema.optional(),
   country: z.string().min(1, 'Country is required').trim().optional(),
   city: z.string().min(1, 'City is required').trim().optional(),
   provider: z.string().min(1, 'Provider is required').trim().optional(),

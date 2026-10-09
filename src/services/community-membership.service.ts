@@ -2,7 +2,7 @@ import CommunityMembership, { ICommunityMembership } from '@/models/communityMem
 import Community from '@/models/community.model';
 import User from '@/models/user.model';
 import { AppError } from '@/utils/app-error';
-import { notifyAdminCommunityMember } from '@/services/admin-notification.service';
+import { notifyAdminCommunityMember, notifyAdminCommunityMemberLeft } from '@/services/admin-notification.service';
 import { notifyCommunityNewMember } from '@/services/community-notification.service';
 
 export class CommunityMembershipService {
@@ -97,7 +97,11 @@ export class CommunityMembershipService {
   * 
   * */
 
-  async leaveCommunity(userId: string, communityId: any) {
+  async leaveCommunity(
+    userId: string,
+    communityId: any,
+    details: { reason?: string; feedback?: string } = {}
+  ) {
   if (!userId) {
     throw new AppError('User not authenticated', 401);
   }
@@ -119,6 +123,18 @@ export class CommunityMembershipService {
       communityId,
       { $pull: { members: userId } }
     );
+
+    const [leftUser, leftCommunity] = await Promise.all([
+      User.findById(userId).select('fullName').lean(),
+      Community.findById(communityId).select('title').lean(),
+    ]);
+    void notifyAdminCommunityMemberLeft({
+      memberName: (leftUser as any)?.fullName?.trim() || 'Member',
+      communityTitle: (leftCommunity as any)?.title || 'Community',
+      communityId: String(communityId),
+      reason: details.reason?.trim() || undefined,
+      feedback: details.feedback?.trim() || undefined,
+    });
   }
 
   // ✅ Always return same structure

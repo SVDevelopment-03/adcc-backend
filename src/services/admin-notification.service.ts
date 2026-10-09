@@ -133,7 +133,61 @@ export async function notifyAdminEventRegistration(params: {
     category: 'event',
     title: 'New event registration',
     body: `${participantName} registered for ${eventTitle}.`,
-    metadata: { eventId },
+    metadata: { eventId, participantName, eventTitle },
+  });
+}
+
+/** Member cancelled their event registration. */
+export async function notifyAdminEventRegistrationCancelled(params: {
+  eventTitle: string;
+  participantName: string;
+  eventId: string;
+  reason?: string;
+}): Promise<void> {
+  const { eventTitle, participantName, eventId, reason } = params;
+  await createAdminNotification({
+    category: 'event',
+    title: 'Event registration cancelled',
+    body: `${participantName} cancelled their registration for ${eventTitle}.`,
+    metadata: { eventId, participantName, eventTitle, ...(reason ? { reason } : {}) },
+  });
+}
+
+/** Member left a community. */
+export async function notifyAdminCommunityMemberLeft(params: {
+  communityTitle: string;
+  memberName: string;
+  communityId: string;
+  reason?: string;
+  feedback?: string;
+}): Promise<void> {
+  const { communityTitle, memberName, communityId, reason, feedback } = params;
+  await createAdminNotification({
+    category: 'community',
+    title: 'Member left community',
+    body: `${memberName} left ${communityTitle}.`,
+    metadata: {
+      communityId,
+      memberName,
+      communityTitle,
+      ...(reason ? { reason } : {}),
+      ...(feedback ? { feedback } : {}),
+    },
+  });
+}
+
+/** Member joined a challenge. */
+export async function notifyAdminChallengeJoined(params: {
+  challengeTitle: string;
+  participantName: string;
+  challengeId: string;
+}): Promise<void> {
+  const { challengeTitle, participantName, challengeId } = params;
+  await createAdminNotification({
+    category: 'challenge',
+    title: 'New challenge participant',
+    body: `${participantName} joined ${challengeTitle}.`,
+    metadata: { challengeId, participantName, challengeTitle },
   });
 }
 
@@ -148,7 +202,7 @@ export async function notifyAdminCommunityMember(params: {
     category: 'community',
     title: 'New community member',
     body: `${memberName} joined ${communityTitle}.`,
-    metadata: { communityId },
+    metadata: { communityId, memberName, communityTitle },
   });
 }
 

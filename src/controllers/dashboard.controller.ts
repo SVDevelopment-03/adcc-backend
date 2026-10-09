@@ -4,6 +4,7 @@ import User from '@/models/user.model';
 import Event from '@/models/event.model';
 import Track from '@/models/track.model';
 import Community from '@/models/community.model';
+import CommunityMembership from '@/models/communityMembership.model';
 import FeedPost from '@/models/feed-post.model';
 import StoreItem from '@/models/store-item.model';
 import { sendSuccess } from '@/utils/response';
@@ -42,20 +43,20 @@ function parseDashboardYear(queryYear: unknown): number {
   return dayjs().year();
 }
 
-/** Communities created per calendar month for a year (Jan–Dec), zeros where none. */
+/** New community members per calendar month for a year (Jan–Dec), zeros where none. */
 async function getCommunityCreatedByMonth(year: number) {
   const yearStart = dayjs().year(year).startOf('year').toDate();
   const yearEnd = dayjs().year(year).endOf('year').toDate();
 
-  const grouped = await Community.aggregate<{ _id: number; count: number }>([
+  const grouped = await CommunityMembership.aggregate<{ _id: number; count: number }>([
     {
       $match: {
-        createdAt: { $gte: yearStart, $lte: yearEnd },
+        joinedAt: { $gte: yearStart, $lte: yearEnd },
       },
     },
     {
       $group: {
-        _id: { $month: '$createdAt' },
+        _id: { $month: '$joinedAt' },
         count: { $sum: 1 },
       },
     },

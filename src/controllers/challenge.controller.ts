@@ -465,9 +465,65 @@ export const getChallengeParticipants = asyncHandler(async (req: Request, res: R
     userId: String(j.userId?._id ?? j.userId),
     fullName: j.userId?.fullName ?? '',
     email: j.userId?.email ?? '',
+    progressValue: j.progressValue ?? 0,
     progressPercent: j.progressPercent ?? 0,
     joinedAt: j.joinedAt,
   }));
 
-  sendSuccess(res, { participants, total: participants.length }, 'Challenge participants retrieved');
+  sendSuccess(
+    res,
+    { participants, total: participants.length, target: (challenge as any).target ?? null, unit: (challenge as any).unit ?? null },
+    'Challenge participants retrieved'
+  );
+});
+
+/**
+ * Staff sets a participant's progress (manual tracking, like event results)
+ * PATCH /v1/challenges/:id/participants/:userId/progress  { progress }
+ */
+export const adminUpdateChallengeProgress = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as any;
+  const { id, userId } = req.params;
+  const progressInput = req.body?.progress ?? req.body?.progressValue;
+
+  if (progressInput === undefined || progressInput === null || Number.isNaN(Number(progressInput)) || Number(progressInput) < 0) {
+    throw new AppError('Progress must be a number of 0 or more', 400);
+  }
+
+  const challenge = await Challenge.findById(id).select('target title').lean();
+  if (!challenge) {
+    throw new AppError(t(lang, 'challenge.not_found'), 404);
+  }
+
+  const joinRecord = await ChallengeJoin.findOne({ challengeId: id, userId });
+  if (!joinRecord || joinRecord.status !== 'joined') {
+    throw new AppError('This user has not joined the challenge', 400);
+  }
+
+  const target = Math.max(1, Number((challenge as any).target) || 1);
+  const progressValue = Number(progressInput);
+  const progressPercent = Math.max(0, Math.min(100, Math.round((progressValue / target) * 100)));
+
+  const previousPercent = Number(joinRecord.progressPercent || 0);
+  const completedBefore = !!joinRecord.completedNotificationSentAt;
+
+  joinRecord.progressValue = progressValue;
+  joinRecord.progressPercent = progressPercent;
+  await joinRecord.save();
+
+  if (progressPercent >= 100 && !completedBefore) {
+    await Challenge.updateOne({ _id: id }, { $inc: { completions: 1 } });
+  }
+
+  // Same milestone alerts the rider gets when progress is recorded from the app
+  if (progressPercent > previousPercent) {
+    void challengeNotificationService.notifyChallengeProgressMilestones({
+      challengeId: String(id),
+      userId: String(userId),
+      progressPercent,
+      progressValue,
+    });
+  }
+
+  sendSuccess(res, { userId: String(userId), progressValue, progressPercent }, 'Participant progress updated');
 });

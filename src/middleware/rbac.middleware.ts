@@ -27,6 +27,8 @@ const auditStaffActionOnFinish = (req: AuthRequest, res: Response): void => {
 
     // '/v1/challenges' -> 'challenges', '/v1/communities/:id/community-posts' -> 'community-posts'
     const segment = req.baseUrl.split('/').filter(Boolean).pop() || 'dashboard';
+    // Marking a dashboard notification as read is not an admin action worth auditing
+    if (segment === 'admin-notifications') return;
     const moduleName = segment
       .split('-')
       .map((word) => word.charAt(0).toUpperCase() + word.slice(1))

@@ -3,6 +3,9 @@ import mongoose from 'mongoose';
 import bcrypt from 'bcryptjs';
 import { t } from '@/utils/i18n';
 import User from '@/models/user.model';
+import EventResult from '@/models/eventResult.model';
+import CommunityMembership from '@/models/communityMembership.model';
+import ChallengeJoin from '@/models/challengeJoin.model';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
@@ -160,6 +163,83 @@ export const getUserById = asyncHandler(async (req: AuthRequest, res: Response) 
   }
 
   sendSuccess(res, user, t(lang, 'user.retrieved'), 200);
+});
+
+/**
+ * Everything a user has joined, for the dashboard's user profile tabs
+ * GET /user/:userId/activity
+ * Admin only.
+ */
+export const getUserActivity = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as AuthRequest & { lang?: string }).lang || 'en') as string;
+  const userId = typeof req.params.userId === 'string' ? req.params.userId : req.params.userId?.[0] ?? '';
+
+  if (!mongoose.Types.ObjectId.isValid(userId)) {
+    throw new AppError(t(lang, 'user.not_found'), 404);
+  }
+
+  const [eventRows, communityRows, challengeRows] = await Promise.all([
+    EventResult.find({ userId })
+      .sort({ createdAt: -1 })
+      .populate('eventId', 'title eventDate city status')
+      .lean(),
+    CommunityMembership.find({ userId })
+      .sort({ joinedAt: -1 })
+      .populate('communityId', 'title city')
+      .lean(),
+    ChallengeJoin.find({ userId })
+      .sort({ joinedAt: -1 })
+      .populate('challengeId', 'title startDate endDate status')
+      .lean(),
+  ]);
+
+  const events = eventRows
+    .filter((row: any) => row.eventId)
+    .map((row: any) => ({
+      id: String(row._id),
+      eventId: String(row.eventId._id),
+      title: row.eventId.title,
+      eventDate: row.eventId.eventDate,
+      city: row.eventId.city ?? null,
+      status: row.status,
+      registeredAt: row.createdAt,
+      rank: row.rank ?? null,
+      pointsEarned: row.pointsEarned ?? null,
+    }));
+
+  const communities = communityRows
+    .filter((row: any) => row.communityId)
+    .map((row: any) => ({
+      id: String(row._id),
+      communityId: String(row.communityId._id),
+      title: row.communityId.title,
+      city: row.communityId.city ?? null,
+      role: row.role,
+      status: row.status,
+      joinedAt: row.joinedAt,
+    }));
+
+  const challenges = challengeRows
+    .filter((row: any) => row.challengeId)
+    .map((row: any) => ({
+      id: String(row._id),
+      challengeId: String(row.challengeId._id),
+      title: row.challengeId.title,
+      startDate: row.challengeId.startDate,
+      endDate: row.challengeId.endDate,
+      status: row.status,
+      progressPercent: row.progressPercent ?? 0,
+      joinedAt: row.joinedAt,
+    }));
+
+  // One merged timeline, newest first
+  const activity = [
+    ...events.map((e) => ({ type: 'event', title: e.title, detail: `Event registration (${e.status})`, date: e.registeredAt })),
+    ...communities.map((c) => ({ type: 'community', title: c.title, detail: `Community membership (${c.status})`, date: c.joinedAt })),
+    ...challenges.map((c) => ({ type: 'challenge', title: c.title, detail: `Challenge (${c.status})`, date: c.joinedAt })),
+  ].sort((a, b) => new Date(b.date || 0).getTime() - new Date(a.date || 0).getTime());
+
+  sendSuccess(res, { events, communities, challenges, activity }, t(lang, 'user.retrieved'), 200);
 });
 
 /**
