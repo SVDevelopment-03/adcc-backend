@@ -36,7 +36,10 @@ async function resolveSmtpConfig(): Promise<SmtpConfig> {
     typeof emailSettings.smtpSecure === 'boolean'
       ? emailSettings.smtpSecure
       : (process.env.SMTP_SECURE || 'false') === 'true';
-  const from = String(emailSettings.fromEmail || process.env.FROM_EMAIL || process.env.SMTP_USER || '').trim();
+  const fromAddress = String(emailSettings.fromEmail || process.env.FROM_EMAIL || process.env.SMTP_USER || '').trim();
+  const fromName = String(emailSettings.fromName || 'Abu Dhabi Cycling Club').replace(/["\r\n]/g, '').trim();
+  // Without a display name, inboxes show the mailbox part of the address (e.g. "hello").
+  const from = !fromAddress || fromAddress.includes('<') || !fromName ? fromAddress : `"${fromName}" <${fromAddress}>`;
 
   console.log('[EMAIL] resolveSmtpConfig → host:', host || '(empty)', '| port:', port, '| user:', user || '(empty)', '| secure:', secure, '| from:', from || '(empty)');
 
@@ -93,7 +96,11 @@ export async function sendEmail(options: EmailOptions) {
   const chunkSize = 100;
   for (let i = 0; i < options.to.length; i += chunkSize) {
     const chunk = options.to.slice(i, i + chunkSize);
-    const mail: any = { from, to: chunk.join(','), subject: options.subject, text: options.text, html: options.html };
+    // Bulk sends go out as BCC so recipients never see each other's addresses
+    const mail: any =
+      chunk.length > 1
+        ? { from, to: from, bcc: chunk.join(','), subject: options.subject, text: options.text, html: options.html }
+        : { from, to: chunk[0], subject: options.subject, text: options.text, html: options.html };
     if (options.attachments && options.attachments.length > 0) {
       mail.attachments = options.attachments;
     }

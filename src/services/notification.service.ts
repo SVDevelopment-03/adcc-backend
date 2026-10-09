@@ -177,6 +177,117 @@ export async function sendNotificationToUsers(
   return results;
 }
 
+/**
+ * Broadcast to a large audience: every user gets an inbox entry (even without a push token),
+ * and push is sent in batches to whichever of them have registered devices.
+ */
+export async function broadcastNotificationToUsers(
+  userIds: string[],
+  payload: {
+    title: string;
+    body: string;
+    type?: INotification['type'];
+    data?: Record<string, unknown>;
+  },
+  options: NotificationSendOptions = {}
+) {
+  const uniqueIds = Array.from(new Set(userIds)).filter((id) => mongoose.Types.ObjectId.isValid(id));
+  console.log('[PUSH] broadcastNotificationToUsers', 'userCount=' + uniqueIds.length, 'title=' + payload.title);
+
+  if (uniqueIds.length === 0) {
+    return { userCount: 0, successCount: 0, failureCount: 0 };
+  }
+
+  const insertChunkSize = 1000;
+  for (let i = 0; i < uniqueIds.length; i += insertChunkSize) {
+    // eslint-disable-next-line no-await-in-loop
+    await Notification.insertMany(
+      uniqueIds.slice(i, i + insertChunkSize).map((id) => ({
+        userId: new mongoose.Types.ObjectId(id),
+        title: payload.title,
+        body: payload.body,
+        type: payload.type ?? 'general',
+        data: payload.data,
+      })),
+      { ordered: false }
+    );
+  }
+
+  const usersWithTokens = await User.find(
+    { _id: { $in: uniqueIds }, fcmTokens: { $exists: true, $ne: [] } },
+    { fcmTokens: 1 }
+  ).lean();
+
+  const tokenOwners = new Map<string, string>();
+  for (const user of usersWithTokens) {
+    for (const entry of (user as any).fcmTokens || []) {
+      if (entry?.token) tokenOwners.set(entry.token, user._id.toString());
+    }
+  }
+  const tokens = Array.from(tokenOwners.keys());
+
+  const imageFromData = (payload.data && (payload.data as any).image) || (payload.data && (payload.data as any).imageUrl);
+  const imageToSend = options.image ?? imageFromData ?? undefined;
+
+  const chunkSize = 500;
+  let successCount = 0;
+  let failureCount = 0;
+  const invalidTokensByUser = new Map<string, string[]>();
+
+  for (let i = 0; i < tokens.length; i += chunkSize) {
+    const chunk = tokens.slice(i, i + chunkSize);
+    // eslint-disable-next-line no-await-in-loop
+    const response = await sendWebPushNotification(chunk, {
+      title: payload.title,
+      body: payload.body,
+      url: options.url,
+      image: imageToSend,
+      actions: options.actions,
+    });
+    successCount += response.successCount;
+    failureCount += response.failureCount;
+    response.responses.forEach((resp, index) => {
+      if (!resp.success && resp.error) {
+        const code = (resp.error as any).code as string | undefined;
+        if (
+          code === 'messaging/registration-token-not-registered' ||
+          code === 'messaging/invalid-registration-token' ||
+          code === 'messaging/mismatched-credential' ||
+          code === 'messaging/third-party-auth-error'
+        ) {
+          const badToken = chunk[index];
+          const ownerId = tokenOwners.get(badToken);
+          if (ownerId) {
+            const list = invalidTokensByUser.get(ownerId) || [];
+            list.push(badToken);
+            invalidTokensByUser.set(ownerId, list);
+          }
+        }
+      }
+    });
+  }
+
+  if (invalidTokensByUser.size > 0) {
+    const ops = Array.from(invalidTokensByUser.entries()).map(([userId, badTokens]) => ({
+      updateOne: {
+        filter: { _id: userId },
+        update: { $pull: { fcmTokens: { token: { $in: badTokens } } } },
+      },
+    }));
+    await User.bulkWrite(ops, { ordered: false });
+  }
+
+  console.log(
+    '[PUSH] broadcastNotificationToUsers result',
+    'users=' + uniqueIds.length,
+    'tokens=' + tokens.length,
+    'success=' + successCount,
+    'failure=' + failureCount
+  );
+
+  return { userCount: uniqueIds.length, successCount, failureCount };
+}
+
 export async function sendToStaff(payload: { title: string; body: string; url?: string; data?: Record<string, unknown> }, _options: NotificationSendOptions = {}) {
   console.log(
     '[PUSH] sendToStaff',
@@ -271,5 +382,6 @@ export default {
   createInAppNotification,
   sendNotificationToUser,
   sendNotificationToUsers,
+  broadcastNotificationToUsers,
   sendToStaff,
 };

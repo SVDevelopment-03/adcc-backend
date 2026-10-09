@@ -13,7 +13,7 @@ import {
   updateUser,
 } from '@/controllers/user.controller';
 import { startPhoneChange, confirmPhoneChange } from '@/controllers/phone-change.controller';
-import { getAllUsers, getUserById, deleteUser } from '@/controllers/user.controller';
+import { getAllUsers, getUserById, getUserActivity, deleteUser } from '@/controllers/user.controller';
 import {
   createUserSchema,
   registerFcmTokenSchema,
@@ -39,6 +39,7 @@ router.get(
   getUserRegistrationStats
 );
 router.get('/:userId', authenticate, getUserById);
+router.get('/:userId/activity', authenticate, requireStaffPermission('manage_users'), getUserActivity);
 router.patch('/:userId', authenticate, requireStaffPermission('manage_users'), updateUser);
 router.delete('/:userId', authenticate, requireStaffPermission('manage_users'), deleteUser);
 router.patch(

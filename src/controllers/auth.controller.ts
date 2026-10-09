@@ -1573,6 +1573,21 @@ export const getCurrentUser = asyncHandler(
       }
     }
 
+    // Rider level is earned from completed rides rather than stored, so a new
+    // member always starts as a beginner.
+    if (!payload.skillLevel) {
+      const completedRides = Number(payload.stats?.completedCount ?? 0);
+      const level =
+        completedRides >= 50 ? 'ambassador' : completedRides >= 20 ? 'advanced' : completedRides >= 5 ? 'intermediate' : 'beginner';
+      const labels: Record<string, Record<string, string>> = {
+        en: { beginner: 'Beginner', intermediate: 'Intermediate', advanced: 'Advanced', ambassador: 'Ambassador' },
+        ar: { beginner: 'مبتدئ', intermediate: 'متوسط', advanced: 'متقدم', ambassador: 'سفير' },
+      };
+      payload.skillLevel = (labels[lang] || labels.en)[level];
+      sendSuccess(res, payload, t(lang, 'auth.profile_retrieved'));
+      return;
+    }
+
     // Map common skill-level text to localized translations
     if (payload.skillLevel && typeof payload.skillLevel === 'string') {
       const lvl = payload.skillLevel.toLowerCase();

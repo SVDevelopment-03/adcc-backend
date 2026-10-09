@@ -28,6 +28,7 @@ import  {localizeEventPayload}  from '@/utils/event-payload';
 // import { localizeDocumentFields, SupportedLanguage, localizeEventStatic } from '@/utils/localization';
 import {
   notifyAdminEventRegistration,
+  notifyAdminEventRegistrationCancelled,
   notifyAdminTrackRideCompleted,
 } from '@/services/admin-notification.service';
 import {
@@ -783,8 +784,10 @@ export const getCompletedEventStats = asyncHandler(async (req: AuthRequest, res:
     throw new AppError(t(lang, 'common.bad_request'), 400);
   }
 
+  // `scope=all` counts every published event in the range, not only completed ones
+  const countAll = req.query.scope === 'all';
   const rangeFilter = {
-    status: 'Completed',
+    ...(countAll ? { status: { $nin: ['Draft'] }, deletedAt: null } : { status: 'Completed' }),
     eventDate: {
       $gte: fromDate,
       $lte: toDate,
@@ -2083,6 +2086,17 @@ export const cancelRegistration = asyncHandler(async (req: AuthRequest, res: Res
 
 
   await decrementStatsOnCancel(userId);
+
+  const [cancelUser, cancelledEvent] = await Promise.all([
+    User.findById(userId).select('fullName').lean(),
+    Event.findById(eventId).select('title').lean(),
+  ]);
+  void notifyAdminEventRegistrationCancelled({
+    participantName: (cancelUser as any)?.fullName?.trim() || 'Member',
+    eventTitle: (cancelledEvent as any)?.title || 'Event',
+    eventId: String(eventId),
+    reason,
+  });
 
   sendSuccess(res, event, t(lang, "event.participationCancelled"), 201);
 });

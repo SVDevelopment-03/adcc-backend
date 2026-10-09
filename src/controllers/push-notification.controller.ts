@@ -1,6 +1,8 @@
 import { Response } from 'express';
 import User from '@/models/user.model';
 import Notification from '@/models/notification.model';
+import EventResult from '@/models/eventResult.model';
+import CommunityMembership from '@/models/communityMembership.model';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { sendSuccess } from '@/utils/response';
@@ -8,12 +10,72 @@ import { AuthRequest } from '@/middleware/auth.middleware';
 import notificationService from '@/services/notification.service';
 import { sendWebPushNotification } from '@/services/firebase.service';
 import emailService from '@/services/email.service';
+import { announcementEmail } from '@/services/emailTemplates';
+import PushCampaign from '@/models/push-campaign.model';
+import mongoose from 'mongoose';
 
 const STAFF_ROLES: Array<'Admin' | 'Vendor' | 'Member'> = ['Vendor'];
 
 const ensureStaff = (role?: string) => {
   if (!role || !STAFF_ROLES.includes(role as 'Admin' | 'Vendor' | 'Member')) {
     throw new AppError('Staff access required', 403);
+  }
+};
+
+/** Wrap a dashboard-composed message in the branded email layout. */
+const buildBroadcastEmail = (params: { title: string; body: string; image?: string; actions?: string }) => {
+  let parsedActions: Array<{ title: string; action: string }> | undefined;
+  if (params.actions) {
+    try {
+      const raw = JSON.parse(params.actions);
+      if (Array.isArray(raw)) parsedActions = raw;
+    } catch {
+      parsedActions = undefined;
+    }
+  }
+  return announcementEmail({
+    title: params.title,
+    body: params.body,
+    image: params.image,
+    actions: parsedActions,
+  });
+};
+
+/**
+ * Resolve a dashboard audience to the user ids it targets.
+ * Returns null for audiences that mean "staff only" (the legacy default).
+ */
+const resolveAudienceUserIds = async (
+  audienceType: string | undefined,
+  selectedIds: string[]
+): Promise<string[] | null> => {
+  if (selectedIds.length > 0) {
+    const users = await User.find({ _id: { $in: selectedIds } }).select('_id').lean();
+    return users.map((u: any) => String(u._id));
+  }
+
+  switch (audienceType) {
+    case 'all':
+    case 'all_devices': {
+      const users = await User.find({}).select('_id').lean();
+      return users.map((u: any) => String(u._id));
+    }
+    case 'active': {
+      const users = await User.find({ isVerified: true }).select('_id').lean();
+      return users.map((u: any) => String(u._id));
+    }
+    case 'event': {
+      const ids = await EventResult.distinct('userId', {
+        status: { $in: ['joined', 'checked_in', 'completed'] },
+      });
+      return ids.map((id: any) => String(id));
+    }
+    case 'chapter': {
+      const ids = await CommunityMembership.distinct('userId', { status: 'active' });
+      return ids.map((id: any) => String(id));
+    }
+    default:
+      return null;
   }
 };
 
@@ -282,16 +344,20 @@ export const sendTestBroadcast = asyncHandler(
       throw new AppError('Title and body are required', 400);
     }
 
+    if (audienceType === 'selected_users' && selectedIds.length === 0) {
+      throw new AppError('Select at least one user', 400);
+    }
+
+    // null => staff-only audience
+    const audienceUserIds = await resolveAudienceUserIds(audienceType, selectedIds);
+
     // If deliveryType includes email, handle email sending first (externalEmails or audience-based)
     let emailsSentCount = 0;
     if (deliveryType === 'email' || deliveryType === 'both') {
       let emailTargets: string[] = [];
 
-      if (selectedIds.length > 0) {
-        const selectedUsers = await User.find({ _id: { $in: selectedIds } }).select('email').lean();
-        emailTargets = selectedUsers.map((u: any) => u.email).filter(Boolean) as string[];
-      } else if (audienceType === 'all') {
-        const users = await User.find({}).select('email').lean();
+      if (audienceUserIds) {
+        const users = await User.find({ _id: { $in: audienceUserIds } }).select('email').lean();
         emailTargets = users.map((u: any) => u.email).filter(Boolean) as string[];
       } else {
         const staffUsers = await User.find({ role: { $in: STAFF_ROLES } }).select('email').lean();
@@ -307,7 +373,8 @@ export const sendTestBroadcast = asyncHandler(
 
       if (emailTargets.length > 0) {
         try {
-          await emailService.sendEmail({ to: emailTargets, subject: title, text: body });
+          const mail = buildBroadcastEmail({ title, body, image, actions });
+          await emailService.sendEmail({ to: emailTargets, subject: mail.subject, text: mail.text, html: mail.html });
           emailsSentCount = emailTargets.length;
         } catch (err: any) {
           const reason = err?.message || 'Unknown error';
@@ -322,6 +389,14 @@ export const sendTestBroadcast = asyncHandler(
       }
 
       if (deliveryType === 'email') {
+        await PushCampaign.create({
+          title,
+          body,
+          audienceType: audienceType || 'staff',
+          deliveryType: 'email',
+          emailCount: emailsSentCount,
+          createdBy: req.user?.id,
+        }).catch((err: any) => console.error('[push] failed to record campaign', err?.message ?? err));
         sendSuccess(res, { sentTo: emailsSentCount }, 'Test broadcast emails sent');
         return;
       }
@@ -329,40 +404,55 @@ export const sendTestBroadcast = asyncHandler(
 
     // If deliveryType includes app or default, send in-app/web push
     if (deliveryType === 'app' || deliveryType === 'both' || !deliveryType) {
-      if (selectedIds.length > 0) {
-        const selectedUsers = await User.find({ _id: { $in: selectedIds } }).select('_id fcmTokens').lean();
-        const selectedUserIds = selectedUsers.map((user: any) => String(user._id));
-
-        if (selectedUserIds.length === 0) {
-          sendSuccess(res, { sentToUserCount: 0 }, 'No selected users found');
+      if (audienceUserIds) {
+        if (audienceUserIds.length === 0) {
+          sendSuccess(res, { sentToUserCount: 0 }, 'No users found for this audience');
           return;
         }
 
         const parsedActions = actions ? (() => { try { return JSON.parse(actions); } catch { return undefined; } })() : undefined;
-        const results = await notificationService.sendNotificationToUsers(
-          selectedUserIds,
+        // Recorded first so each inbox entry can point back to its campaign (read tracking)
+        const campaignId = new mongoose.Types.ObjectId();
+        const data: Record<string, unknown> = {
+          campaignId: String(campaignId),
+          ...(communityId ? { communityId } : {}),
+          ...(image ? { image } : {}),
+          ...(actions ? { actions } : {}),
+          ...(url ? { url } : {}),
+        };
+
+        // Every targeted user gets an inbox entry; push goes to those with registered devices
+        const result = await notificationService.broadcastNotificationToUsers(
+          audienceUserIds,
           {
             title,
             body,
             type: communityId ? 'community' : undefined,
-            data: communityId ? { communityId, image, actions } : (image || actions ? { ...(image ? { image } : {}), ...(actions ? { actions } : {}) } : undefined),
+            data,
           },
           { url, image, actions: parsedActions }
         );
-        sendSuccess(res, { sentToUserCount: results.length }, 'Test broadcast sent to selected users');
-        return;
-      }
-
-      if (audienceType === 'all') {
-        // send to all users who have tokens or simply create in-app notifications for all users
-        const users = await User.find({}).select('_id fcmTokens').lean();
-        const userIdsWithTokens = users.filter((u: any) => Array.isArray(u.fcmTokens) && u.fcmTokens.length > 0).map((u: any) => String(u._id));
-
-        // create in-app notifications + attempt push per user with tokens
-        const parsedActionsAll = req.body.actions ? (() => { try { return JSON.parse(String(req.body.actions)); } catch { return undefined; } })() : undefined;
-        const results = await notificationService.sendNotificationToUsers(userIdsWithTokens, { title, body, data: (image || req.body.actions) ? { ...(image ? { image } : {}), ...(req.body.actions ? { actions: req.body.actions } : {}) } : undefined }, { url, image, actions: parsedActionsAll });
-
-        sendSuccess(res, { sentToUserCount: results.length }, 'Test broadcast sent to all users (with tokens)');
+        await PushCampaign.create({
+          _id: campaignId,
+          title,
+          body,
+          audienceType: audienceType || 'all',
+          deliveryType: deliveryType === 'both' ? 'both' : 'app',
+          recipientCount: result.userCount,
+          pushSuccessCount: result.successCount,
+          pushFailureCount: result.failureCount,
+          emailCount: emailsSentCount,
+          createdBy: req.user?.id,
+        }).catch((err: any) => console.error('[push] failed to record campaign', err?.message ?? err));
+        sendSuccess(
+          res,
+          {
+            sentToUserCount: result.userCount,
+            pushSuccessCount: result.successCount,
+            pushFailureCount: result.failureCount,
+          },
+          'Notification sent'
+        );
         return;
       }
 
@@ -434,7 +524,8 @@ export const sendCampaignBroadcast = asyncHandler(
 
       if (emailTargets.length > 0) {
         try {
-          await emailService.sendEmail({ to: emailTargets, subject: title, text: body });
+          const mail = buildBroadcastEmail({ title, body, image });
+          await emailService.sendEmail({ to: emailTargets, subject: mail.subject, text: mail.text, html: mail.html });
           emailsSentCount = emailTargets.length;
         } catch (err: any) {
           const reason = err?.message || 'Unknown error';
@@ -493,6 +584,43 @@ export const sendCampaignBroadcast = asyncHandler(
     }
   }
 );
+
+/**
+ * Recent dashboard broadcasts with delivery and read counts
+ * GET /v1/push-notifications/campaigns?limit=5
+ */
+export const getPushCampaigns = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const limit = Math.min(Math.max(parseInt(req.query.limit as string) || 5, 1), 50);
+  const campaigns = await PushCampaign.find({}).sort({ createdAt: -1 }).limit(limit).lean();
+
+  const ids = campaigns.map((c) => String(c._id));
+  const readRows = ids.length
+    ? await Notification.aggregate<{ _id: string; count: number }>([
+        { $match: { 'data.campaignId': { $in: ids }, isRead: true } },
+        { $group: { _id: '$data.campaignId', count: { $sum: 1 } } },
+      ])
+    : [];
+  const readById = new Map(readRows.map((row) => [String(row._id), Number(row.count || 0)]));
+
+  sendSuccess(
+    res,
+    {
+      campaigns: campaigns.map((c) => ({
+        id: String(c._id),
+        title: c.title,
+        audienceType: c.audienceType,
+        deliveryType: c.deliveryType,
+        recipientCount: c.recipientCount,
+        pushSuccessCount: c.pushSuccessCount,
+        pushFailureCount: c.pushFailureCount,
+        emailCount: c.emailCount,
+        readCount: readById.get(String(c._id)) ?? 0,
+        createdAt: c.createdAt,
+      })),
+    },
+    'Push campaigns retrieved'
+  );
+});
 
 /**
  * Get user's notification inbox

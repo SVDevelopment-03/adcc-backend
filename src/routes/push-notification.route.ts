@@ -17,6 +17,7 @@ import {
   sendTestBroadcast,
   sendCampaignBroadcast,
   getNotificationsInbox,
+  getPushCampaigns,
   markNotificationAsRead,
   markAllNotificationsAsRead,
 } from '@/controllers/push-notification.controller';
@@ -107,6 +108,13 @@ router.post(
   upload.none(),
   validate(sendCampaignBroadcastSchema),
   sendCampaignBroadcast
+);
+
+router.get(
+  '/campaigns',
+  authenticate,
+  requireStaffPermission('app_configuration'),
+  getPushCampaigns
 );
 
 router.get(

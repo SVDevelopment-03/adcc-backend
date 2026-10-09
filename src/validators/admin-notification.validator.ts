@@ -6,6 +6,7 @@ const categoryEnum = z.enum([
   'tracks',
   'store',
   'feed_moderation',
+  'challenge',
 ]);
 
 export const listAdminNotificationsQuerySchema = z.object({

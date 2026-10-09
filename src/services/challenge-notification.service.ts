@@ -3,6 +3,9 @@ import ChallengeJoin from '@/models/challengeJoin.model';
 import CommunityMembership from '@/models/communityMembership.model';
 import User from '@/models/user.model';
 import notificationService from '@/services/notification.service';
+import emailService from '@/services/email.service';
+import { announcementEmail } from '@/services/emailTemplates';
+import { notifyAdminChallengeJoined } from '@/services/admin-notification.service';
 
 const REMINDER_SWEEP_INTERVAL_MS = 5 * 60 * 1000;
 const STARTED_FLAG = Symbol.for('adcc.challengeNotificationSchedulerStarted');
@@ -101,8 +104,42 @@ export async function notifyChallengePublished(challengeId: string): Promise<boo
 }
 
 export async function notifyChallengeJoined(params: { challengeId: string; userId: string }): Promise<boolean> {
-  const challenge = await Challenge.findById(params.challengeId).select('title').lean();
+  const challenge = await Challenge.findById(params.challengeId).select('title startDate endDate').lean();
   if (!challenge) return false;
+
+  const participant = await User.findById(params.userId).select('fullName email').lean();
+  const participantName = (participant as any)?.fullName?.trim() || 'Member';
+
+  void notifyAdminChallengeJoined({
+    challengeTitle: challenge.title,
+    participantName,
+    challengeId: params.challengeId,
+  });
+
+  // Confirmation email (best-effort)
+  const participantEmail = (participant as any)?.email as string | undefined;
+  if (participantEmail) {
+    const formatDate = (d?: Date) =>
+      d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' }) : '';
+    const period =
+      challenge.startDate && challenge.endDate
+        ? `The challenge runs from ${formatDate(challenge.startDate)} to ${formatDate(challenge.endDate)}.`
+        : '';
+    const siteUrl = (process.env.FRONTEND_BASE_URL || 'https://adcyclingclub.ae').replace(/\/$/, '');
+    const mail = announcementEmail({
+      title: `You're in: ${challenge.title}`,
+      body: [
+        `Hi ${participantName},`,
+        `Your registration for ${challenge.title} is confirmed. ${period}`.trim(),
+        'Open the challenge in the ADCC app to follow your progress and see the leaderboard. We will notify you as you reach each milestone.',
+      ].join('\n\n'),
+      actions: [{ title: 'View challenge', action: `${siteUrl}/challenges/${params.challengeId}` }],
+      label: 'Challenge registration',
+    });
+    emailService
+      .sendEmail({ to: [participantEmail], subject: mail.subject, text: mail.text, html: mail.html })
+      .catch((err: any) => console.error('[challenge] join confirmation email failed', err?.message ?? err));
+  }
 
   const result = await sendToUsers(
     [params.userId],

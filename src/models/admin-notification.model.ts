@@ -5,7 +5,8 @@ export type AdminNotificationCategory =
   | 'community'
   | 'tracks'
   | 'store'
-  | 'feed_moderation';
+  | 'feed_moderation'
+  | 'challenge';
 
 export interface IAdminNotification extends Document {
   category: AdminNotificationCategory;
@@ -22,7 +23,7 @@ const AdminNotificationSchema = new Schema(
     category: {
       type: String,
       required: true,
-      enum: ['event', 'community', 'tracks', 'store', 'feed_moderation'],
+      enum: ['event', 'community', 'tracks', 'store', 'feed_moderation', 'challenge'],
       index: true,
     },
     title: {

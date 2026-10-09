@@ -873,7 +873,10 @@ export const leaveCommunity = asyncHandler(
       throw new AppError(t(lang, "auth.unauthorized"), 401);
     }
 
-    const result = await communityMembershipService.leaveCommunity(userId, id);
+    const result = await communityMembershipService.leaveCommunity(userId, id, {
+      reason: typeof req.body?.reason === 'string' ? req.body.reason : undefined,
+      feedback: typeof req.body?.feedback === 'string' ? req.body.feedback : undefined,
+    });
 
     sendSuccess(res, result, t(lang, "community.leave"), 200);
   }
