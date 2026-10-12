@@ -93,6 +93,8 @@ export interface ILaffahRideRegistration extends Document {
   gender: (typeof LAFFAH_RIDE_GENDERS)[number];
   nationality: string;
   city: string;
+  emergencyContactName: string;
+  emergencyContactNumber: string;
   raceLocations: LaffahRideLocation[];
   createdAt: Date;
   updatedAt: Date;
@@ -144,6 +146,17 @@ const LaffahRideRegistrationSchema = new Schema(
       required: [true, 'Region/City is required'],
       trim: true,
       maxlength: 120,
+    },
+    emergencyContactName: {
+      type: String,
+      required: [true, 'Emergency contact name is required'],
+      trim: true,
+      maxlength: 120,
+    },
+    emergencyContactNumber: {
+      type: String,
+      required: [true, 'Emergency contact mobile number is required'],
+      trim: true,
     },
     raceLocations: {
       type: [{ type: String, enum: LAFFAH_RIDE_LOCATIONS }],

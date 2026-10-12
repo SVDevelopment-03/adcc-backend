@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import LaffahRideRegistration, {
   LAFFAH_RIDE_LOCATIONS,
+  type LaffahRideLocation,
 } from '@/models/laffah-ride-registration.model';
 import { asyncHandler } from '@/utils/async-handler';
 import { sendSuccess } from '@/utils/response';
@@ -8,7 +9,16 @@ import { buildCsv, sendCsv } from '@/utils/csv';
 import type { CreateLaffahRideRegistrationInput } from '@/validators/laffah-ride-registration.validator';
 import dayjs from 'dayjs';
 
-const buildFilter = (query: { location?: string }) => {
+// Export columns in ride-date order (29 Oct → 25 Mar).
+const EXPORT_LOCATION_COLUMNS: LaffahRideLocation[] = [
+  'Al Dhafra',
+  'Al Ain',
+  'Al Wathba',
+  'Yas Marina',
+  'Al Hudariyat',
+];
+
+const buildFilter =(query: { location?: string }) => {
   const filter: Record<string, any> = {};
   if (query.location && (LAFFAH_RIDE_LOCATIONS as readonly string[]).includes(query.location)) {
     filter.raceLocations = query.location;
@@ -90,8 +100,12 @@ export const exportLaffahRideRegistrations = asyncHandler(async (req: Request, r
     'Email',
     'Gender',
     'Nationality',
-    'RegionCity',
+    'City',
+    'EmergencyContactName',
+    'EmergencyContactNumber',
     'RaceLocations',
+    // One Yes/No column per location so the sheet can be filtered by location
+    ...EXPORT_LOCATION_COLUMNS,
     'SubmittedAt',
   ];
   const rows = items.map((item: any) => [
@@ -104,7 +118,12 @@ export const exportLaffahRideRegistrations = asyncHandler(async (req: Request, r
     item.gender ?? '',
     item.nationality ?? '',
     item.city ?? '',
+    item.emergencyContactName ?? '',
+    String(item.emergencyContactNumber ?? '').replace(/\D/g, ''),
     (item.raceLocations ?? []).join('; '),
+    ...EXPORT_LOCATION_COLUMNS.map((location) =>
+      (item.raceLocations ?? []).includes(location) ? 'Yes' : 'No'
+    ),
     item.createdAt ? new Date(item.createdAt).toISOString() : '',
   ]);
 
