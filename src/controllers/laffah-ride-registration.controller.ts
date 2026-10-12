@@ -98,7 +98,8 @@ export const exportLaffahRideRegistrations = asyncHandler(async (req: Request, r
     item.firstName ?? '',
     item.lastName ?? '',
     item.dateOfBirth ? new Date(item.dateOfBirth).toISOString().slice(0, 10) : '',
-    item.mobileNumber ?? '',
+    // Digits only, country code first (e.g. 971501051087)
+    String(item.mobileNumber ?? '').replace(/\D/g, ''),
     item.email ?? '',
     item.gender ?? '',
     item.nationality ?? '',
