@@ -91,6 +91,8 @@ export const exportLaffahRideRegistrations = asyncHandler(async (req: Request, r
     'Gender',
     'Nationality',
     'RegionCity',
+    'EmergencyContactName',
+    'EmergencyContactNumber',
     'RaceLocations',
     'SubmittedAt',
   ];
@@ -104,6 +106,8 @@ export const exportLaffahRideRegistrations = asyncHandler(async (req: Request, r
     item.gender ?? '',
     item.nationality ?? '',
     item.city ?? '',
+    item.emergencyContactName ?? '',
+    String(item.emergencyContactNumber ?? '').replace(/\D/g, ''),
     (item.raceLocations ?? []).join('; '),
     item.createdAt ? new Date(item.createdAt).toISOString() : '',
   ]);
