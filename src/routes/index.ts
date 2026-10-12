@@ -32,6 +32,7 @@ import { getStaticData } from '@/controllers/lookup.controller';
 import newsRoutes from './news.route';
 import mediaRoutes from './media.route';
 import contactMessageRoutes from './contact-message.route';
+import laffahRideRegistrationRoutes from './laffah-ride-registration.route';
 import auditLogRoutes from './audit-log.route';
 import splashRoutes from './splash.route';
 // import publicStatsRoutes from './public-stats.route';
@@ -78,6 +79,7 @@ router.get('/static-data', getStaticData);
 router.use('/news', newsRoutes);
 router.use('/media', mediaRoutes);
 router.use('/contact', contactMessageRoutes);
+router.use('/laffah-ride-registrations', laffahRideRegistrationRoutes);
 router.use('/audit-logs', auditLogRoutes);
 router.use('/splash', splashRoutes);
 
