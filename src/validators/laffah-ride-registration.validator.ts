@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { LAFFAH_RIDE_GENDERS, LAFFAH_RIDE_LOCATIONS } from '@/models/laffah-ride-registration.model';
+import { LAFFAH_RIDE_CITIES, LAFFAH_RIDE_GENDERS, LAFFAH_RIDE_LOCATIONS } from '@/models/laffah-ride-registration.model';
 
 export const createLaffahRideRegistrationSchema = z
   .object({
@@ -28,7 +28,7 @@ export const createLaffahRideRegistrationSchema = z
       .transform((value) => value.toLowerCase()),
     gender: z.enum(LAFFAH_RIDE_GENDERS),
     nationality: z.string().trim().min(1, 'Nationality is required').max(120, 'Nationality is too long'),
-    city: z.string().trim().min(1, 'Region/City is required').max(120, 'Region/City is too long'),
+    city: z.enum(LAFFAH_RIDE_CITIES, { message: 'Please select a valid Region/City' }),
     raceLocations: z
       .array(z.enum(LAFFAH_RIDE_LOCATIONS))
       .min(1, 'Select at least one race location')
