@@ -4,6 +4,7 @@ import User from '@/models/user.model';
 import { AppError } from '@/utils/app-error';
 import { notifyAdminCommunityMember, notifyAdminCommunityMemberLeft } from '@/services/admin-notification.service';
 import { notifyCommunityNewMember } from '@/services/community-notification.service';
+import { sendCommunityJoinedEmail, sendCommunityLeftEmail } from '@/services/participation-email.service';
 
 export class CommunityMembershipService {
   /**
@@ -33,6 +34,8 @@ export class CommunityMembershipService {
         // atomically pull from members array (skip validation)
         await Community.findByIdAndUpdate(communityId, { $pull: { members: userId } });
 
+        void sendCommunityLeftEmail({ userId, communityId: String(communityId), communityTitle: community.title });
+
         return alreadyMember.populate('userId', 'fullName email');
       }
 
@@ -43,6 +46,8 @@ export class CommunityMembershipService {
 
         // atomically add to members set
         await Community.findByIdAndUpdate(communityId, { $addToSet: { members: userId } });
+
+        void sendCommunityJoinedEmail({ userId, communityId: String(communityId), communityTitle: community.title });
 
         const rejoinUser = await User.findById(userId).select('fullName').lean();
         if (rejoinUser && community.title) {
@@ -75,6 +80,8 @@ export class CommunityMembershipService {
 
     // atomically add new member (in case document was modified externally)
     await Community.findByIdAndUpdate(communityId, { $addToSet: { members: userId } });
+
+    void sendCommunityJoinedEmail({ userId, communityId: String(communityId), communityTitle: community.title });
 
     const newMemberUser = await User.findById(userId).select('fullName').lean();
     if (newMemberUser && community.title) {
@@ -134,6 +141,11 @@ export class CommunityMembershipService {
       communityId: String(communityId),
       reason: details.reason?.trim() || undefined,
       feedback: details.feedback?.trim() || undefined,
+    });
+    void sendCommunityLeftEmail({
+      userId,
+      communityId: String(communityId),
+      communityTitle: (leftCommunity as any)?.title,
     });
   }
 

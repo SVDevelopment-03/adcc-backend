@@ -33,7 +33,15 @@ const getJWTExpiresIn = (): string => {
 };
 
 const getRefreshExpiresIn = (): string => {
-  return process.env.REFRESH_TOKEN_EXPIRES_IN || '3d';
+  return process.env.REFRESH_TOKEN_EXPIRES_IN || '30d';
+};
+
+// Expiry date stored alongside a refresh token in the DB; kept in sync with the token's own lifetime
+export const getRefreshTokenExpiryDate = (): Date => {
+  const unitMs: Record<string, number> = { s: 1000, m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000 };
+  const match = /^(\d+)\s*([smhd])?$/.exec(getRefreshExpiresIn().trim());
+  const lifetimeMs = match ? Number(match[1]) * unitMs[match[2] || 's'] : 30 * unitMs.d;
+  return new Date(Date.now() + lifetimeMs);
 };
 
 export const generateAccessToken = (payload: JWTPayload): string => {

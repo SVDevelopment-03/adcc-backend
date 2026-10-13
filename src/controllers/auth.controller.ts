@@ -23,6 +23,7 @@ import {
   verifyRefreshToken,
   generateAccessToken,
   generateRefreshToken,
+  getRefreshTokenExpiryDate,
 } from '@/utils/jwt.util';
 import { t } from '@/utils/i18n';
 import {
@@ -143,7 +144,7 @@ export const verifyFirebaseAuth = asyncHandler(
 
       // Store refresh token in database
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 3); // 3 days
+      expiresAt.setTime(getRefreshTokenExpiryDate().getTime());
 
       user.refreshTokens.push({
         token: tokens.refreshToken,
@@ -251,7 +252,7 @@ export const emailRegister = asyncHandler(
         });
 
         const expiresAt = new Date();
-        expiresAt.setDate(expiresAt.getDate() + 3);
+        expiresAt.setTime(getRefreshTokenExpiryDate().getTime());
 
         existingUser.refreshTokens = existingUser.refreshTokens.filter(
           (token) => token.expiresAt >= new Date()
@@ -314,7 +315,7 @@ export const emailRegister = asyncHandler(
     });
 
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 3);
+    expiresAt.setTime(getRefreshTokenExpiryDate().getTime());
 
     user.refreshTokens.push({
       token: tokens.refreshToken,
@@ -406,7 +407,7 @@ export const emailLogin = asyncHandler(
     });
 
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 3);
+    expiresAt.setTime(getRefreshTokenExpiryDate().getTime());
 
     user.refreshTokens.push({
       token: tokens.refreshToken,
@@ -688,7 +689,7 @@ export const registerUser = asyncHandler(
     });
 
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 3);
+    expiresAt.setTime(getRefreshTokenExpiryDate().getTime());
 
     user.refreshTokens.push({
       token: tokens.refreshToken,
@@ -783,9 +784,9 @@ export const refreshAccessToken = asyncHandler(
       role: user.role,
     });
 
-    // Calculate expiry date for new refresh token (3 days)
+    // Calculate expiry date for new refresh token
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 3);
+    expiresAt.setTime(getRefreshTokenExpiryDate().getTime());
 
     // Filter out expired tokens and the old refresh token, then add new one
     const now = new Date();
