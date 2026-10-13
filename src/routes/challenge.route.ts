@@ -7,6 +7,7 @@ import {
   updateChallenge,
   deleteChallenge,
   joinChallenge,
+  leaveChallenge,
   getChallengeMemberStatus,
   updateChallengeProgress,
   getChallengeParticipants,
@@ -40,6 +41,7 @@ router.get('/:id/member-status', authenticate, getChallengeMemberStatus);
 
 // Join a challenge (increment participants)
 router.post('/:id/join', authenticate, joinChallenge);
+router.post('/:id/leave', authenticate, leaveChallenge);
 router.patch('/:id/progress', authenticate, validate(updateChallengeProgressSchema), updateChallengeProgress);
 
 router.post(

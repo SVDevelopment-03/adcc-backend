@@ -7,7 +7,7 @@ import { normalizePhone, getPhoneLookupVariants } from '@/utils/phone.util';
 import nexusService from '@/services/nexus.service';
 import crypto from 'node:crypto';
 import User from '@/models/user.model';
-import { generateTokens } from '@/utils/jwt.util';
+import { generateTokens, getRefreshTokenExpiryDate } from '@/utils/jwt.util';
 import { t } from '@/utils/i18n';
 import { resolveRequestLanguage } from '@/utils/localization';
 
@@ -118,7 +118,7 @@ export const verifyOtpController = asyncHandler(async (req: Request, res: Respon
 
     // Store refresh token in DB (simple expiry adding similar to auth flow)
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 3);
+    expiresAt.setTime(getRefreshTokenExpiryDate().getTime());
     user.refreshTokens = user.refreshTokens || [];
     user.refreshTokens.push({
       token: tokens.refreshToken,

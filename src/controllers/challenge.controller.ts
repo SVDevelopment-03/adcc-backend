@@ -9,6 +9,7 @@ import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import challengeNotificationService from '@/services/challenge-notification.service';
+import { sendChallengeLeftEmail } from '@/services/participation-email.service';
 import { localizeChallengeStatic } from '@/utils/localization';
 
 const attachChallengeImage = async (req: AuthRequest, data: Record<string, any>) => {
@@ -332,6 +333,35 @@ export const joinChallenge = asyncHandler(async (req: AuthRequest, res: Response
 
   localizeChallengeStatic(challenge as unknown as Record<string, any>, lang);
   sendSuccess(res, challenge, t(lang, 'challenge.joined') || 'Joined challenge');
+});
+
+/**
+ * Leave a challenge
+ * POST /v1/challenges/:id/leave
+ */
+export const leaveChallenge = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as any;
+  const { id } = req.params;
+  const userId = req.user?.id;
+
+  if (!userId) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const joinRecord = await ChallengeJoin.findOneAndUpdate(
+    { challengeId: id, userId, status: 'joined' },
+    { status: 'left', leftAt: new Date() }
+  );
+
+  if (!joinRecord) {
+    throw new AppError(t(lang, 'challenge.not_joined'), 400);
+  }
+
+  await Challenge.updateOne({ _id: id, participants: { $gt: 0 } }, { $inc: { participants: -1 } });
+
+  void sendChallengeLeftEmail({ challengeId: String(id), userId });
+
+  sendSuccess(res, null, t(lang, 'challenge.left'));
 });
 
 /**

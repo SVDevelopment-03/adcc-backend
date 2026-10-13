@@ -135,7 +135,9 @@
         "updated": "Challenge updated successfully",
         "deleted": "Challenge deleted successfully",
         "allChallenges": "Challenges retrieved successfully",
-        "details": "Challenge details retrieved successfully"
+        "details": "Challenge details retrieved successfully",
+        "left": "You have left the challenge",
+        "not_joined": "You have not joined this challenge"
     },
     "news": {
         "not_found": "News article not found",
