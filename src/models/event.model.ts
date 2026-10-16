@@ -371,14 +371,16 @@ EventSchema.plugin(softDeletePlugin);
 EventSchema.index({ eventDate: 1, status: 1 });
 EventSchema.index({ status: 1, eventDate: 1, createdAt: -1 });
 
-// Auto-generate a URL-friendly slug from the title on first save. Existing
+// Auto-generate a URL-friendly slug from the title on first save, or make the
+// slug the dashboard sent unique (a trashed event may still hold it). Existing
 // events keep their slug forever once set — it's never regenerated on a
 // later title edit, so shared/bookmarked links stay valid.
 EventSchema.pre('save', async function () {
-  if (!this.slug && this.title) {
+  const source = this.slug?.trim() || this.title;
+  if ((this.isNew || this.isModified('slug')) && source) {
     this.slug = await generateUniqueSlug(
       this.constructor as mongoose.Model<IEvent>,
-      this.title,
+      source,
       (this._id as mongoose.Types.ObjectId | undefined)?.toString(),
     );
   }
