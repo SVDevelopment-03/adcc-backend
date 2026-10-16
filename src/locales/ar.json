@@ -325,6 +325,8 @@
     "women(sherides)": "نساء (شيريدز)"
   },
   "difficulties": {
+    "race": "سباق",
+    "ride": "جولة",
     "easy": "سهل",
     "medium": "متوسط",
     "hard": "صعب",
