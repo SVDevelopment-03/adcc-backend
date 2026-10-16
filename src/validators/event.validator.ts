@@ -88,6 +88,22 @@ const clearableObjectIdSchema = z.preprocess(
   objectIdSchema.nullable().optional()
 );
 
+// Repeatable track rows of an internal event. Existing rows carry their _id so
+// leads that reference them stay linked after an edit.
+const raceTracksSchema = z.preprocess(
+  jsonOrValue,
+  z.array(
+    z
+      .object({
+        _id: optionalObjectIdSchema,
+        name: z.string().trim().min(1, 'Track name is required').max(200, 'Track name is too long'),
+        date: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Track date must be in YYYY-MM-DD format'),
+        time: z.string().trim().regex(/^\d{2}:\d{2}$/, 'Track time must be in HH:mm format'),
+      })
+      .strip()
+  )
+);
+
 export const createEventSchema = z
   .object({
     title: stringField('Event title is required'),
@@ -173,6 +189,8 @@ export const createEventSchema = z
     isFeatured: booleanField().default(false),
     allowCancellation: booleanField().default(false),
     isPurposeBased: booleanField().default(false),
+    isInternal: booleanField().default(false),
+    raceTracks: raceTracksSchema.optional().default([]),
     rewards: rewardsSchema,
     galleryImages: z.preprocess(jsonOrValue, z.array(z.string().url('Invalid image URL'))).optional().default([])
   })
@@ -268,6 +286,9 @@ export const updateEventSchema = z
     isFeatured: booleanField().default(false),
     allowCancellation: booleanField().default(false),
     isPurposeBased: booleanField().default(false),
+    // No default: leaving it out of a PATCH must not flip an internal event back to external
+    isInternal: booleanField().optional(),
+    raceTracks: raceTracksSchema.optional(),
     galleryImages: z.preprocess(jsonOrValue, z.array(z.string().url('Invalid image URL'))).optional()
 
   })

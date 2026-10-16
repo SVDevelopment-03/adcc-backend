@@ -24,6 +24,16 @@ export interface IEventSchedule {
 
 export type IEventAmenity = string;
 
+/** A track/location an internal event's riders can sign up for (e.g. "Al Dhafra Oasis Parking"). */
+export interface IEventRaceTrack {
+  _id?: mongoose.Types.ObjectId;
+  name: string;
+  /** YYYY-MM-DD */
+  date: string;
+  /** HH:mm (24h) */
+  time: string;
+}
+
 /**
  * Event categories are dashboard-managed (see the `lookups` collection,
  * type "event_category") rather than a fixed enum, so admins can add/edit/
@@ -83,6 +93,9 @@ export interface IEvent extends Document {
   isFeatured?: boolean;
   allowCancellation?: boolean;
   isPurposeBased?: boolean;
+  /** Internal events collect leads through the public registration form instead of the app. */
+  isInternal?: boolean;
+  raceTracks?: IEventRaceTrack[];
   galleryImages?: string[];
   publishedNotificationSentAt?: Date | null;
   resultsNotificationSentAt?: Date | null;
@@ -313,6 +326,17 @@ const EventSchema = new Schema(
       type: Boolean,
       trim: true,
     },
+    isInternal: {
+      type: Boolean,
+      default: false,
+    },
+    raceTracks: [
+      {
+        name: { type: String, required: true, trim: true },
+        date: { type: String, required: true, trim: true },
+        time: { type: String, required: true, trim: true },
+      },
+    ],
     rewards: {
       points: {
         type: Number,

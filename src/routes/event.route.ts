@@ -31,6 +31,8 @@ import {
   disableEvent
 
 } from '@/controllers/event.controller';
+import { createEventLead, getEventLeads, exportEventLeads } from '@/controllers/event-lead.controller';
+import { createEventLeadSchema } from '@/validators/event-lead.validator';
 import { validate, validateParams } from '@/middleware/validate.middleware';
 import {
   createEventSchema,
@@ -57,6 +59,10 @@ router.get(
   getCompletedEventStats
 );
 router.get('/:id', optionalAuthenticate, getEventById);
+// Internal events: public registration form + dashboard leads list/export
+router.post('/:eventId/leads', validate(createEventLeadSchema), createEventLead);
+router.get('/:eventId/leads/export', authenticate, requireStaffPermission('manage_events'), exportEventLeads);
+router.get('/:eventId/leads', authenticate, requireStaffPermission('manage_events'), getEventLeads);
 router.post('/:eventId/results', authenticate, getEventResults);
 router.get('/:eventId/completed-summary', authenticate, getEventCompletedSummary);
 router.get('/:eventId/results',  authenticate, getEventResultsList);
