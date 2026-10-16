@@ -8,7 +8,7 @@ import { parseTimeToSeconds } from '@/utils/event-results.util';
 import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
-import { idOrSlugFilter } from '@/utils/slug';
+import { generateUniqueSlug, idOrSlugFilter, slugify } from '@/utils/slug';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import {
@@ -901,6 +901,17 @@ export const updateEvent = asyncHandler(async (req: AuthRequest, res: Response) 
       titleAr: item.titleAr || item.title,
       descriptionAr: item.descriptionAr || item.description,
     }));
+  }
+
+  // A blank slug keeps the current one; a changed slug must not collide with
+  // another event, including one in the Trash
+  if ('slug' in updateData) {
+    const requestedSlug = slugify(String(updateData.slug ?? ''));
+    if (!requestedSlug || requestedSlug === previousEvent?.slug) {
+      delete updateData.slug;
+    } else {
+      updateData.slug = await generateUniqueSlug(Event, requestedSlug, String(id));
+    }
   }
 
   // Community is optional: a null communityId means the admin cleared it
