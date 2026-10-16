@@ -308,7 +308,7 @@ const EVENT_AUDIT_FIELDS = [
   'maxParticipants', 'registrationFeeType', 'registrationFeeAmount', 'minAge', 'maxAge',
   'distance', 'difficulty', 'isFeatured', 'allowCancellation', 'isPurposeBased', 'organizedBy',
   'youtubeLink', 'registrationLink', 'mainImage', 'eventImage', 'galleryImages', 'amenities',
-  'schedule', 'eligibility', 'rewards',
+  'schedule', 'eligibility', 'rewards', 'isInternal', 'raceTracks',
 ];
 
 const normalizeRegistrationFee = (data: Record<string, any>) => {
