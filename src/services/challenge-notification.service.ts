@@ -131,7 +131,7 @@ export async function notifyChallengeJoined(params: { challengeId: string; userI
       body: [
         `Hi ${participantName},`,
         `Your registration for ${challenge.title} is confirmed. ${period}`.trim(),
-        'Open the challenge in the ADCC app to follow your progress and see the leaderboard. We will notify you as you reach each milestone.',
+        'Open the challenge in the DARRAJA app to follow your progress and see the leaderboard. We will notify you as you reach each milestone.',
       ].join('\n\n'),
       actions: [{ title: 'View challenge', action: `${siteUrl}/challenges/${params.challengeId}` }],
       label: 'Challenge registration',

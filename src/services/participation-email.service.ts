@@ -100,12 +100,12 @@ export function sendEventRegistrationEmail(params: { userId: string; event: Even
         title: `You're registered: ${title}`,
         body: [
           `Hi ${name},`,
-          `Your place at ${title} is confirmed.`,
+          `Thanks for registering for ${title}. Your place is confirmed.`,
           details.join('\n'),
           attachments.length
             ? 'A calendar file is attached to this email so you can add the event to your calendar.'
             : '',
-          'If your plans change, please cancel your registration from the event page in the ADCC app so your place can go to another rider.',
+          'If your plans change, please cancel your registration from the event page in the DARRAJA app so your place can go to another rider.',
         ]
           .filter(Boolean)
           .join('\n\n'),
@@ -131,7 +131,7 @@ export function sendEventCancellationEmail(params: {
         `Hi ${name},`,
         `Your registration for ${title}${event.eventDate ? ` on ${formatDate(event.eventDate)}` : ''} has been cancelled and your place has been released.`,
         reason ? `Reason you gave: ${reason}` : '',
-        'Changed your mind? You can register again from the event page for as long as registration is open.',
+        'Changed your mind? You can register again from the event page in the DARRAJA app for as long as registration is open.',
       ]
         .filter(Boolean)
         .join('\n\n'),
@@ -156,7 +156,7 @@ export function sendCommunityJoinedEmail(params: {
       body: [
         `Hi ${name},`,
         `You are now a member of ${title}.`,
-        "You will find the community's rides, events and challenges in the ADCC app, and we will let you know when something new is announced.",
+        "You will find the community's rides, events and challenges in the DARRAJA app, and we will let you know when something new is announced.",
       ].join('\n\n'),
       actions: [{ title: 'View community', action: `${getSiteUrl()}/communities/${params.communityId}` }],
     },
