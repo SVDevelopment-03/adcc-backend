@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import mongoose from 'mongoose';
+import { isValidPhoneNumber } from 'libphonenumber-js';
 import { EVENT_LEAD_CITIES, EVENT_LEAD_GENDERS } from '@/models/event-lead.model';
 
 const phoneField = (requiredMessage: string, invalidMessage: string, tooLongMessage: string) =>
@@ -8,7 +9,9 @@ const phoneField = (requiredMessage: string, invalidMessage: string, tooLongMess
     .trim()
     .min(6, requiredMessage)
     .max(30, tooLongMessage)
-    .regex(/^[0-9\s\-+()]+$/, invalidMessage);
+    .regex(/^[0-9\s\-+()]+$/, invalidMessage)
+    // "+971 501234567": must be a valid number for its country code
+    .refine((value) => isValidPhoneNumber(value), invalidMessage);
 
 export const createEventLeadSchema = z
   .object({
