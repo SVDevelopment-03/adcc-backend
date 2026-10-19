@@ -251,7 +251,7 @@ export function announcementEmail(vars: {
         </td></tr>
         <tr><td style="background:#ffffff;padding:20px 36px 26px 36px;font-size:14px;line-height:22px;color:#5c5a63">
           <strong style="color:#111118">Ride with the club.</strong>
-          Events, communities and challenges are all in the ADCC app and at
+          Events, communities and challenges are all in the DARRAJA app and at
           <a href="${siteUrl}" style="color:#C12D32;text-decoration:underline">${siteLabel}</a>.
         </td></tr>
         <tr><td align="center" style="background:#111118;padding:30px 28px 28px 28px;border-radius:0 0 12px 12px">
