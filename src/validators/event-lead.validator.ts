@@ -50,10 +50,12 @@ export const createEventLeadSchema = z
       'Please enter a valid emergency contact mobile number',
       'Emergency contact mobile number is too long'
     ),
-    // _ids of the picked entries in the event's raceTracks
+    // _ids of picked entries in the event's raceTracks. Optional: the form no
+    // longer asks for a location, but older app versions may still send them.
     raceTrackIds: z
       .array(z.string().refine((val) => mongoose.Types.ObjectId.isValid(val), 'Invalid race location'))
-      .min(1, 'Select at least one race location')
+      .optional()
+      .default([])
       .transform((values) => Array.from(new Set(values))),
   })
   .strict();
