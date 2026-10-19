@@ -75,7 +75,7 @@ const EventLeadSchema = new Schema(
           time: { type: String, required: true, trim: true },
         },
       ],
-      required: true,
+      default: [],
     },
   },
   {
