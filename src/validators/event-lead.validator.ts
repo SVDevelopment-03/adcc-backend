@@ -39,7 +39,8 @@ export const createEventLeadSchema = z
       .transform((value) => value.toLowerCase()),
     gender: z.enum(EVENT_LEAD_GENDERS),
     nationality: z.string().trim().min(1, 'Nationality is required').max(120, 'Nationality is too long'),
-    city: z.enum(EVENT_LEAD_CITIES, { message: 'Please select a valid Region/City' }),
+    // Only asked for UAE nationals (required for them, see below)
+    city: z.enum(EVENT_LEAD_CITIES, { message: 'Please select a valid Region/City' }).optional(),
     emergencyContactName: z
       .string()
       .trim()
@@ -58,6 +59,15 @@ export const createEventLeadSchema = z
       .default([])
       .transform((values) => Array.from(new Set(values))),
   })
-  .strict();
+  .strict()
+  .superRefine((data, ctx) => {
+    if (data.nationality === 'United Arab Emirates' && !data.city) {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['city'], message: 'Region/City is required' });
+    }
+  })
+  .transform((data) =>
+    // The city is not asked for non-UAE nationals; drop any stale value
+    data.nationality === 'United Arab Emirates' ? data : { ...data, city: undefined }
+  );
 
 export type CreateEventLeadInput = z.infer<typeof createEventLeadSchema>;
