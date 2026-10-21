@@ -31,7 +31,8 @@ export interface IEventLead extends Document {
   email: string;
   gender: (typeof EVENT_LEAD_GENDERS)[number];
   nationality: string;
-  city: (typeof EVENT_LEAD_CITIES)[number];
+  /** Only asked for UAE nationals. */
+  city?: (typeof EVENT_LEAD_CITIES)[number];
   emergencyContactName: string;
   emergencyContactNumber: string;
   raceTracks: IEventLeadTrack[];
@@ -53,7 +54,7 @@ const EventLeadSchema = new Schema(
     email: { type: String, required: [true, 'Email is required'], trim: true, lowercase: true },
     gender: { type: String, enum: EVENT_LEAD_GENDERS, required: [true, 'Gender is required'] },
     nationality: { type: String, required: [true, 'Nationality is required'], trim: true, maxlength: 120 },
-    city: { type: String, enum: EVENT_LEAD_CITIES, required: [true, 'Region/City is required'] },
+    city: { type: String, enum: EVENT_LEAD_CITIES },
     emergencyContactName: {
       type: String,
       required: [true, 'Emergency contact name is required'],
