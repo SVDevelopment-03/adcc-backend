@@ -96,6 +96,8 @@ export interface IEvent extends Document {
   /** Internal events collect leads through the public registration form instead of the app. */
   isInternal?: boolean;
   raceTracks?: IEventRaceTrack[];
+  /** Shared by every occurrence of a repeating event (e.g. a weekly ride), created together. */
+  seriesId?: mongoose.Types.ObjectId | null;
   galleryImages?: string[];
   publishedNotificationSentAt?: Date | null;
   resultsNotificationSentAt?: Date | null;
@@ -304,6 +306,7 @@ const EventSchema = new Schema(
     reminder24hSentAt: { type: Date, default: null },
     reminder1hSentAt: { type: Date, default: null },
     communityNotificationSentAt: { type: Date, default: null },
+    seriesId: { type: Schema.Types.ObjectId, default: null, index: true },
     difficulty: {
       type: String,
       trim: true,
