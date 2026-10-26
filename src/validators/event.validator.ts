@@ -192,9 +192,23 @@ export const createEventSchema = z
     isInternal: booleanField().default(false),
     raceTracks: raceTracksSchema.optional().default([]),
     rewards: rewardsSchema,
-    galleryImages: z.preprocess(jsonOrValue, z.array(z.string().url('Invalid image URL'))).optional().default([])
+    galleryImages: z.preprocess(jsonOrValue, z.array(z.string().url('Invalid image URL'))).optional().default([]),
+    // Repeat weekly: one event is created per matching weekday (0 = Sunday … 6 = Saturday)
+    // from eventDate through repeatUntil, inclusive.
+    repeatWeekdays: z.preprocess(
+      jsonOrValue,
+      z.array(z.coerce.number().int().min(0).max(6)).min(1, 'Pick at least one weekday')
+    ).optional(),
+    repeatUntil: z.preprocess(
+      firstValue,
+      z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, 'Repeat end date must be in YYYY-MM-DD format')
+    ).optional(),
   })
-  .strip();
+  .strip()
+  .refine((data) => !data.repeatWeekdays || !!data.repeatUntil, {
+    message: 'Repeat end date is required for a repeating event',
+    path: ['repeatUntil'],
+  });
 
 export const updateEventSchema = z
   .object({

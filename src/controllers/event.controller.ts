@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { t } from "@/utils/i18n";
-import Event from '@/models/event.model';
+import Event, { type IEventRaceTrack } from '@/models/event.model';
 import EventResult from '@/models/eventResult.model';
 import Track from '@/models/track.model';
 import User from '@/models/user.model';
@@ -301,6 +301,31 @@ const UNPUBLISHED_EVENT_STATUSES = ['Draft', 'Disabled', 'Archived'];
 // Statuses that mean an event is over regardless of its date.
 const CLOSED_EVENT_STATUSES = ['Completed', 'Closed', 'Archived'];
 
+// Repeating events: about two years of a weekly ride, guarding against a typo'd end date.
+const MAX_SERIES_OCCURRENCES = 104;
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * Every date from `start` through `until` (YYYY-MM-DD, inclusive) that falls on
+ * one of `weekdays` (0 = Sunday … 6 = Saturday). Works in UTC days, matching how
+ * a date-only eventDate string is parsed.
+ */
+const getWeeklyOccurrenceDates = (start: Date, until: string, weekdays: number[]): Date[] => {
+  const end = new Date(until);
+  const wanted = new Set(weekdays);
+  const dates: Date[] = [];
+  for (let day = new Date(start); day <= end; day = new Date(day.getTime() + DAY_MS)) {
+    if (wanted.has(day.getUTCDay())) dates.push(day);
+    // Stop well past the cap so a far-off end date fails fast instead of looping for years.
+    if (dates.length > MAX_SERIES_OCCURRENCES) break;
+  }
+  return dates;
+};
+
+/** Move a YYYY-MM-DD date by a whole number of days. */
+const shiftIsoDate = (isoDate: string, days: number): string =>
+  new Date(new Date(isoDate).getTime() + days * DAY_MS).toISOString().slice(0, 10);
+
 // Fields compared before/after an edit to describe "what was changed" in the audit log.
 const EVENT_AUDIT_FIELDS = [
   'title', 'titleAr', 'description', 'descriptionAr', 'status', 'category', 'eventDate',
@@ -482,7 +507,75 @@ export const createEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     throw new AppError(t(lang, 'event.past_date_not_allowed'), 400);
   }
 
-  const event = await Event.create(eventData);
+  const { repeatWeekdays, repeatUntil } = eventData as { repeatWeekdays?: number[]; repeatUntil?: string };
+  delete (eventData as any).repeatWeekdays;
+  delete (eventData as any).repeatUntil;
+
+  if (!repeatWeekdays || !repeatUntil || !eventData.eventDate) {
+    const event = await Event.create(eventData);
+    const localizedEvent = localizeEventPayload(event.toObject(), lang);
+
+    void recordAuditLog({
+      req,
+      action: 'event.create',
+      targetType: 'Event',
+      targetId: event._id.toString(),
+      targetLabel: event.title,
+      metadata: { status: event.status },
+    });
+
+    if (event.status === 'Open') {
+      void notifyEventPublished(String(event._id));
+      if (event.communityId) {
+        void notifyCommunityEventCreated({
+          communityId: String(event.communityId),
+          eventId: String(event._id),
+          eventTitle: event.title,
+          url: `/events/${event._id}`,
+        });
+      }
+    }
+
+    sendSuccess(res, localizedEvent, t(lang, "event.created"), 201);
+    return;
+  }
+
+  // Repeating event: one real event per occurrence so each keeps its own
+  // registrations, capacity, results and reminders.
+  const occurrenceDates = getWeeklyOccurrenceDates(eventData.eventDate, repeatUntil, repeatWeekdays);
+  if (occurrenceDates.length === 0) {
+    throw new AppError('No dates match the selected weekdays before the repeat end date', 400);
+  }
+  if (occurrenceDates.length > MAX_SERIES_OCCURRENCES) {
+    throw new AppError(
+      `A repeating event can have at most ${MAX_SERIES_OCCURRENCES} occurrences (got ${occurrenceDates.length})`,
+      400
+    );
+  }
+
+  const seriesId = new mongoose.Types.ObjectId();
+  const baseDate: Date = eventData.eventDate;
+  const announcedAt = new Date();
+  const events = [];
+  for (const [index, date] of occurrenceDates.entries()) {
+    const dayOffset = Math.round((date.getTime() - baseDate.getTime()) / DAY_MS);
+    events.push(
+      await Event.create({
+        ...eventData,
+        eventDate: date,
+        seriesId,
+        raceTracks: Array.isArray(eventData.raceTracks)
+          ? eventData.raceTracks.map((track: IEventRaceTrack) => ({
+              ...track,
+              date: shiftIsoDate(track.date, dayOffset),
+            }))
+          : eventData.raceTracks,
+        // Announce the series once (from the first occurrence), not once per date.
+        ...(index > 0 ? { publishedNotificationSentAt: announcedAt, communityNotificationSentAt: announcedAt } : {}),
+      })
+    );
+  }
+  const event = events[0];
   const localizedEvent = localizeEventPayload(event.toObject(), lang);
 
   void recordAuditLog({
@@ -491,7 +584,12 @@ export const createEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     targetType: 'Event',
     targetId: event._id.toString(),
     targetLabel: event.title,
-    metadata: { status: event.status },
+    metadata: {
+      status: event.status,
+      seriesId: String(seriesId),
+      occurrences: events.length,
+      until: repeatUntil,
+    },
   });
 
   if (event.status === 'Open') {
@@ -506,7 +604,12 @@ export const createEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     }
   }
 
-  sendSuccess(res, localizedEvent, t(lang, "event.created"), 201);
+  sendSuccess(
+    res,
+    { ...localizedEvent, seriesCount: events.length },
+    `${events.length} events created`,
+    201
+  );
 });
 
 /**
@@ -534,6 +637,17 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
       {
         $or: [
           { status: 'Closed' },
+          { status: { $in: ['Open', 'Full'] }, eventDate: { $lt: todayStart } },
+        ],
+      },
+    ];
+  } else if (status === 'Completed') {
+    // The public "Completed" filter means every event that is over: marked
+    // Completed/Closed, or Open/Full with a date that has passed.
+    filter.$and = [
+      {
+        $or: [
+          { status: { $in: ['Completed', 'Closed'] } },
           { status: { $in: ['Open', 'Full'] }, eventDate: { $lt: todayStart } },
         ],
       },
