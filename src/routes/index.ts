@@ -35,6 +35,7 @@ import contactMessageRoutes from './contact-message.route';
 import laffahRideRegistrationRoutes from './laffah-ride-registration.route';
 import auditLogRoutes from './audit-log.route';
 import splashRoutes from './splash.route';
+import partnerRoutes from './partner.route';
 // import publicStatsRoutes from './public-stats.route';
 const router = Router();
 
@@ -82,6 +83,7 @@ router.use('/contact', contactMessageRoutes);
 router.use('/laffah-ride-registrations', laffahRideRegistrationRoutes);
 router.use('/audit-logs', auditLogRoutes);
 router.use('/splash', splashRoutes);
+router.use('/partners', partnerRoutes);
 
 // Add more routes here as you create them
 // router.use('/users', userRoutes);
