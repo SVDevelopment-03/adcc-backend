@@ -189,7 +189,17 @@ export const uploadSettingsImages = (req: any, res: any, next: any) => {
   return next();
 };
 
-export const uploadSettingsBulkImages = (req: any, res: any, next: any) => {
+// Partner logos: images only, any field name, so the dashboard can send one or
+// many files in a single request.
+export const uploadPartnerLogos = (req: any, res: any, next: any) => {
+  const contentType = (req.headers['content-type'] || '').toString();
+  if (contentType.includes('multipart/form-data')) {
+    return upload.any()(req, res, next);
+  }
+  return next();
+};
+
+export const uploadSettingsBulkImages =(req: any, res: any, next: any) => {
   const contentType = (req.headers['content-type'] || '').toString();
   if (contentType.includes('multipart/form-data')) {
     return uploadWithVideos.any()(req, res, next);
