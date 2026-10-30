@@ -1,4 +1,5 @@
 import multer from 'multer';
+import { AppError } from '@/utils/app-error';
 
 const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10MB
 const IMAGE_MIME_TYPES = new Set([
@@ -197,6 +198,38 @@ export const uploadPartnerLogos = (req: any, res: any, next: any) => {
     return upload.any()(req, res, next);
   }
   return next();
+};
+
+// Page section images (e.g. homepage banner): PNG/JPG only, 1MB max — the
+// same limits the dashboard enforces before upload.
+const PAGE_IMAGE_MAX_SIZE_MB = 1;
+const PAGE_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png']);
+
+const uploadPageImages = multer({
+  storage,
+  limits: { fileSize: PAGE_IMAGE_MAX_SIZE_MB * 1024 * 1024, files: 4 },
+  fileFilter: (_req, file, cb) => {
+    if (!PAGE_IMAGE_MIME_TYPES.has(file.mimetype)) {
+      cb(new AppError('Only PNG, JPG and JPEG images are allowed', 400));
+      return;
+    }
+    cb(null, true);
+  },
+}).any();
+
+export const uploadPageSectionImages = (req: any, res: any, next: any) => {
+  const contentType = (req.headers['content-type'] || '').toString();
+  if (!contentType.includes('multipart/form-data')) {
+    return next();
+  }
+  return uploadPageImages(req, res, (err: any) => {
+    if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
+      return next(
+        new AppError(`Image size must not exceed ${PAGE_IMAGE_MAX_SIZE_MB}MB`, 400)
+      );
+    }
+    return next(err);
+  });
 };
 
 export const uploadSettingsBulkImages =(req: any, res: any, next: any) => {
