@@ -27,6 +27,37 @@ const parseContentField = (value: unknown): Record<string, any> => {
   throw new AppError('"content" must be a JSON object', 400);
 };
 
+// Image field names are dot paths into `content`, e.g. `imageEn` or
+// `cards.2.image`; each must already hold a (possibly empty) string there.
+const IMAGE_PATH_SEGMENT = /^[A-Za-z0-9_]+$/;
+
+const resolveImagePath = (content: Record<string, any>, path: string) => {
+  const segments = path.split('.');
+  if (!segments.every((segment) => IMAGE_PATH_SEGMENT.test(segment))) return null;
+  let parent: any = content;
+  for (const segment of segments.slice(0, -1)) {
+    if (!parent || typeof parent !== 'object' || !Object.prototype.hasOwnProperty.call(parent, segment)) {
+      return null;
+    }
+    parent = parent[segment];
+  }
+  const key = segments[segments.length - 1];
+  if (!parent || typeof parent !== 'object' || typeof parent[key] !== 'string') return null;
+  return { parent, key };
+};
+
+// GET /pages/:page/sections — public; every saved section of the page keyed by
+// section name. Sections never saved are absent and the site uses its defaults.
+export const getPageSections = asyncHandler(async (req: Request, res: Response) => {
+  const page = normalizeParam(req.params.page);
+  const docs = await PageSection.find({ page }).lean();
+  const sections: Record<string, unknown> = {};
+  for (const doc of docs) {
+    if (PAGE_SECTION_SCHEMAS[page]?.[doc.section]) sections[doc.section] = doc.content;
+  }
+  sendSuccess(res, { page, sections }, 'Page sections fetched successfully', 200);
+});
+
 // GET /pages/:page/sections/:section — public; `content` is null until the
 // section has been saved once, and the site then shows its built-in defaults.
 export const getPageSection = asyncHandler(async (req: Request, res: Response) => {
@@ -43,8 +74,8 @@ export const getPageSection = asyncHandler(async (req: Request, res: Response) =
 });
 
 // PUT /pages/:page/sections/:section — multipart: `content` (JSON string) plus
-// optional image files whose field name is the content key they replace
-// (e.g. `imageEn`, `imageAr`).
+// optional image files whose field name is the content path they replace
+// (e.g. `imageEn`, `cards.2.image`).
 export const upsertPageSection = asyncHandler(async (req: AuthRequest, res: Response) => {
   const page = normalizeParam(req.params.page);
   const section = normalizeParam(req.params.section);
@@ -57,7 +88,8 @@ export const upsertPageSection = asyncHandler(async (req: AuthRequest, res: Resp
 
   const files = ((req as any).files as Express.Multer.File[] | undefined) ?? [];
   for (const file of files) {
-    if (!(file.fieldname in content) || typeof content[file.fieldname] === 'object') {
+    const target = resolveImagePath(content, file.fieldname);
+    if (!target) {
       throw new AppError(`Unexpected image field "${file.fieldname}"`, 400);
     }
     const uploaded = await uploadImageBufferToS3(
@@ -67,7 +99,7 @@ export const upsertPageSection = asyncHandler(async (req: AuthRequest, res: Resp
       PAGE_IMAGE_FOLDER,
       req.user?.id
     );
-    content[file.fieldname] = uploaded.url;
+    target.parent[target.key] = uploaded.url;
   }
 
   const result = schema.safeParse(content);

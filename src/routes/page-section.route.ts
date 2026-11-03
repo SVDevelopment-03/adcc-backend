@@ -3,10 +3,12 @@ import { authenticate } from '@/middleware/auth.middleware';
 import { requireStaffPermission } from '@/middleware/rbac.middleware';
 import { validateParams } from '@/middleware/validate.middleware';
 import { uploadPageSectionImages } from '@/middleware/upload.middleware';
-import { getPageSection, upsertPageSection } from '@/controllers/page-section.controller';
-import { pageSectionParamsSchema } from '@/validators/page-section.validator';
+import { getPageSection, getPageSections, upsertPageSection } from '@/controllers/page-section.controller';
+import { pageParamsSchema, pageSectionParamsSchema } from '@/validators/page-section.validator';
 
 const router = Router();
+
+router.get('/:page/sections', validateParams(pageParamsSchema), getPageSections);
 
 router.get('/:page/sections/:section', validateParams(pageSectionParamsSchema), getPageSection);
 
