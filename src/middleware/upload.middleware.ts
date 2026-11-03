@@ -207,7 +207,7 @@ const PAGE_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png']);
 
 const uploadPageImages = multer({
   storage,
-  limits: { fileSize: PAGE_IMAGE_MAX_SIZE_MB * 1024 * 1024, files: 4 },
+  limits: { fileSize: PAGE_IMAGE_MAX_SIZE_MB * 1024 * 1024, files: 12 },
   fileFilter: (_req, file, cb) => {
     if (!PAGE_IMAGE_MIME_TYPES.has(file.mimetype)) {
       cb(new AppError('Only PNG, JPG and JPEG images are allowed', 400));
