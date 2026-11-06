@@ -74,6 +74,8 @@ export interface IEvent extends Document {
   eligibility?: IEventEligibility;
   youtubeLink?: string;
   registrationLink?: string;
+  /** Optional map link (e.g. Google Maps) for the event location. */
+  locationLink?: string;
   /** `value` of an "event_organizer" lookup entry; optional. */
   organizedBy?: string;
   category?: IEventCategory;
@@ -272,6 +274,10 @@ const EventSchema = new Schema(
       trim: true,
     },
     registrationLink: {
+      type: String,
+      trim: true,
+    },
+    locationLink: {
       type: String,
       trim: true,
     },
