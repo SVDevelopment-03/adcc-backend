@@ -332,7 +332,7 @@ const EVENT_AUDIT_FIELDS = [
   'eventTime', 'endTime', 'address', 'addressAr', 'city', 'country', 'communityId', 'trackId',
   'maxParticipants', 'registrationFeeType', 'registrationFeeAmount', 'minAge', 'maxAge',
   'distance', 'difficulty', 'isFeatured', 'allowCancellation', 'isPurposeBased', 'organizedBy',
-  'youtubeLink', 'registrationLink', 'mainImage', 'eventImage', 'galleryImages', 'amenities',
+  'youtubeLink', 'registrationLink', 'locationLink', 'mainImage', 'eventImage', 'galleryImages', 'amenities',
   'schedule', 'eligibility', 'rewards', 'isInternal', 'raceTracks',
 ];
 

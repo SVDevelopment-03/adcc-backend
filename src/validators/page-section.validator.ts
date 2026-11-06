@@ -124,6 +124,36 @@ const homeVenueContentSchema = section({
   buttonLink: link,
 });
 
+/* ─── Site-wide header and footer (page "layout") ───────────────────────── */
+
+const navLink = { ...localized('label'), link };
+
+const layoutHeaderContentSchema = section({
+  logoImage: image,
+  navItems: list('Menu items', navLink, 1, 10),
+});
+
+const layoutCtaContentSchema = section({
+  ...localized('title'),
+  ...localized('subtitle', 500),
+  backgroundImage: image,
+});
+
+const layoutFooterContentSchema = section({
+  logoImage: image,
+  ...localized('brandText', 1000),
+  // The site picks each icon from the link's domain (Twitter/X, Facebook, ...).
+  socialLinks: list('Social links', navLink, 0, 8),
+  ...localized('quickLinksTitle'),
+  quickLinks: list('Quick links', navLink, 0, 12),
+  ...localized('contactTitle'),
+  phone: text(50),
+  email: text(200),
+  ...localized('address', 500),
+  addressLink: link,
+  ...localized('copyright'),
+});
+
 /**
  * Editable sections per page, each with the schema its content must match.
  * Add an entry here to make another page section editable from the dashboard.
@@ -140,6 +170,11 @@ export const PAGE_SECTION_SCHEMAS: Record<string, Record<string, z.ZodType>> = {
     partners: homePartnersContentSchema,
     about: homeAboutContentSchema,
     venue: homeVenueContentSchema,
+  },
+  layout: {
+    header: layoutHeaderContentSchema,
+    cta: layoutCtaContentSchema,
+    footer: layoutFooterContentSchema,
   },
 };
 
