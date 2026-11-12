@@ -28,7 +28,9 @@ import {
   closeEventRegistration,
   reopenEventRegistration,
   completeEvent,
-  disableEvent
+  disableEvent,
+  cancelEvent,
+  duplicateEvent,
 
 } from '@/controllers/event.controller';
 import { createEventLead, getEventLeads, exportEventLeads } from '@/controllers/event-lead.controller';
@@ -124,5 +126,7 @@ router.patch('/:eventId/close-registration', authenticate, requireStaffPermissio
 router.patch('/:eventId/reopen-registration', authenticate, requireStaffPermission('manage_events'), reopenEventRegistration);
 router.patch('/:eventId/complete', authenticate, requireStaffPermission('manage_events'), completeEvent);
 router.patch('/:eventId/disable', authenticate, requireStaffPermission('manage_events'), disableEvent);
+router.patch('/:eventId/cancel-event', authenticate, requireStaffPermission('manage_events'), cancelEvent);
+router.post('/:id/duplicate', authenticate, requireStaffPermission('manage_events'), duplicateEvent);
 
 export default router;

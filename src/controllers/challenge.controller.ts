@@ -67,7 +67,24 @@ export const getAllChallenges = asyncHandler(async (req: Request, res: Response)
 
   const todayStart = dayjs().startOf('day').toDate();
   const filter: any = {};
-  if (status) filter.status = status;
+  // The stored status isn't moved to Completed when a challenge's end date
+  // passes, so filter on what the status effectively is: an Active/Upcoming
+  // challenge that has ended belongs under Completed, not its old tab.
+  if (status === 'Active' || status === 'Upcoming') {
+    filter.status = status;
+    filter.endDate = { $gte: todayStart };
+  } else if (status === 'Completed') {
+    filter.$and = [
+      {
+        $or: [
+          { status: 'Completed' },
+          { status: { $in: ['Active', 'Upcoming'] }, endDate: { $lt: todayStart } },
+        ],
+      },
+    ];
+  } else if (status) {
+    filter.status = status;
+  }
   if (type) filter.type = type;
   if (typeof featured === 'boolean') filter.featured = featured;
   if (communityId) filter.communities = communityId;

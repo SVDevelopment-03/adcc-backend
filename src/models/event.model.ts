@@ -80,7 +80,7 @@ export interface IEvent extends Document {
   organizedBy?: string;
   category?: IEventCategory;
   currentParticipants: number;
-  status: 'Open' | 'Draft' | 'Full' | 'Closed' | 'Disabled' | 'Completed' | 'Archived';
+  status: 'Open' | 'Draft' | 'Full' | 'Closed' | 'Disabled' | 'Cancelled' | 'Completed' | 'Archived';
   createdBy: mongoose.Types.ObjectId;
   createdAt: Date;
   updatedAt: Date;
@@ -299,7 +299,7 @@ const EventSchema = new Schema(
     },
     status: {
       type: String,
-      enum: ['Draft', 'Open', 'Full', 'Closed', 'Disabled', 'Completed', 'Archived'],
+      enum: ['Draft', 'Open', 'Full', 'Closed', 'Disabled', 'Cancelled', 'Completed', 'Archived'],
       default: 'Open',
     },
     galleryImages: {

@@ -182,7 +182,7 @@ export const createEventSchema = z
       ])
     ).optional(),
 
-    status: z.preprocess(firstValue, z.enum(['Draft', 'Open', 'Full', 'Closed', 'Disabled', 'Completed', 'Archived'])).default('Draft'),
+    status: z.preprocess(firstValue, z.enum(['Draft', 'Open', 'Full', 'Closed', 'Disabled', 'Cancelled', 'Completed', 'Archived'])).default('Draft'),
     slug: z.preprocess(firstValue, z.string()).optional(),
     difficulty: z.preprocess(firstValue, z.string()).optional(),
     endTime: z.preprocess(firstValue, z.string()).optional(),
@@ -245,7 +245,7 @@ export const updateEventSchema = z
     locationLink: z.preprocess(firstValue, z.string().url('Invalid location link URL')).optional().or(z.literal('')),
     // Empty string clears the organiser
     organizedBy: z.preprocess(firstValue, z.string().trim()).optional(),
-    status: z.preprocess(firstValue, z.enum(['Draft', 'Open', 'Full', 'Closed', 'Disabled', 'Completed', 'Archived'])).optional(),
+    status: z.preprocess(firstValue, z.enum(['Draft', 'Open', 'Full', 'Closed', 'Disabled', 'Cancelled', 'Completed', 'Archived'])).optional(),
     distance: optionalCoerceNumberField('Distance cannot be negative'),
     // Empty string clears the community (it is optional on an event)
     communityId: clearableObjectIdSchema,
@@ -318,6 +318,7 @@ export const getEventsQuerySchema = z.object({
       'Full',
       'Closed',
       'Disabled',
+      'Cancelled',
       'Completed',
       'Archived',
       'Upcoming',
