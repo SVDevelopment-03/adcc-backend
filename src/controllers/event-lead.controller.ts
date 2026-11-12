@@ -12,7 +12,7 @@ import { getEffectiveEventStatus } from '@/utils/event-date';
 import type { CreateEventLeadInput } from '@/validators/event-lead.validator';
 
 // Same rule the public page uses: an Open event whose date has passed reads as Closed.
-const REGISTRATION_CLOSED_STATUSES = ['Draft', 'Disabled', 'Archived', 'Closed', 'Completed'];
+const REGISTRATION_CLOSED_STATUSES = ['Draft', 'Disabled', 'Cancelled', 'Archived', 'Closed', 'Completed'];
 
 const paramValue = (value: string | string[] | undefined) => (Array.isArray(value) ? value[0] : value) ?? '';
 

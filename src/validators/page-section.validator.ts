@@ -154,6 +154,107 @@ const layoutFooterContentSchema = section({
   ...localized('copyright'),
 });
 
+const layoutJourneyCardContentSchema = section({
+  riderImage: image,
+  ...localized('eyebrow'),
+  ...localized('title'),
+  ...localized('communityText'),
+  ...localized('buttonLabel'),
+  buttonLink: link,
+});
+
+/* ─── Other public pages (Pages → About Us, Events, ...) ───────────────── */
+// Mirrors CONTENT_PAGES in the web app's services/contentPages.ts.
+
+const heroContentSchema = section({
+  ...localized('title'),
+  ...localized('breadcrumb'),
+  backgroundImage: image,
+});
+
+const introContentSchema = section({
+  ...localized('title', 300),
+  ...localized('body', 2000),
+});
+
+const introWithImageContentSchema = section({
+  ...localized('title', 300),
+  ...localized('body', 2000),
+  image,
+});
+
+const headingContentSchema = section({
+  ...localized('title', 300),
+});
+
+const aboutIntroContentSchema = section({
+  ...localized('title', 300),
+  image,
+  // An empty value on the first two stats shows the live member / event counts.
+  stats: list('Stats', { ...localized('value', 20), ...localized('label', 100) }, 1, 4),
+  ...localized('body', 2000),
+  ...localized('buttonLabel'),
+  buttonLink: link,
+});
+
+const aboutMissionContentSchema = section({
+  ...localized('title', 300),
+  ...localized('intro', 2000),
+  backgroundImage: image,
+  ...localized('missionHeading'),
+  ...localized('missionText', 2000),
+  ...localized('visionHeading'),
+  ...localized('visionText', 2000),
+});
+
+const aboutValuesContentSchema = section({
+  ...localized('eyebrow'),
+  ...localized('title', 300),
+  ...localized('buttonLabel'),
+  buttonLink: link,
+  items: list('Values', { ...localized('title'), ...localized('text', 500) }, 1, 6),
+});
+
+const aboutCoachesContentSchema = section({
+  ...localized('title', 300),
+  cards: list('Cards', { ...localized('label'), image }, 1, 4),
+});
+
+const tracksWhyContentSchema = section({
+  ...localized('title', 300),
+  ...localized('buttonLabel'),
+  image,
+  backgroundImage: image,
+  features: list('Features', { ...localized('title'), ...localized('text', 500) }, 1, 6),
+});
+
+const challengesVideoContentSchema = section({
+  videoUrl: url('Video'),
+  posterImage: image,
+});
+
+const contactDetailsContentSchema = section({
+  email: text(200),
+  phone: text(50),
+  ...localized('address', 500),
+  addressLink: link,
+});
+
+const marketplaceGearUpContentSchema = section({
+  ...localized('title', 300),
+  ...localized('body', 2000),
+  ...localized('buttonLabel'),
+  buttonLink: link,
+  image,
+});
+
+const privacyPolicyContentSchema = section({
+  ...localized('title'),
+  ...localized('breadcrumb'),
+  ...localized('intro', 20000),
+  sections: list('Policy sections', { ...localized('heading', 300), ...localized('body', 20000) }, 1, 40),
+});
+
 /**
  * Editable sections per page, each with the schema its content must match.
  * Add an entry here to make another page section editable from the dashboard.
@@ -175,6 +276,59 @@ export const PAGE_SECTION_SCHEMAS: Record<string, Record<string, z.ZodType>> = {
     header: layoutHeaderContentSchema,
     cta: layoutCtaContentSchema,
     footer: layoutFooterContentSchema,
+    journey: layoutJourneyCardContentSchema,
+  },
+  about: {
+    hero: heroContentSchema,
+    intro: aboutIntroContentSchema,
+    mission: aboutMissionContentSchema,
+    values: aboutValuesContentSchema,
+    coaches: aboutCoachesContentSchema,
+  },
+  events: {
+    hero: heroContentSchema,
+    intro: introContentSchema,
+  },
+  tracks: {
+    hero: heroContentSchema,
+    intro: introWithImageContentSchema,
+    why: tracksWhyContentSchema,
+    list: headingContentSchema,
+  },
+  challenges: {
+    hero: heroContentSchema,
+    intro: introContentSchema,
+    video: challengesVideoContentSchema,
+    list: headingContentSchema,
+  },
+  communities: {
+    hero: heroContentSchema,
+    intro: introWithImageContentSchema,
+    list: headingContentSchema,
+  },
+  contact: {
+    hero: heroContentSchema,
+    intro: introWithImageContentSchema,
+    details: contactDetailsContentSchema,
+  },
+  store: {
+    launching: headingContentSchema,
+  },
+  marketplace: {
+    hero: heroContentSchema,
+    list: section({ ...localized('title', 300), ...localized('listingsTitle', 300) }),
+    promo: marketplaceGearUpContentSchema,
+  },
+  news: {
+    hero: heroContentSchema,
+    intro: introContentSchema,
+  },
+  laffah: {
+    hero: heroContentSchema,
+    intro: introContentSchema,
+  },
+  privacy: {
+    policy: privacyPolicyContentSchema,
   },
 };
 

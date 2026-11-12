@@ -32,7 +32,10 @@ export const getPublicStats = asyncHandler(async (_req: Request, res: Response) 
     Event.countDocuments({ status: 'Completed' }),
     Track.countDocuments({ status: { $in: ['open', 'limited'] } }),
     Community.countDocuments({ isActive: true, isPublic: true }),
-    Challenge.countDocuments({ status: { $in: ['Active', 'Upcoming'] } }),
+    Challenge.countDocuments({
+      status: { $in: ['Active', 'Upcoming'] },
+      endDate: { $gte: todayStart },
+    }),
     StoreItem.countDocuments({ status: 'Approved' }),
     User.aggregate<{ totalDistanceKm: number; totalRides: number }>([
       { $match: { role: 'Member', isVerified: true } },

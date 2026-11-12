@@ -299,6 +299,8 @@ const getRouteParam = (value?: string | string[]): string => {
 // Statuses that must never appear in public (guest/member) event listings.
 const UNPUBLISHED_EVENT_STATUSES = ['Draft', 'Disabled', 'Archived'];
 // Statuses that mean an event is over regardless of its date.
+// Listing order only. 'Cancelled' is left out on purpose: a cancelled event keeps
+// its place by date (with a "Cancelled" stamp) and moves down once its day has passed.
 const CLOSED_EVENT_STATUSES = ['Completed', 'Closed', 'Archived'];
 
 // Repeating events: about two years of a weekly ride, guarding against a typo'd end date.
@@ -1062,7 +1064,10 @@ export const updateEvent = asyncHandler(async (req: AuthRequest, res: Response) 
     void notifyEventResultsPublished(String(event._id));
   }
 
-  if (updateData.status === 'Disabled' && previousEvent?.status !== 'Disabled') {
+  if (
+    (updateData.status === 'Disabled' || updateData.status === 'Cancelled') &&
+    previousEvent?.status !== updateData.status
+  ) {
     void notifyEventCancelled(String(event._id));
   }
 
@@ -1162,7 +1167,7 @@ export const permanentlyDeleteEvent = asyncHandler(async (req: AuthRequest, res:
 
 const updateEventStatus = async (
   eventId: string,
-  status: 'Draft' | 'Open' | 'Full' | 'Closed' | 'Disabled' | 'Completed' | 'Archived',
+  status: 'Draft' | 'Open' | 'Full' | 'Closed' | 'Disabled' | 'Cancelled' | 'Completed' | 'Archived',
   lang: SupportedLanguage,
   req: AuthRequest,
   action = 'event.status.update'
@@ -1197,7 +1202,7 @@ const updateEventStatus = async (
     void notifyEventResultsPublished(String(event._id));
   }
 
-  if (status === 'Disabled' && previous?.status !== 'Disabled') {
+  if ((status === 'Disabled' || status === 'Cancelled') && previous?.status !== status) {
     void notifyEventCancelled(String(event._id));
   }
 
@@ -1279,6 +1284,71 @@ export const disableEvent = asyncHandler(async (req: AuthRequest, res: Response)
 
   const event = await updateEventStatus(eventId, 'Disabled', lang, req);
   sendSuccess(res, localizeEventPayload(event.toObject(), lang), t(lang, "event.disabled"), 200);
+});
+
+/**
+ * Cancel event: it stays visible on the website with a "Cancelled" label, but
+ * takes no registrations and has no detail page. Registered riders are notified.
+ * PATCH /v1/events/:eventId/cancel-event
+ * Admin only
+ */
+export const cancelEvent = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as SupportedLanguage;
+  const eventId = getRouteParam(req.params.eventId);
+
+  const event = await updateEventStatus(eventId, 'Cancelled', lang, req, 'event.cancel');
+  sendSuccess(res, localizeEventPayload(event.toObject(), lang), 'Event cancelled', 200);
+});
+
+/** Fields that belong to one event's run, not to its setup: never copied. */
+const NON_DUPLICATED_EVENT_FIELDS = [
+  '_id', 'id', '__v', 'slug', 'createdAt', 'updatedAt', 'createdBy',
+  'currentParticipants', 'seriesId', 'galleryImages',
+  'publishedNotificationSentAt', 'resultsNotificationSentAt', 'cancelledNotificationSentAt',
+  'reminder24hSentAt', 'reminder1hSentAt', 'communityNotificationSentAt',
+  'deletedAt', 'deletedBy',
+];
+
+/**
+ * Duplicate event: a Draft copy with the same setup (no participants, results
+ * or gallery), for the admin to adjust and publish.
+ * POST /v1/events/:id/duplicate
+ * Admin only
+ */
+export const duplicateEvent = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = ((req as any).lang || 'en') as SupportedLanguage;
+  const id = getRouteParam(req.params.id);
+  const userId = req.user?.id;
+  if (!userId) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const source = await Event.findOne({ ...idOrSlugFilter(id), deletedAt: null }).lean();
+  if (!source) {
+    throw new AppError(t(lang, 'event.not_found'), 404);
+  }
+
+  const copy: Record<string, any> = { ...source };
+  for (const field of NON_DUPLICATED_EVENT_FIELDS) delete copy[field];
+  copy.title = `${source.title} (Copy)`;
+  if (source.titleAr) copy.titleAr = `${source.titleAr} (نسخة)`;
+  copy.status = 'Draft';
+  copy.isFeatured = false;
+  copy.currentParticipants = 0;
+  copy.createdBy = userId;
+
+  const event = await Event.create(copy);
+
+  void recordAuditLog({
+    req,
+    action: 'event.duplicate',
+    targetType: 'Event',
+    targetId: String(event._id),
+    targetLabel: event.title,
+    metadata: { sourceId: String(source._id), sourceTitle: source.title },
+  });
+
+  sendSuccess(res, localizeEventPayload(event.toObject(), lang), 'Event duplicated', 201);
 });
 
 

@@ -37,6 +37,7 @@ import auditLogRoutes from './audit-log.route';
 import splashRoutes from './splash.route';
 import partnerRoutes from './partner.route';
 import pageSectionRoutes from './page-section.route';
+import siteRoutes from './site.route';
 // import publicStatsRoutes from './public-stats.route';
 const router = Router();
 
@@ -86,6 +87,7 @@ router.use('/audit-logs', auditLogRoutes);
 router.use('/splash', splashRoutes);
 router.use('/partners', partnerRoutes);
 router.use('/pages', pageSectionRoutes);
+router.use('/site', siteRoutes);
 
 // Add more routes here as you create them
 // router.use('/users', userRoutes);
