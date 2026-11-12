@@ -104,6 +104,16 @@ const raceTracksSchema = z.preprocess(
   )
 );
 
+// 24-hour "HH:mm" (what the dashboard time picker sends), e.g. "06:00", "21:30".
+const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
+const timeField = (requiredMessage?: string) =>
+  z.preprocess(
+    firstValue,
+    requiredMessage
+      ? z.string({ message: requiredMessage }).trim().regex(TIME_PATTERN, 'Use a 24-hour time like 06:00')
+      : z.string().trim().regex(TIME_PATTERN, 'Use a 24-hour time like 06:00')
+  );
+
 export const createEventSchema = z
   .object({
     title: stringField('Event title is required'),
@@ -119,7 +129,7 @@ export const createEventSchema = z
       },
       { message: 'Invalid event date' }
     ),
-    eventTime: stringField('Event time is required'),
+    eventTime: timeField('Event time is required'),
     address: stringField('Event address is required'),
     addressAr: optionalStringField('Arabic event address is required'),
     city: z.preprocess(firstValue, z.string()).optional(),
@@ -185,7 +195,7 @@ export const createEventSchema = z
     status: z.preprocess(firstValue, z.enum(['Draft', 'Open', 'Full', 'Closed', 'Disabled', 'Cancelled', 'Completed', 'Archived'])).default('Draft'),
     slug: z.preprocess(firstValue, z.string()).optional(),
     difficulty: z.preprocess(firstValue, z.string()).optional(),
-    endTime: z.preprocess(firstValue, z.string()).optional(),
+    endTime: timeField().optional(),
     category: z.preprocess(firstValue, z.string()).optional(),
     isFeatured: booleanField().default(false),
     allowCancellation: booleanField().default(false),
@@ -229,7 +239,7 @@ export const updateEventSchema = z
         { message: 'Invalid event date' }
       )
       .optional(),
-    eventTime: z.preprocess(firstValue, z.string().min(1, 'Event time is required')).optional(),
+    eventTime: timeField().optional(),
     address: z.preprocess(firstValue, z.string().min(1, 'Event address is required')).optional(),
     addressAr: z.preprocess(firstValue, z.string().min(1, 'Arabic event address is required')).optional(),
     city: z.preprocess(firstValue, z.string()).optional(),
@@ -296,7 +306,7 @@ export const updateEventSchema = z
     ).optional(),
     slug: z.preprocess(firstValue, z.string()).optional(),
     difficulty: z.preprocess(firstValue, z.string()).optional(),
-    endTime: z.preprocess(firstValue, z.string()).optional(),
+    endTime: timeField().optional(),
     category: z.preprocess(firstValue, z.string()).optional(),
     rewards: rewardsSchema,
     isFeatured: booleanField().default(false),

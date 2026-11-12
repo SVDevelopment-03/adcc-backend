@@ -2086,7 +2086,7 @@ export const cancelRegistration = asyncHandler(async (req: AuthRequest, res: Res
   // console.log('bodyResponse:', req.body);
   const lang = ((req as any).lang || 'en') as SupportedLanguage;
   const eventId  = req.params.eventId;
-  const reason = req.body.reason || 'No reason provided';
+  const reason = req.body?.reason || 'No reason provided';
   
   
   const userId = req.user?.id;
@@ -2144,7 +2144,7 @@ export const cancelRegistration = asyncHandler(async (req: AuthRequest, res: Res
     void sendEventCancellationEmail({
       userId,
       event: cancelledEvent,
-      reason: typeof req.body.reason === 'string' ? req.body.reason : undefined,
+      reason: typeof req.body?.reason === 'string' ? req.body.reason : undefined,
     });
   }
 

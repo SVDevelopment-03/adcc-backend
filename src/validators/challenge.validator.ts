@@ -167,6 +167,8 @@ export const getChallengesQuerySchema = z.object({
   search: z.string().trim().min(1).optional(),
   page: z.string().regex(/^\d+$/).transform(Number).optional(),
   limit: z.string().regex(/^\d+$/).transform(Number).optional(),
+  // Dashboard only (staff): also list Draft/Disabled/Archived challenges
+  includeUnpublished: z.string().optional(),
 });
 
 export type CreateChallengeInput = z.infer<typeof createChallengeSchema>;

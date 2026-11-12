@@ -157,6 +157,47 @@ export const getS3ObjectBuffer = async (key: string): Promise<{ buffer: Buffer; 
   return { buffer: Buffer.from(bytes), contentType: response.ContentType };
 };
 
+/**
+ * The browser-supplied MIME type is only a label: check the bytes really are
+ * that kind of image, so a renamed text/HTML file can't be stored under an
+ * image URL, and refuse SVGs that carry scripts or event handlers.
+ */
+const HEIF_BRANDS = new Set(['heic', 'heix', 'hevc', 'hevx', 'heim', 'heis', 'hevm', 'hevs', 'mif1', 'msf1', 'avif']);
+export const assertImageContent = (buffer: Buffer, mimeType: string) => {
+  if (!mimeType.startsWith('image/')) return;
+  const ascii = (start: number, end: number) => buffer.subarray(start, end).toString('latin1');
+  let ok: boolean;
+  switch (mimeType) {
+    case 'image/jpeg':
+      ok = buffer.length > 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff;
+      break;
+    case 'image/png':
+      ok = ascii(0, 8) === '\x89PNG\r\n\x1a\n';
+      break;
+    case 'image/gif':
+      ok = ascii(0, 6) === 'GIF87a' || ascii(0, 6) === 'GIF89a';
+      break;
+    case 'image/webp':
+      ok = ascii(0, 4) === 'RIFF' && ascii(8, 12) === 'WEBP';
+      break;
+    case 'image/heic':
+    case 'image/heif':
+    case 'image/avif':
+      ok = ascii(4, 8) === 'ftyp' && HEIF_BRANDS.has(ascii(8, 12));
+      break;
+    case 'image/svg+xml': {
+      const text = buffer.toString('utf8');
+      ok = /<svg[\s>]/i.test(text) && !/<script|<foreignObject|\son[a-z]+\s*=|javascript:/i.test(text);
+      break;
+    }
+    default:
+      ok = true;
+  }
+  if (!ok) {
+    throw new AppError('The file is not a valid image (or contains unsafe content). Please upload a real JPG, PNG, WebP, GIF or HEIC image.', 400);
+  }
+};
+
 export const uploadImageBufferToS3 = async (
   fileBuffer: Buffer,
   mimeType: string,
@@ -164,6 +205,7 @@ export const uploadImageBufferToS3 = async (
   folderKey: string,
   uploadedBy?: string
 ) => {
+  assertImageContent(fileBuffer, mimeType);
   try {
     const { bucket, region } = getAwsConfig();
     const client = getS3Client();

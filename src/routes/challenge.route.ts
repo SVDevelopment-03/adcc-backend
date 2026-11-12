@@ -28,7 +28,7 @@ const router = express.Router();
 const requireChallengeManagement = requireStaffPermission('manage_events', 'admin.panel');
 
 router.get('/leaderboard', getChallengeLeaderboard);
-router.get('/', validate(getChallengesQuerySchema), getAllChallenges);
+router.get('/', optionalAuthenticate, validate(getChallengesQuerySchema), getAllChallenges);
 router.get('/:id', optionalAuthenticate, getChallengeById);
 router.get('/:id/participants', authenticate, requireChallengeManagement, getChallengeParticipants);
 router.patch(

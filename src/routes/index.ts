@@ -38,7 +38,7 @@ import splashRoutes from './splash.route';
 import partnerRoutes from './partner.route';
 import pageSectionRoutes from './page-section.route';
 import siteRoutes from './site.route';
-// import publicStatsRoutes from './public-stats.route';
+import publicStatsRoutes from './public-stats.route';
 const router = Router();
 
 // Register all routes
@@ -88,6 +88,8 @@ router.use('/splash', splashRoutes);
 router.use('/partners', partnerRoutes);
 router.use('/pages', pageSectionRoutes);
 router.use('/site', siteRoutes);
+// Live counts for the public site (About Us stats)
+router.use('/public', publicStatsRoutes);
 
 // Add more routes here as you create them
 // router.use('/users', userRoutes);

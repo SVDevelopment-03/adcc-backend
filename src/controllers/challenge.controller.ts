@@ -11,6 +11,12 @@ import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import challengeNotificationService from '@/services/challenge-notification.service';
 import { sendChallengeLeftEmail } from '@/services/participation-email.service';
 import { localizeChallengeStatic } from '@/utils/localization';
+import { isStaffRequest, hasUnverifiedToken } from '@/utils/staff-request';
+
+// Statuses that must never reach the public site or app (lists, detail, joining).
+const UNPUBLISHED_CHALLENGE_STATUSES = ['Draft', 'Disabled', 'Archived'];
+// Statuses a member may join (as long as the end date has not passed).
+const JOINABLE_CHALLENGE_STATUSES = ['Active', 'Upcoming'];
 
 const attachChallengeImage = async (req: AuthRequest, data: Record<string, any>) => {
   const file = (req as any).file as Express.Multer.File | undefined;
@@ -85,6 +91,22 @@ export const getAllChallenges = asyncHandler(async (req: Request, res: Response)
   } else if (status) {
     filter.status = status;
   }
+
+  // Draft/Disabled/Archived challenges are only listed for staff, and only when
+  // the dashboard asks for them explicitly; the public site and app never see them.
+  const wantsUnpublished = String((req.query as any).includeUnpublished) === 'true';
+  if (wantsUnpublished && hasUnverifiedToken(req)) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+  const includeUnpublished = wantsUnpublished && (await isStaffRequest(req));
+  if (!includeUnpublished) {
+    if (typeof status === 'string' && UNPUBLISHED_CHALLENGE_STATUSES.includes(status)) {
+      filter.status = { $in: [] };
+    } else if (!filter.status && !filter.$and) {
+      filter.status = { $nin: UNPUBLISHED_CHALLENGE_STATUSES };
+    }
+  }
+
   if (type) filter.type = type;
   if (typeof featured === 'boolean') filter.featured = featured;
   if (communityId) filter.communities = communityId;
@@ -206,6 +228,10 @@ export const getChallengeById = asyncHandler(async (req: AuthRequest, res: Respo
   if (!challenge) {
     throw new AppError(t(lang, 'challenge.not_found'), 404);
   }
+  // Unpublished challenges have no public detail page (staff can still open them)
+  if (UNPUBLISHED_CHALLENGE_STATUSES.includes(String(challenge.status)) && !(await isStaffRequest(req))) {
+    throw new AppError(t(lang, 'challenge.not_found'), 404);
+  }
 
   const joinRecord = userId
     ? await ChallengeJoin.findOne({ challengeId: id, userId }).lean()
@@ -313,6 +339,16 @@ export const joinChallenge = asyncHandler(async (req: AuthRequest, res: Response
     localizeChallengeStatic(challenge as unknown as Record<string, any>, lang);
     sendSuccess(res, challenge, t(lang, 'challenge.joined') || 'Joined challenge');
     return;
+  }
+
+  // Only running or upcoming challenges that have not ended can be joined
+  const target = await Challenge.findById(id).select('status endDate').lean();
+  if (!target) {
+    throw new AppError(t(lang, 'challenge.not_found'), 404);
+  }
+  const ended = target.endDate && dayjs(target.endDate).isBefore(dayjs().startOf('day'));
+  if (!JOINABLE_CHALLENGE_STATUSES.includes(String(target.status)) || ended) {
+    throw new AppError('This challenge is not open for joining', 400);
   }
 
   const challenge = await Challenge.findByIdAndUpdate(
