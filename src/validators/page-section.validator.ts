@@ -117,8 +117,9 @@ const homeVenueContentSchema = section({
   image,
   ...localized('imageTitle'),
   ...localized('imageSubtitle', 500),
-  // Fixed at two: each card has its own built-in icon on the site.
-  cards: list('Cards', { ...localized('title'), ...localized('text', 500) }, 2, 2),
+  // Fixed at two. `icon` is optional: an empty one keeps the card's built-in
+  // icon on the site.
+  cards: list('Cards', { icon: image, ...localized('title'), ...localized('text', 500) }, 2, 2),
   ...localized('text', 1500),
   ...localized('buttonLabel'),
   buttonLink: link,
