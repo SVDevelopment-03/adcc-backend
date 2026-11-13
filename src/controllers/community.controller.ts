@@ -31,6 +31,9 @@ const COMMUNITY_AUDIT_FIELDS = [
 ];
 const COMMUNITY_STATUS_FIELDS = ['isActive', 'status'];
 
+/** Escapes a user-supplied filter value so it is matched literally ("MTB / Trail", "Women (SheRides)"). */
+const escapeRegex = (value: string) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const COMMUNITY_LOCALIZED_FIELDS = {
   title: 'titleAr',
   description: 'descriptionAr',
@@ -347,33 +350,37 @@ export const getAllCommunities = asyncHandler(async (req: Request, res: Response
   const { type, location, category, search, page = 1, limit = 10, isActive, isPublic, isFeatured } = req.query;
 
   const query: any = {};
+  // Each filter adds its own condition; several $or filters can't share one key.
+  const and: any[] = [];
 
-  const VALID_TYPES = [
-    'Family Rides',
-    'Racing & Performance',
-    'Women (SheRides)',
-    'Youth Cycling',
-    'Weekend Social',
-    'Night Riders',
-    'MTB/Trail',
-    'Training & Clinics',
-  ];
-  const VALID_LOCATIONS = ['Abu Dhabi', 'Dubai', 'Al Ain', 'Sharjah', 'Al Dhafra'];
+  // Cities and categories are dashboard-managed lookups, so any value can be
+  // asked for. (A hard-coded allow-list here used to drop unknown values
+  // silently, so picking e.g. "Doha" or "MTB / Trail" showed every community.)
+  const exact = (value: string) => new RegExp(`^${escapeRegex(value)}$`, 'i');
+  // `category` is saved as a comma-separated string ("Women (SheRides), Youth Cycling").
+  const listItem = (value: string) => new RegExp(`(^|,)\\s*${escapeRegex(value)}\\s*(,|$)`, 'i');
+  const queryText = (value: unknown) => (typeof value === 'string' ? value.trim() : '');
 
-  // Filter by type (stored as string array on the model)
-  if (type && VALID_TYPES.includes(type as string)) {
-    query.type = { $in: [type] };
+  // Filter by type. The public Communities page sends a category here; `type`
+  // itself only holds the City / Group / Special Purpose markers, so match either.
+  const typeValue = queryText(type);
+  if (typeValue) {
+    and.push({ $or: [{ type: exact(typeValue) }, { category: listItem(typeValue) }] });
   }
 
-  // Filter by location
-  if (location && VALID_LOCATIONS.includes(location as string)) {
-    query.$or = [{ location }, { city: location }];
+  // Filter by location (older communities have only `location`, newer ones `city` too)
+  const locationValue = queryText(location);
+  if (locationValue) {
+    and.push({ $or: [{ location: exact(locationValue) }, { city: exact(locationValue) }] });
   }
 
-  // Filter by category (check if category array contains the query value)
-  if (category) {
-    query.category = { $in: [category] };
+  // Filter by category
+  const categoryValue = queryText(category);
+  if (categoryValue) {
+    and.push({ category: listItem(categoryValue) });
   }
+
+  if (and.length) query.$and = and;
 
   // Filter by active status
   if (isActive !== undefined) {

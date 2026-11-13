@@ -3,6 +3,10 @@ import mongoose from 'mongoose';
 
 const firstValue = (val: unknown) => (Array.isArray(val) ? val[0] : val);
 
+// Cities are managed in the dashboard (lookups of type "city"), so any city
+// name is accepted here rather than a fixed list that falls out of date.
+const cityName = z.preprocess(firstValue, z.string().trim().min(1, 'City is required').max(100));
+
 /** Form-data often repeats the same key (`trackId` × N); parsers give a string[] — do not take only [0]. */
 const arrayOrScalar = (val: unknown) => (Array.isArray(val) ? val : firstValue(val));
 
@@ -102,58 +106,7 @@ export const  createCommunitySchema = z
     weeklyRides: z.preprocess(firstValue, z.string()).optional(),
     fundsRaised: z.preprocess(firstValue, z.string()).optional(),
     joinMode: z.preprocess(firstValue, z.string()).optional(),
-    location: z.preprocess(firstValue, z.enum([
-      "Abu Dhabi",
-      "Dubai",
-      "Sharjah",
-      "Ajman",
-      "Ras Al Khaimah",
-      "Fujairah",
-      "Umm Al Quwain",
-      "Al Ain",
-      "Riyadh",
-      "Jeddah",
-      "Mecca",
-      "Medina",
-      "Dammam",
-      "Khobar",
-      "Dhahran",
-      "Taif",
-      "Tabuk",
-      "Abha",
-      "Jubail",
-      "Yanbu",
-      "Doha",
-      "Al Wakrah",
-      "Al Khor",
-      "Al Rayyan",
-      "Mesaieed",
-      "Dukhan",
-      "Muscat",
-      "Salalah",
-      "Sohar",
-      "Nizwa",
-      "Sur",
-      "Ibri",
-      "Barka",
-      "Rustaq",
-      "Kuwait City",
-      "Hawalli",
-      "Salmiya",
-      "Farwaniya",
-      "Jahra",
-      "Ahmadi",
-      "Mangaf",
-      "Fahaheel",
-      "Manama",
-      "Muharraq",
-      "Riffa",
-      "Hamad Town",
-      "Isa Town",
-      "Sitra",
-      "Budaiya",
-      "Jidhafs"
-    ])).optional(),
+    location: cityName.optional(),
     country: z.preprocess(firstValue, z.string()).optional(),
     image: z.preprocess(firstValue, imageStringSchema).optional(),
     coverImage: z.preprocess(firstValue, imageStringSchema).optional(),
@@ -196,7 +149,7 @@ export const updateCommunitySchema = z
     weeklyRides: z.preprocess(firstValue, z.string()).optional(),
     fundsRaised: z.preprocess(firstValue, z.string()).optional(),
     joinMode: z.preprocess(firstValue, z.string()).optional(),
-    location: z.preprocess(firstValue, z.enum(['Abu Dhabi', 'Dubai', 'Al Ain', 'Sharjah'])).optional(),
+    location: cityName.optional(),
     country: z.preprocess(firstValue, z.string()).optional(),
     // Empty string = the dashboard removed the image
     image: z.preprocess(firstValue, z.union([z.literal(''), imageStringSchema])).optional(),
@@ -232,8 +185,9 @@ export const featureCommunitySchema = z
   .strict();
 
 export const getCommunitiesQuerySchema = z.object({
-  type: z.enum(['Family Rides', 'Racing & Performance', 'Women (SheRides)', 'Youth Cycling', 'Weekend Social', 'Night Riders', 'MTB/Trail', 'Training & Clinics']).optional(),
-  location: z.enum(['Abu Dhabi', 'Dubai', 'Al Ain', 'Sharjah', 'Al Dhafra']).optional(),
+  // Category / city names come from the dashboard lookups, so any value is allowed.
+  type: z.string().trim().max(100).optional(),
+  location: z.string().trim().max(100).optional(),
   category: z.string().optional(),
   search: z.string().optional(),
   page: z.string().regex(/^\d+$/).transform(Number).optional(),

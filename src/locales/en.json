@@ -136,6 +136,8 @@
         "deleted": "Challenge deleted successfully",
         "allChallenges": "Challenges retrieved successfully",
         "details": "Challenge details retrieved successfully",
+        "joined": "Joined the challenge successfully",
+        "updated_progress": "Progress updated successfully",
         "left": "You have left the challenge",
         "not_joined": "You have not joined this challenge"
     },
