@@ -2,20 +2,69 @@ import { z } from 'zod';
 
 const textSchema = z.string().trim().max(200);
 
+const bannerMediaUrl = z
+  .string()
+  .trim()
+  .max(1000)
+  .default('')
+  .refine((v) => v === '' || v.startsWith('/') || /^https?:\/\//i.test(v), {
+    message: 'Media URL must start with "/" or "http(s)://"',
+  });
+
+export const HOME_BANNER_MAX_SLIDES = 8;
+
+/**
+ * Homepage banner. `mode` picks what fills the hero:
+ *  - `static`   — one image (`imageEn`, optional `imageAr`)
+ *  - `carousel` — 2+ `slides` that cross-fade every `intervalSeconds`
+ *  - `video`    — `videoUrl`, looping and muted, with `videoPoster` shown
+ *                 while it loads (falls back to `imageEn`)
+ * Title text / buttons and `hideText` apply to every mode. Documents saved
+ * before `mode` existed parse as `static`, so nothing changes for them.
+ */
 export const homeBannerContentSchema = z
   .object({
+    mode: z.enum(['static', 'carousel', 'video']).default('static'),
     hideText: z.boolean().default(false),
     // Kept when no new file is uploaded; may be a site-relative path for the
     // built-in default images or an S3 URL for uploaded ones. The Arabic image
     // is optional; the site falls back to the English one.
-    imageEn: z.string().trim().min(1, 'Banner image is required').max(1000),
-    imageAr: z.string().trim().max(1000).default(''),
+    imageEn: bannerMediaUrl,
+    imageAr: bannerMediaUrl,
+    slides: z
+      .array(z.object({ imageEn: bannerMediaUrl, imageAr: bannerMediaUrl }).strict())
+      .max(HOME_BANNER_MAX_SLIDES, `Carousel: at most ${HOME_BANNER_MAX_SLIDES} slides allowed`)
+      .default([]),
+    intervalSeconds: z.number().int().min(3, 'Slide interval must be at least 3 seconds').max(15, 'Slide interval must be at most 15 seconds').default(5),
+    videoUrl: bannerMediaUrl,
+    videoPoster: bannerMediaUrl,
     titleLine1En: textSchema.default(''),
     titleLine2En: textSchema.default(''),
     titleLine1Ar: textSchema.default(''),
     titleLine2Ar: textSchema.default(''),
   })
-  .strict();
+  .strict()
+  .superRefine((data, ctx) => {
+    // Only the selected mode's media is required; the others are kept so an
+    // admin can switch back without re-uploading.
+    if (data.mode === 'static' && !data.imageEn) {
+      ctx.addIssue({ code: 'custom', path: ['imageEn'], message: 'Banner image is required' });
+    }
+    if (data.mode === 'carousel') {
+      const filled = data.slides.filter((s) => s.imageEn);
+      if (filled.length < 2) {
+        ctx.addIssue({ code: 'custom', path: ['slides'], message: 'Carousel needs at least 2 slide images' });
+      }
+      data.slides.forEach((s, i) => {
+        if (!s.imageEn) {
+          ctx.addIssue({ code: 'custom', path: ['slides', i, 'imageEn'], message: `Slide ${i + 1} needs an image` });
+        }
+      });
+    }
+    if (data.mode === 'video' && !data.videoUrl) {
+      ctx.addIssue({ code: 'custom', path: ['videoUrl'], message: 'Banner video is required' });
+    }
+  });
 
 export type HomeBannerContent = z.infer<typeof homeBannerContentSchema>;
 

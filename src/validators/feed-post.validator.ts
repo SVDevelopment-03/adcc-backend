@@ -35,6 +35,33 @@ export const createFeedPostSchema = z
   })
   .strict();
 
+/**
+ * Admin-created feed post. Admin posts skip the moderation queue: they are
+ * published (`approved`) by default, or can be saved as `pending` drafts.
+ * Media (image / video) arrives as multipart files, validated by
+ * uploadFeedAdminMedia + the controller.
+ */
+export const createAdminFeedPostSchema = z
+  .object({
+    title: z.preprocess(
+      firstValue,
+      z.string().trim().min(1, 'Post title is required').max(150, 'Title must be 150 characters or fewer')
+    ),
+    description: z.preprocess(
+      firstValue,
+      z
+        .string()
+        .trim()
+        .min(1, 'Post description is required')
+        .max(2000, 'Description must be 2000 characters or fewer')
+    ),
+    status: z
+      .preprocess(normalizedString, z.enum(['approved', 'pending']))
+      .optional()
+      .default('approved'),
+  })
+  .strict();
+
 export const updateFeedPostModerationSchema = z
   .object({
     status: z.preprocess(normalizedString, feedPostStatusEnum).optional(),
@@ -79,6 +106,7 @@ export const createFeedCommentSchema = z
   .strict();
 
 export type CreateFeedPostInput = z.infer<typeof createFeedPostSchema>;
+export type CreateAdminFeedPostInput = z.infer<typeof createAdminFeedPostSchema>;
 export type CreateFeedCommentInput = z.infer<typeof createFeedCommentSchema>;
 export type UpdateFeedPostModerationInput = z.infer<typeof updateFeedPostModerationSchema>;
 export type GetFeedPostsQueryInput = z.infer<typeof getFeedPostsQuerySchema>;

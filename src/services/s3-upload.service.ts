@@ -198,6 +198,29 @@ export const assertImageContent = (buffer: Buffer, mimeType: string) => {
   }
 };
 
+/**
+ * Same idea as assertImageContent for videos: the bytes must match the
+ * claimed container. MP4/MOV are ISO-BMFF (`ftyp` box at offset 4);
+ * WebM is Matroska/EBML (1A 45 DF A3).
+ */
+export const assertVideoContent = (buffer: Buffer, mimeType: string) => {
+  let ok: boolean;
+  switch (mimeType) {
+    case 'video/mp4':
+    case 'video/quicktime':
+      ok = buffer.length > 12 && buffer.subarray(4, 8).toString('latin1') === 'ftyp';
+      break;
+    case 'video/webm':
+      ok = buffer.length > 4 && buffer[0] === 0x1a && buffer[1] === 0x45 && buffer[2] === 0xdf && buffer[3] === 0xa3;
+      break;
+    default:
+      ok = false;
+  }
+  if (!ok) {
+    throw new AppError('The file is not a valid video. Please upload a real MP4, MOV or WebM video.', 400);
+  }
+};
+
 export const uploadImageBufferToS3 = async (
   fileBuffer: Buffer,
   mimeType: string,
