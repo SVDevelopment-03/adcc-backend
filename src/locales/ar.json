@@ -266,6 +266,7 @@
   },
   "amenities": {
     "water": "ماء",
+    "waters": "ماء",
     "waterstations": "محطات المياه",
     "parking": "موقف سيارات",
     "toilets": "دورات المياه",
