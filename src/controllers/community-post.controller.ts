@@ -10,6 +10,7 @@ import { AuthRequest } from '@/middleware/auth.middleware';
 import { t } from '@/utils/i18n';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import { notifyCommunityAnnouncement } from '@/services/community-notification.service';
+import { escapeRegex } from '@/utils/regex.util';
 
 const getParamString = (value: string | string[] | undefined) =>
   Array.isArray(value) ? value[0] : value;
@@ -102,8 +103,8 @@ export const getCommunityPosts = asyncHandler(async (req: Request, res: Response
   if (postType) filter.postType = postType;
   if (q) {
     filter.$or = [
-      { title: { $regex: String(q), $options: 'i' } },
-      { caption: { $regex: String(q), $options: 'i' } },
+      { title: { $regex: escapeRegex(String(q)), $options: 'i' } },
+      { caption: { $regex: escapeRegex(String(q)), $options: 'i' } },
     ];
   }
 

@@ -19,6 +19,7 @@ import {
   deleteFirebaseUser,
   updateFirebasePassword,
 } from '@/services/firebase.service';
+import { escapeRegex } from '@/utils/regex.util';
 
 /**
  * Fields never sent in user responses. Only refresh tokens were excluded
@@ -136,7 +137,7 @@ export const getAllUsers = asyncHandler(async (req: AuthRequest, res: Response) 
   if (typeof gender === 'string') {
     const g = gender.trim();
     if (/^male$/i.test(g) || /^female$/i.test(g)) {
-      filter.gender = { $regex: `^${g}$`, $options: 'i' };
+      filter.gender = { $regex: `^${escapeRegex(g)}$`, $options: 'i' };
     }
   }
 

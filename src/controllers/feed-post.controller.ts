@@ -11,6 +11,7 @@ import User from '@/models/user.model';
 import feedStoreNotificationService from '@/services/feed-store-notification.service';
 import { assertVideoContent, uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import { notifyAdminFeedPostPending } from '@/services/admin-notification.service';
+import { escapeRegex } from '@/utils/regex.util';
 
 const getLang = (req: Request) => (((req as any).lang || 'en') as string) ?? 'en';
 
@@ -248,8 +249,8 @@ export const getPublicFeedPosts = asyncHandler(async (req: AuthRequest, res: Res
   if (q) {
     const qStr = String(q);
     filter.$or = [
-      { title: { $regex: qStr, $options: 'i' } },
-      { description: { $regex: qStr, $options: 'i' } },
+      { title: { $regex: escapeRegex(qStr), $options: 'i' } },
+      { description: { $regex: escapeRegex(qStr), $options: 'i' } },
     ];
   }
 
@@ -345,8 +346,8 @@ export const getFeedPosts = asyncHandler(async (req: Request, res: Response) => 
   if (q) {
     const qStr = String(q);
     filter.$or = [
-      { title: { $regex: qStr, $options: 'i' } },
-      { description: { $regex: qStr, $options: 'i' } },
+      { title: { $regex: escapeRegex(qStr), $options: 'i' } },
+      { description: { $regex: escapeRegex(qStr), $options: 'i' } },
     ];
   }
 

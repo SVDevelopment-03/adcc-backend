@@ -6,6 +6,7 @@ import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
+import { escapeRegex } from '@/utils/regex.util';
 
 const normalizeStringArray = (value: unknown): string[] => {
   if (!value) return [];
@@ -264,9 +265,9 @@ export const getGlobalSettings = asyncHandler(async (req: Request, res: Response
 
   if (q) {
     filter.$or = [
-      { key: { $regex: String(q), $options: 'i' } },
-      { label: { $regex: String(q), $options: 'i' } },
-      { description: { $regex: String(q), $options: 'i' } },
+      { key: { $regex: escapeRegex(String(q)), $options: 'i' } },
+      { label: { $regex: escapeRegex(String(q)), $options: 'i' } },
+      { description: { $regex: escapeRegex(String(q)), $options: 'i' } },
     ];
   }
 

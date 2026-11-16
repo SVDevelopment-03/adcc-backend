@@ -15,6 +15,7 @@ import {
 } from '@/utils/localization';
 import { translateFieldsToArabic } from '@/services/translation.service';
 import { userHasAnyPermission } from '@/services/rbac.service';
+import { escapeRegex } from '@/utils/regex.util';
 
 const ensureObjectId = (id: string): mongoose.Types.ObjectId => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -68,7 +69,7 @@ const buildProductQuery = (query: any, isAdmin: boolean) => {
   }
 
   if (query.q) {
-    const regex = new RegExp(String(query.q), 'i');
+    const regex = new RegExp(escapeRegex(String(query.q)), 'i');
     filter.$or = [
       { name: regex },
       { sku: regex },
@@ -90,7 +91,7 @@ const buildOrderQuery = (query: any) => {
   }
 
   if (query.q) {
-    const regex = new RegExp(String(query.q), 'i');
+    const regex = new RegExp(escapeRegex(String(query.q)), 'i');
     filter.$or = [
       { orderNumber: regex },
       { userName: regex },

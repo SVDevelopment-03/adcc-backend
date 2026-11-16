@@ -12,6 +12,7 @@ import { userHasAnyPermission } from '@/services/rbac.service';
 import { notifyAdminStoreItemPending } from '@/services/admin-notification.service';
 import feedStoreNotificationService from '@/services/feed-store-notification.service';
 import { translateFieldsToArabic } from '@/services/translation.service';
+import { escapeRegex } from '@/utils/regex.util';
 
 /**
  * Marketplace moderators: a full Admin, or staff whose role grants
@@ -230,8 +231,8 @@ export const getStoreItems = asyncHandler(async (req: AuthRequest, res: Response
   }
   if (q) {
     filter.$or = [
-      { title: { $regex: String(q), $options: 'i' } },
-      { description: { $regex: String(q), $options: 'i' } },
+      { title: { $regex: escapeRegex(String(q)), $options: 'i' } },
+      { description: { $regex: escapeRegex(String(q)), $options: 'i' } },
     ];
   }
 
@@ -288,8 +289,8 @@ export const getAdminStoreItems = asyncHandler(async (req: AuthRequest, res: Res
   }
   if (q) {
     filter.$or = [
-      { title: { $regex: String(q), $options: 'i' } },
-      { description: { $regex: String(q), $options: 'i' } },
+      { title: { $regex: escapeRegex(String(q)), $options: 'i' } },
+      { description: { $regex: escapeRegex(String(q)), $options: 'i' } },
     ];
   }
 

@@ -8,6 +8,7 @@ import { AuthRequest } from '@/middleware/auth.middleware';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import { BADGE_ICONS } from '@/constants/badges';
 import { localizeBadgeStatic } from '@/utils/localization';
+import { escapeRegex } from '@/utils/regex.util';
 
 const attachBadgeImage = async (req: AuthRequest, data: Record<string, any>) => {
   const file = (req as any).file as Express.Multer.File | undefined;
@@ -76,9 +77,9 @@ export const getAllBadges = asyncHandler(async (req: Request, res: Response) => 
   if (rarity) filter.rarity = rarity;
   if (q) {
     filter.$or = [
-      { name: { $regex: String(q), $options: 'i' } },
-      { description: { $regex: String(q), $options: 'i' } },
-      { requirements: { $regex: String(q), $options: 'i' } },
+      { name: { $regex: escapeRegex(String(q)), $options: 'i' } },
+      { description: { $regex: escapeRegex(String(q)), $options: 'i' } },
+      { requirements: { $regex: escapeRegex(String(q)), $options: 'i' } },
     ];
   }
 
