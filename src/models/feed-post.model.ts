@@ -7,6 +7,7 @@ export interface IFeedPost extends Document {
   description: string;
   status: FeedPostStatus;
   image?: string;
+  video?: string;
   eventId?: string;
   eventTitle?: string;
   trackId?: string;
@@ -47,6 +48,12 @@ const FeedPostSchema = new Schema(
       index: true,
     },
     image: {
+      type: String,
+      trim: true,
+    },
+    // Optional video (admin-created posts). When both are set, `image` is
+    // used as the video's poster/thumbnail.
+    video: {
       type: String,
       trim: true,
     },

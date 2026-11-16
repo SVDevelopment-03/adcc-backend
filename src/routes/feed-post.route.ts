@@ -4,12 +4,14 @@ import { authenticate, optionalAuthenticate } from '@/middleware/auth.middleware
 import { authenticatedOnly } from '@/middleware/role.middleware';
 import { requireStaffPermission } from '@/middleware/rbac.middleware';
 import {
+  uploadFeedAdminMedia,
   uploadFeedPostImageIfMultipart,
   uploadBodyIfMultipart,
   requireMultipartFormData,
   requireParsedMultipartBody,
 } from '@/middleware/upload.middleware';
 import {
+  createAdminFeedPostSchema,
   createFeedCommentSchema,
   createFeedPostSchema,
   getFeedPostsQuerySchema,
@@ -19,6 +21,7 @@ import {
 import {
   addFeedComment,
   createFeedPost,
+  createFeedPostAsAdmin,
   deleteFeedComment,
   deleteFeedCommentAsAdmin,
   deleteFeedPost,
@@ -49,6 +52,17 @@ router.post(
 );
 
 const requireFeedModeration = requireStaffPermission('moderate_content', 'admin.panel');
+
+router.post(
+  '/admin',
+  authenticate,
+  requireFeedModeration,
+  requireMultipartFormData,
+  uploadFeedAdminMedia,
+  requireParsedMultipartBody,
+  validate(createAdminFeedPostSchema),
+  createFeedPostAsAdmin
+);
 
 router.delete('/:id', authenticate, requireFeedModeration, deleteFeedPost);
 router.delete(

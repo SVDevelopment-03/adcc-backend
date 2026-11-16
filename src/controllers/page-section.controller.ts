@@ -4,7 +4,7 @@ import { sendSuccess } from '@/utils/response';
 import { asyncHandler } from '@/utils/async-handler';
 import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
-import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
+import { assertVideoContent, uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import { PAGE_SECTION_SCHEMAS } from '@/validators/page-section.validator';
 
 const PAGE_IMAGE_FOLDER = 'page-banners';
@@ -87,11 +87,20 @@ export const upsertPageSection = asyncHandler(async (req: AuthRequest, res: Resp
   const content = parseContentField(req.body?.content);
 
   const files = ((req as any).files as Express.Multer.File[] | undefined) ?? [];
-  for (const file of files) {
+  // Check every file before uploading any, so one bad file doesn't leave the
+  // others orphaned in S3.
+  const targets = files.map((file) => {
     const target = resolveImagePath(content, file.fieldname);
     if (!target) {
       throw new AppError(`Unexpected image field "${file.fieldname}"`, 400);
     }
+    // Only the home banner's videoUrl field gets past the upload filter with
+    // a video type; make sure the bytes really are one.
+    if (file.mimetype.startsWith('video/')) assertVideoContent(file.buffer, file.mimetype);
+    return target;
+  });
+  for (const [index, file] of files.entries()) {
+    const target = targets[index];
     const uploaded = await uploadImageBufferToS3(
       file.buffer,
       file.mimetype,

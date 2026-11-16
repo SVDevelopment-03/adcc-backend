@@ -175,6 +175,72 @@ export const uploadFeedPostImageIfMultipart = (req: any, res: any, next: any) =>
   return next();
 };
 
+/**
+ * Admin-created feed posts: one optional `image` and one optional `video`.
+ * Each field only accepts its own kind of file, with its own size cap.
+ * Limits are mirrored in the dashboard (src/utils/feedMediaValidation.ts).
+ */
+export const FEED_IMAGE_MAX_SIZE_MB = 5;
+export const FEED_VIDEO_MAX_SIZE_MB = 50;
+const FEED_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp']);
+const FEED_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/quicktime', 'video/webm']);
+
+const uploadFeedAdminMediaFields = multer({
+  storage,
+  // Multer has one per-file cap, so it is set to the larger (video) limit;
+  // the image cap is checked per field below.
+  limits: { fileSize: FEED_VIDEO_MAX_SIZE_MB * 1024 * 1024, files: 2 },
+  fileFilter: (_req, file, cb) => {
+    if (file.fieldname === 'image') {
+      if (!FEED_IMAGE_MIME_TYPES.has(file.mimetype)) {
+        cb(new AppError('Image must be a JPG, PNG or WebP file', 400));
+        return;
+      }
+      cb(null, true);
+      return;
+    }
+    if (file.fieldname === 'video') {
+      if (!FEED_VIDEO_MIME_TYPES.has(file.mimetype)) {
+        cb(new AppError('Video must be an MP4, MOV or WebM file', 400));
+        return;
+      }
+      cb(null, true);
+      return;
+    }
+    cb(new AppError(`Unexpected file field "${file.fieldname}". Use "image" or "video".`, 400));
+  },
+}).fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'video', maxCount: 1 },
+]);
+
+export const uploadFeedAdminMedia = (req: any, res: any, next: any) => {
+  const contentType = (req.headers['content-type'] || '').toString();
+  if (!contentType.includes('multipart/form-data')) {
+    return next();
+  }
+  return uploadFeedAdminMediaFields(req, res, (err: any) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === 'LIMIT_FILE_SIZE') {
+        return next(new AppError(`Video size must not exceed ${FEED_VIDEO_MAX_SIZE_MB}MB`, 400));
+      }
+      if (err.code === 'LIMIT_UNEXPECTED_FILE' || err.code === 'LIMIT_FILE_COUNT') {
+        return next(
+          new AppError('Upload at most one image (field "image") and one video (field "video")', 400)
+        );
+      }
+      return next(new AppError(err.message, 400));
+    }
+    if (err) return next(err);
+
+    const image = req.files?.image?.[0] as Express.Multer.File | undefined;
+    if (image && image.size > FEED_IMAGE_MAX_SIZE_MB * 1024 * 1024) {
+      return next(new AppError(`Image size must not exceed ${FEED_IMAGE_MAX_SIZE_MB}MB`, 400));
+    }
+    return next();
+  });
+};
+
 // const settingsFields = upload.fields([
 //   { name: 'image', maxCount: 1 },
 //   { name: 'images', maxCount: 10 },
@@ -205,10 +271,31 @@ export const uploadPartnerLogos = (req: any, res: any, next: any) => {
 const PAGE_IMAGE_MAX_SIZE_MB = 1;
 const PAGE_IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/jpg', 'image/png']);
 
+// The homepage banner's video mode: the one place a page section takes a
+// video. Only the `videoUrl` field of home/banner accepts one.
+export const PAGE_VIDEO_MAX_SIZE_MB = 50;
+export const PAGE_VIDEO_MIME_TYPES = new Set(['video/mp4', 'video/webm']);
+const PAGE_VIDEO_FIELD = 'videoUrl';
+
+const isBannerVideoField = (req: any, file: Express.Multer.File) =>
+  file.fieldname === PAGE_VIDEO_FIELD &&
+  String(req.params?.page || '').toLowerCase() === 'home' &&
+  String(req.params?.section || '').toLowerCase() === 'banner';
+
 const uploadPageImages = multer({
   storage,
-  limits: { fileSize: PAGE_IMAGE_MAX_SIZE_MB * 1024 * 1024, files: 12 },
-  fileFilter: (_req, file, cb) => {
+  // Multer has a single per-file cap, so it is the (larger) video limit; the
+  // image cap is enforced per file after parsing.
+  limits: { fileSize: PAGE_VIDEO_MAX_SIZE_MB * 1024 * 1024, files: 12 },
+  fileFilter: (req, file, cb) => {
+    if (isBannerVideoField(req, file)) {
+      if (!PAGE_VIDEO_MIME_TYPES.has(file.mimetype)) {
+        cb(new AppError('Banner video must be an MP4 or WebM file', 400));
+        return;
+      }
+      cb(null, true);
+      return;
+    }
     if (!PAGE_IMAGE_MIME_TYPES.has(file.mimetype)) {
       cb(new AppError('Only PNG, JPG and JPEG images are allowed', 400));
       return;
@@ -224,11 +311,18 @@ export const uploadPageSectionImages = (req: any, res: any, next: any) => {
   }
   return uploadPageImages(req, res, (err: any) => {
     if (err instanceof multer.MulterError && err.code === 'LIMIT_FILE_SIZE') {
-      return next(
-        new AppError(`Image size must not exceed ${PAGE_IMAGE_MAX_SIZE_MB}MB`, 400)
-      );
+      return next(new AppError(`Video size must not exceed ${PAGE_VIDEO_MAX_SIZE_MB}MB`, 400));
     }
-    return next(err);
+    if (err) return next(err);
+
+    const files = (req.files as Express.Multer.File[] | undefined) ?? [];
+    const oversizedImage = files.find(
+      (f) => !isBannerVideoField(req, f) && f.size > PAGE_IMAGE_MAX_SIZE_MB * 1024 * 1024
+    );
+    if (oversizedImage) {
+      return next(new AppError(`Image size must not exceed ${PAGE_IMAGE_MAX_SIZE_MB}MB`, 400));
+    }
+    return next();
   });
 };
 

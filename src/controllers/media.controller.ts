@@ -22,7 +22,9 @@ export const listMedia = asyncHandler(async (req: Request, res: Response) => {
   const search = String(req.query.search || '').trim();
   const folder = String(req.query.folder || '').trim();
 
-  const filter: Record<string, unknown> = {};
+  // The library is an image picker: videos (feed posts, homepage banner) are
+  // recorded in the catalog too but must not be offered for image fields.
+  const filter: Record<string, unknown> = { mimeType: { $not: /^video\// } };
   if (folder) filter.folder = folder;
   if (search) filter.name = { $regex: search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), $options: 'i' };
 

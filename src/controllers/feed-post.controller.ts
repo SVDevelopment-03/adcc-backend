@@ -9,7 +9,7 @@ import { translateFieldsToArabic } from '@/services/translation.service';
 import FeedPost from '@/models/feed-post.model';
 import User from '@/models/user.model';
 import feedStoreNotificationService from '@/services/feed-store-notification.service';
-import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
+import { assertVideoContent, uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import { notifyAdminFeedPostPending } from '@/services/admin-notification.service';
 
 const getLang = (req: Request) => (((req as any).lang || 'en') as string) ?? 'en';
@@ -169,6 +169,68 @@ export const createFeedPost = asyncHandler(async (req: AuthRequest, res: Respons
     postId: created._id.toString(),
     authorName: author?.fullName?.trim() || 'Member',
   });
+
+  sendSuccess(res, populated, t(lang, 'feedPost.created'), 201);
+});
+
+/**
+ * Admin creates a feed post (e.g. for the home page "Voices from the
+ * Community" section). Skips the moderation queue: published immediately
+ * unless saved as `pending`. Accepts an optional `image` and/or `video`
+ * (already type/size-checked by uploadFeedAdminMedia).
+ * POST /v1/feed-posts/admin
+ */
+export const createFeedPostAsAdmin = asyncHandler(async (req: AuthRequest, res: Response) => {
+  const lang = getLang(req);
+  const userId = req.user?.id;
+
+  if (!userId) {
+    throw new AppError(t(lang, 'auth.unauthorized'), 401);
+  }
+
+  const files = ((req as any).files ?? {}) as Record<string, Express.Multer.File[] | undefined>;
+  const imageFile = files.image?.[0];
+  const videoFile = files.video?.[0];
+
+  // Content checks before anything reaches S3, so a bad video doesn't leave
+  // an orphaned image behind (and vice versa).
+  if (videoFile) assertVideoContent(videoFile.buffer, videoFile.mimetype);
+
+  const data: Record<string, any> = {
+    title: req.body.title,
+    description: req.body.description,
+    status: req.body.status ?? 'approved',
+    reported: false,
+    createdBy: userId,
+  };
+
+  if (imageFile) {
+    // uploadImageBufferToS3 runs assertImageContent itself.
+    const upload = await uploadImageBufferToS3(
+      imageFile.buffer,
+      imageFile.mimetype,
+      imageFile.originalname,
+      'feed-posts',
+      userId
+    );
+    data.image = upload.url;
+  }
+
+  if (videoFile) {
+    const upload = await uploadImageBufferToS3(
+      videoFile.buffer,
+      videoFile.mimetype,
+      videoFile.originalname,
+      'feed-posts',
+      userId
+    );
+    data.video = upload.url;
+  }
+
+  const created = await FeedPost.create(data);
+  const populated = await FeedPost.findById(created._id)
+    .populate('createdBy', feedPostSelect)
+    .lean();
 
   sendSuccess(res, populated, t(lang, 'feedPost.created'), 201);
 });
