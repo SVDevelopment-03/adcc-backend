@@ -28,6 +28,13 @@ const resolveDynamicLabel = (type: string, value: string, lang: SupportedLanguag
   return lang === 'ar' ? entry.labelAr || value : entry.label || value;
 };
 
+
+/** Translation for `key`, or `fallback` when no translation exists (t() returns the key itself then). */
+const translateOr = (lang: string, key: string, fallback: string): string => {
+  const value = t(lang, key);
+  return value && value !== key ? value : fallback;
+};
+
 export type SupportedLanguage = 'en' | 'ar';
 
 const SUPPORTED_LANGUAGES = new Set(['en', 'ar']);
@@ -222,7 +229,7 @@ export const localizeEventStatic = (event: Record<string, any>, lang: SupportedL
       } else if (amenityKey === 'changingrooms') {
         return t(lang, 'amenities.changingRooms');
       }
-      return t(lang, `amenities.${amenityKey}`) || amenity;
+      return translateOr(lang, `amenities.${amenityKey}`, amenity);
     });
   }
   if (event.category) {
@@ -318,7 +325,7 @@ export const localizeTrackStatic = (track: Record<string, any>, lang: SupportedL
       } else if (facilityKey === 'changingrooms') {
         return t(lang, 'amenities.changingRooms');
       }
-      return t(lang, `amenities.${facilityKey}`) || facility;
+      return translateOr(lang, `amenities.${facilityKey}`, facility);
     });
     // Older saves could store the same facility more than once (as value and
     // as label) — collapse them so each facility is listed once.
