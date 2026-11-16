@@ -2,7 +2,7 @@ import { Request, Response } from 'express';
 import { asyncHandler } from '@/utils/async-handler';
 import { sendSuccess } from '@/utils/response';
 import { AppError } from '@/utils/app-error';
-import { setOtp, verifyOtp } from '@/services/otp.store';
+import { setOtp, verifyOtp, getResendWaitSeconds } from '@/services/otp.store';
 import { normalizePhone, getPhoneLookupVariants } from '@/utils/phone.util';
 import nexusService from '@/services/nexus.service';
 import crypto from 'node:crypto';
@@ -32,8 +32,13 @@ export const sendOtp = asyncHandler(async (req: Request, res: Response) => {
 
   const normalizedRecipient = normalizePhone(recipient) || recipient;
 
-  // Generate 6-digit code
-  const code = Math.floor(100000 + Math.random() * 900000).toString();
+  const waitSeconds = getResendWaitSeconds(normalizedRecipient);
+  if (waitSeconds > 0) {
+    throw new AppError(`Please wait ${waitSeconds} seconds before requesting a new code`, 429);
+  }
+
+  // Generate 6-digit code (cryptographically random)
+  const code = crypto.randomInt(100000, 1000000).toString();
 
   // TTL in seconds (default 5 minutes)
   const ttlSeconds = 300;

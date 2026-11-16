@@ -27,6 +27,7 @@ import productBannerRoutes from './product-banner.route';
 import productBannerArRoutes from './product-banner-ar.route';
 import lookupRoutes from './lookup.route';
 import otpRoutes from './otp.route';
+import { publicFormLimiter } from '@/middleware/rate-limit.middleware';
 import debugRoutes from './debug.route';
 import { getStaticData } from '@/controllers/lookup.controller';
 import newsRoutes from './news.route';
@@ -73,7 +74,7 @@ router.use('/banner', bannerRoutes);
 router.use('/banner-ar', bannerArRoutes);
 router.use('/product-banners', productBannerRoutes);
 router.use('/product-banners-ar', productBannerArRoutes);
-router.use('/newsletter-subscriptions', newsletterSubscriptionRoutes);
+router.use('/newsletter-subscriptions', publicFormLimiter, newsletterSubscriptionRoutes);
 router.use('/lookups', lookupRoutes);
 // Consolidated static data endpoint used by clients to fetch all dashboard-managed
 // lookup lists (cities, countries, event categories, etc.) with both English
@@ -81,8 +82,8 @@ router.use('/lookups', lookupRoutes);
 router.get('/static-data', getStaticData);
 router.use('/news', newsRoutes);
 router.use('/media', mediaRoutes);
-router.use('/contact', contactMessageRoutes);
-router.use('/laffah-ride-registrations', laffahRideRegistrationRoutes);
+router.use('/contact', publicFormLimiter, contactMessageRoutes);
+router.use('/laffah-ride-registrations', publicFormLimiter, laffahRideRegistrationRoutes);
 router.use('/audit-logs', auditLogRoutes);
 router.use('/splash', splashRoutes);
 router.use('/partners', partnerRoutes);

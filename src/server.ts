@@ -39,14 +39,20 @@ const webOrigins = new Set([
   'https://adcyclingclub.ae',
   'https://www.adcyclingclub.ae',
 ]);
-const mobileOrigins = new Set([
-  'capacitor://localhost',
-  'ionic://localhost',
-  'http://localhost',
-  'https://localhost',
-  'http://127.0.0.1',
-  'https://127.0.0.1',
-]);
+// Local dev origins are only accepted outside production (the Flutter app sends no Origin header).
+const isProduction = process.env.NODE_ENV === 'production';
+const mobileOrigins = new Set(
+  isProduction
+    ? []
+    : [
+        'capacitor://localhost',
+        'ionic://localhost',
+        'http://localhost',
+        'https://localhost',
+        'http://127.0.0.1',
+        'https://127.0.0.1',
+      ]
+);
 
 const corsOptions: cors.CorsOptions = {
   credentials: true,
@@ -109,6 +115,8 @@ const corsOptions: cors.CorsOptions = {
   };
 
 
+// The API sits behind nginx on the same host: trust one proxy hop so rate limits see the real client IP.
+app.set('trust proxy', 1);
 app.use(helmet());
 app.use(cors(corsOptions));
 app.use(compression());

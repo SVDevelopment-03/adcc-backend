@@ -315,9 +315,11 @@ export const updateEventSchema = z
     endTime: timeField().optional(),
     category: z.preprocess(firstValue, z.string()).optional(),
     rewards: rewardsSchema,
-    isFeatured: booleanField().default(false),
-    allowCancellation: booleanField().default(false),
-    isPurposeBased: booleanField().default(false),
+    // No defaults on update: a partial edit (e.g. only the Arabic title) must
+    // not switch these settings off.
+    isFeatured: booleanField().optional(),
+    allowCancellation: booleanField().optional(),
+    isPurposeBased: booleanField().optional(),
     // No default: leaving it out of a PATCH must not flip an internal event back to external
     isInternal: booleanField().optional(),
     raceTracks: raceTracksSchema.optional(),
