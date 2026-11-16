@@ -1,6 +1,7 @@
-import express from 'express';
+import express, { NextFunction, Response } from 'express';
 import { validate } from '@/middleware/validate.middleware';
-import { authenticate, optionalAuthenticate } from '@/middleware/auth.middleware';
+import { authenticate, optionalAuthenticate, AuthRequest } from '@/middleware/auth.middleware';
+import { userHasAnyPermission } from '@/services/rbac.service';
 import { authenticatedOnly } from '@/middleware/role.middleware';
 import { requireStaffPermission } from '@/middleware/rbac.middleware';
 import {
@@ -37,10 +38,31 @@ import {
 
 const router = express.Router();
 
+/**
+ * Product creation: store managers (manage_store / admin.panel, or a full
+ * Admin) and vendors. Checked before validation so unauthorised callers get
+ * 403, not field errors. Edit/delete keep their per-product ownership check
+ * in the controller (vendors may only change their own products).
+ */
+const requireStoreManagerOrVendor = async (req: AuthRequest, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+    if (userId && !req.user?.isGuest) {
+      if (req.user?.role === 'Vendor' || (await userHasAnyPermission(String(userId), ['manage_store', 'admin.panel']))) {
+        next();
+        return;
+      }
+    }
+    res.status(403).json({ success: false, message: 'Permission denied' });
+  } catch (error) {
+    next(error);
+  }
+};
+
 // Product API
 router.get('/products', optionalAuthenticate, validate(merchandiseQuerySchema), getMerchandiseProducts);
 router.get('/products/:id', optionalAuthenticate, getMerchandiseProductById);
-router.post('/products', authenticate, authenticatedOnly, validate(createMerchandiseProductSchema), createMerchandiseProduct);
+router.post('/products', authenticate, authenticatedOnly, requireStoreManagerOrVendor, validate(createMerchandiseProductSchema), createMerchandiseProduct);
 router.patch('/products/:id', authenticate, authenticatedOnly, validate(updateMerchandiseProductSchema), updateMerchandiseProduct);
 router.delete('/products/:id', authenticate, authenticatedOnly, deleteMerchandiseProduct);
 router.patch('/products/:id/status', authenticate, authenticatedOnly, validate(updateMerchandiseProductStatusSchema), updateMerchandiseProductStatus);

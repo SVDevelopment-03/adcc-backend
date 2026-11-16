@@ -141,6 +141,13 @@ export async function getEffectivePermissionKeys(userId: string): Promise<Set<st
     return new Set();
   }
 
+  // An INACTIVE or ARCHIVED role grants nothing; before, the status was
+  // stored but ignored, so switching a role off had no effect on access.
+  // Roles saved before the field existed have no status and count as ACTIVE.
+  if (role.status && role.status !== 'ACTIVE') {
+    return new Set();
+  }
+
   const keys = (role.permissions as Array<{ key?: string }>)
     .map((p) => p.key)
     .filter((k): k is string => typeof k === 'string');

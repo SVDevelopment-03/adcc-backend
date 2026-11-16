@@ -219,6 +219,12 @@ export const createEventSchema = z
   .refine((data) => !data.repeatWeekdays || !!data.repeatUntil, {
     message: 'Repeat end date is required for a repeating event',
     path: ['repeatUntil'],
+  })
+  // The dashboard already requires a track for internal events; enforce it
+  // on the server too so an API call can't create one riders can't pick from.
+  .refine((data) => !data.isInternal || (data.raceTracks?.length ?? 0) > 0, {
+    message: 'Add at least one track for an internal event',
+    path: ['raceTracks'],
   });
 
 export const updateEventSchema = z

@@ -8,11 +8,22 @@ import { AuthRequest } from '@/middleware/auth.middleware';
 import { t } from '@/utils/i18n';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import User from '@/models/user.model';
+import { userHasAnyPermission } from '@/services/rbac.service';
 import { notifyAdminStoreItemPending } from '@/services/admin-notification.service';
 import feedStoreNotificationService from '@/services/feed-store-notification.service';
 import { translateFieldsToArabic } from '@/services/translation.service';
 
-const isAdmin = (req: AuthRequest): boolean => req.user?.role === 'Admin';
+/**
+ * Marketplace moderators: a full Admin, or staff whose role grants
+ * moderate_content / admin.panel. Checking `role === 'Admin'` alone let any
+ * staff member edit or delete other members' listings, because every staff
+ * account carries that legacy role.
+ */
+const isAdmin = async (req: AuthRequest): Promise<boolean> => {
+  const userId = req.user?.id;
+  if (!userId || req.user?.isGuest) return false;
+  return userHasAnyPermission(String(userId), ['moderate_content', 'admin.panel']);
+};
 
 const isOwner = (req: AuthRequest, item: any): boolean => {
   const userId = req.user?.id;
@@ -208,7 +219,7 @@ export const getStoreItems = asyncHandler(async (req: AuthRequest, res: Response
   const { page = 1, limit = 10, status, category, condition, city, minPrice, maxPrice, q } = req.query as any;
 
   const filter: any = {};
-  filter.status = isAdmin(req) && status ? status : 'Approved';
+  filter.status = (await isAdmin(req)) && status ? status : 'Approved';
   if (category) filter.category = category;
   if (condition) filter.condition = condition;
   if (city) filter.city = city;
@@ -259,7 +270,7 @@ export const getStoreItems = asyncHandler(async (req: AuthRequest, res: Response
  */
 export const getAdminStoreItems = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as string;
-  if (!isAdmin(req)) {
+  if (!(await isAdmin(req))) {
     throw new AppError(t(lang, 'store.admin_required'), 403);
   }
 
@@ -372,7 +383,7 @@ export const getStoreItemById = asyncHandler(async (req: AuthRequest, res: Respo
     throw new AppError(t(lang, 'store.not_found'), 404);
   }
 
-  const canView = item.status === 'Approved' || isAdmin(req) || isOwner(req, item);
+  const canView = item.status === 'Approved' || (await isAdmin(req)) || isOwner(req, item);
   if (!canView) {
     throw new AppError(t(lang, 'store.not_found'), 404);
   }
@@ -392,7 +403,7 @@ export const updateStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
     throw new AppError(t(lang, 'store.not_found'), 404);
   }
 
-  if (!isAdmin(req) && !isOwner(req, item)) {
+  if (!(await isAdmin(req)) && !isOwner(req, item)) {
     throw new AppError(t(lang, 'store.forbidden'), 403);
   }
 
@@ -412,7 +423,7 @@ export const updateStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
     updates.coverImage = updates.photos[0];
   }
 
-  if (!isAdmin(req) && item.status === 'Approved') {
+  if (!(await isAdmin(req)) && item.status === 'Approved') {
     updates.status = 'Pending';
     updates.approvedBy = undefined;
     updates.approvedAt = undefined;
@@ -459,7 +470,7 @@ export const archiveStoreItem = asyncHandler(async (req: AuthRequest, res: Respo
     throw new AppError(t(lang, 'store.not_found'), 404);
   }
 
-  if (!isAdmin(req) && !isOwner(req, item)) {
+  if (!(await isAdmin(req)) && !isOwner(req, item)) {
     throw new AppError(t(lang, 'store.forbidden'), 403);
   }
 
@@ -480,7 +491,7 @@ export const archiveStoreItem = asyncHandler(async (req: AuthRequest, res: Respo
  */
 export const approveStoreItem = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as string;
-  if (!isAdmin(req)) {
+  if (!(await isAdmin(req))) {
     throw new AppError(t(lang, 'store.admin_required'), 403);
   }
 
@@ -520,7 +531,7 @@ export const approveStoreItem = asyncHandler(async (req: AuthRequest, res: Respo
  */
 export const rejectStoreItem = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as string;
-  if (!isAdmin(req)) {
+  if (!(await isAdmin(req))) {
     throw new AppError(t(lang, 'store.admin_required'), 403);
   }
 
@@ -554,7 +565,7 @@ export const rejectStoreItem = asyncHandler(async (req: AuthRequest, res: Respon
  */
 export const featureStoreItem = asyncHandler(async (req: AuthRequest, res: Response) => {
   const lang = ((req as any).lang || 'en') as string;
-  if (!isAdmin(req)) {
+  if (!(await isAdmin(req))) {
     throw new AppError(t(lang, 'store.admin_required'), 403);
   }
 
@@ -586,7 +597,7 @@ export const markStoreItemSold = asyncHandler(async (req: AuthRequest, res: Resp
     throw new AppError(t(lang, 'store.not_found'), 404);
   }
 
-  if (!isAdmin(req) && !isOwner(req, item)) {
+  if (!(await isAdmin(req)) && !isOwner(req, item)) {
     throw new AppError(t(lang, 'store.forbidden'), 403);
   }
 
