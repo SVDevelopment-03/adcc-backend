@@ -1556,7 +1556,7 @@ export const getCurrentUser = asyncHandler(
       return;
     }
 
-    const user = await User.findById(userId).select('-refreshTokens -__v');
+    const user = await User.findById(userId).select('-refreshTokens -__v -passwordHash -resetPasswordCodeHash -resetPasswordExpiresAt');
 
     if (!user) {
       throw new AppError(t(lang, 'auth.user_not_found'), 404);
@@ -1862,7 +1862,7 @@ export const updateMyProfile = asyncHandler(
       userId,
       { $set: updates },
       { new: true, runValidators: true }
-    ).select('-refreshTokens -__v');
+    ).select('-refreshTokens -__v -passwordHash -resetPasswordCodeHash -resetPasswordExpiresAt');
 
     if (!user) {
       throw new AppError(t(lang, 'auth.user_not_found'), 404);
@@ -1894,7 +1894,7 @@ export const updateProfileImage = asyncHandler(
       userId,
       { profileImage },
       { new: true, runValidators: true }
-    ).select('-refreshTokens -__v');
+    ).select('-refreshTokens -__v -passwordHash -resetPasswordCodeHash -resetPasswordExpiresAt');
 
     if (!user) {
       throw new AppError('User not found', 404);

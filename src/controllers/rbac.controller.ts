@@ -471,7 +471,15 @@ export const assignUserRole = asyncHandler(async (req: AuthRequest, res: Respons
 
   let assignedRoleName: string | null = null;
   if (roleId === null) {
-    await User.findByIdAndUpdate(userId, { $unset: { roleId: 1 } }, { runValidators: true });
+    // Removing a staff member's role removes their dashboard access. Before,
+    // only roleId was cleared and the legacy role stayed 'Admin' — which the
+    // permission checks treat as a full Super Admin, so taking a role away
+    // granted every permission. To give full access, assign the Super Admin role.
+    await User.findByIdAndUpdate(
+      userId,
+      { $unset: { roleId: 1 }, $set: { role: 'Member' } },
+      { runValidators: true }
+    );
   } else {
     const role = await Role.findById(roleId);
     if (!role) {
@@ -488,7 +496,7 @@ export const assignUserRole = asyncHandler(async (req: AuthRequest, res: Respons
   }
 
   const updated = await User.findById(userId)
-    .select('-refreshTokens')
+    .select('-refreshTokens -passwordHash -resetPasswordCodeHash -resetPasswordExpiresAt -fcmTokens -webPushTokens')
     .populate('roleId')
     .lean();
 
@@ -510,9 +518,12 @@ export const seedRbacDefaults = asyncHandler(async (req: AuthRequest, res: Respo
     throw new AppError('Unauthorized', 401);
   }
 
-  const user = await User.findById(userId).select('role');
-  if (!user || user.role !== 'Admin') {
-    throw new AppError('Only legacy Admin accounts can run seed', 403);
+  // Every staff account carries role 'Admin' (permissions come from roleId),
+  // so checking role alone let any staff member reset the default roles.
+  // Only a full Admin — role 'Admin' with no RBAC role — may run the seed.
+  const user = await User.findById(userId).select('role roleId');
+  if (!user || user.role !== 'Admin' || user.roleId) {
+    throw new AppError('Only full Admin accounts can reset the default roles', 403);
   }
 
   const result = await seedDefaultRbac();

@@ -12,6 +12,7 @@ import { AppError } from '@/utils/app-error';
 import { AuthRequest } from '@/middleware/auth.middleware';
 import { upsertUserFcmToken } from '@/services/push-token.service';
 import { recordAuditLog, diffChanges } from '@/services/audit-log.service';
+import { userHasAnyPermission } from '@/services/rbac.service';
 import {
   createFirebaseUser,
   getFirebaseUserByEmail,
@@ -19,8 +20,25 @@ import {
   updateFirebasePassword,
 } from '@/services/firebase.service';
 
-/** Fields to exclude from user response (sensitive data) */
-const USER_PROJECTION = '-refreshTokens';
+/**
+ * Fields never sent in user responses. Only refresh tokens were excluded
+ * before, so password hashes, reset codes and device push tokens were returned.
+ */
+const USER_PROJECTION =
+  '-refreshTokens -passwordHash -resetPasswordCodeHash -resetPasswordExpiresAt -fcmTokens -webPushTokens';
+
+/**
+ * Making someone staff ('Admin') or a vendor is a privilege decision: an
+ * 'Admin' account without an RBAC role has full Super Admin access. So only
+ * people who can manage roles (admin.manage_roles, or a full Admin) may set
+ * or change an account type. Before, manage_users alone (e.g. the Moderator
+ * role) was enough to turn any member into a full Super Admin.
+ */
+const canSetAccountType = async (req: AuthRequest): Promise<boolean> => {
+  const requesterId = req.user?.id;
+  if (!requesterId || req.user?.isGuest) return false;
+  return userHasAnyPermission(String(requesterId), ['admin.manage_roles']);
+};
 
 /**
  * Create a new user from the admin panel
@@ -39,6 +57,10 @@ export const createUser = asyncHandler(async (req: AuthRequest, res: Response) =
     role?: 'Admin' | 'Vendor' | 'Member';
     isVerified?: boolean;
   };
+
+  if (role && role !== 'Member' && !(await canSetAccountType(req))) {
+    throw new AppError('You do not have permission to create staff or vendor accounts', 403);
+  }
 
   const normalizedEmail = email.trim().toLowerCase();
 
@@ -154,6 +176,13 @@ export const getUserById = asyncHandler(async (req: AuthRequest, res: Response) 
 
   if (!mongoose.Types.ObjectId.isValid(userId)) {
     throw new AppError(t(lang, 'user.not_found'), 404);
+  }
+
+  // Members may read only their own record; staff need manage_users.
+  const requesterId = String(req.user?.id || '');
+  const isSelf = requesterId === userId;
+  if (!isSelf && (req.user?.isGuest || !(await userHasAnyPermission(requesterId, ['manage_users'])))) {
+    throw new AppError('Access denied', 403);
   }
 
   const user = await User.findById(userId).select(USER_PROJECTION).lean();
@@ -329,6 +358,11 @@ export const updateUser = asyncHandler(async (req: AuthRequest, res: Response) =
   }
 
   const previousUser = await User.findById(userId).select('fullName phone gender profileImage role').lean();
+
+  // Changing the account type (member <-> staff/vendor) needs admin.manage_roles.
+  if (update.role !== undefined && update.role !== previousUser?.role && !(await canSetAccountType(req))) {
+    throw new AppError('You do not have permission to change an account type', 403);
+  }
   const user = await User.findByIdAndUpdate(userId, update, { new: true, runValidators: true })
     .select(USER_PROJECTION)
     .lean();

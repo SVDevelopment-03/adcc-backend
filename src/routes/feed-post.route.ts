@@ -38,8 +38,12 @@ import { getPublicFeedQuerySchema } from '@/validators/feed-post.validator';
 
 const router = express.Router();
 
-router.get('/', authenticate, validate(getFeedPostsQuerySchema), getFeedPosts);
-router.get('/:id', authenticate, getFeedPostById);
+const requireFeedModeration = requireStaffPermission('moderate_content', 'admin.panel');
+
+// The moderation queue (every status, every author) is staff-only. Members and
+// guests read approved posts through the public /v1/feed routes instead.
+router.get('/', authenticate, requireFeedModeration, validate(getFeedPostsQuerySchema), getFeedPosts);
+router.get('/:id', authenticate, requireFeedModeration, getFeedPostById);
 
 router.post(
   '/',
@@ -50,8 +54,6 @@ router.post(
   validate(createFeedPostSchema),
   createFeedPost
 );
-
-const requireFeedModeration = requireStaffPermission('moderate_content', 'admin.panel');
 
 router.post(
   '/admin',

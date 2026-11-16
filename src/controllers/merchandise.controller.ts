@@ -14,6 +14,7 @@ import {
   localizeMerchandiseCategoryStatic,
 } from '@/utils/localization';
 import { translateFieldsToArabic } from '@/services/translation.service';
+import { userHasAnyPermission } from '@/services/rbac.service';
 
 const ensureObjectId = (id: string): mongoose.Types.ObjectId => {
   if (!mongoose.Types.ObjectId.isValid(id)) {
@@ -29,7 +30,17 @@ const buildSlugId = (value: string): string =>
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-+|-+$/g, '') || `category-${Date.now()}`;
 
-const isAdminUser = (req: AuthRequest): boolean => req.user?.role === 'Admin';
+/**
+ * Store managers: a full Admin, or staff whose role grants manage_store /
+ * admin.panel. Checking `role === 'Admin'` alone was not enough — every
+ * staff account carries that legacy role, so any staff member (e.g. a
+ * Moderator) could edit, publish or delete store products.
+ */
+const isAdminUser = async (req: AuthRequest): Promise<boolean> => {
+  const userId = req.user?.id;
+  if (!userId || req.user?.isGuest) return false;
+  return userHasAnyPermission(String(userId), ['manage_store', 'admin.panel']);
+};
 const isVendorUser = (req: AuthRequest): boolean => req.user?.role === 'Vendor';
 
 const buildProductQuery = (query: any, isAdmin: boolean) => {
@@ -89,8 +100,8 @@ const buildOrderQuery = (query: any) => {
   return filter;
 };
 
-const canModifyProduct = (req: AuthRequest, product: any): boolean => {
-  if (isAdminUser(req)) return true;
+const canModifyProduct = async (req: AuthRequest, product: any): Promise<boolean> => {
+  if (await isAdminUser(req)) return true;
   if (!isVendorUser(req)) return false;
 
   const userId = req.user?.id;
@@ -189,7 +200,7 @@ export const getMerchandiseProducts = asyncHandler(async (req: AuthRequest, res:
   const limitNum = Math.min(100, Math.max(1, Number(limit) || 20));
   const skip = (pageNum - 1) * limitNum;
 
-  const isAdmin = isAdminUser(req);
+  const isAdmin = await isAdminUser(req);
   const filter = buildProductQuery(req.query, isAdmin);
 
   if (req.query.category) {
@@ -244,7 +255,7 @@ export const getMerchandiseProductById = asyncHandler(async (req: AuthRequest, r
   const { id } = req.params;
   const product: any = await MerchandiseProduct.findById(ensureObjectId(String(id))).lean();
 
-  if (!product || (product.status !== 'published' && !isAdminUser(req))) {
+  if (!product || (product.status !== 'published' && !(await isAdminUser(req)))) {
     throw new AppError('Product not found', 404);
   }
 
@@ -299,6 +310,11 @@ export const createMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
   const user = await User.findById(userId).select('fullName role').lean();
   if (!user) {
     throw new AppError('User not found', 404);
+  }
+
+  // Only store managers and vendors may add products (members could before).
+  if (!(await isAdminUser(req)) && !isVendorUser(req)) {
+    throw new AppError('Permission denied', 403);
   }
 
   const data = req.body as any;
@@ -366,7 +382,7 @@ export const updateMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
   if (!product) {
     throw new AppError('Product not found', 404);
   }
-  if (!canModifyProduct(req, product)) {
+  if (!(await canModifyProduct(req, product))) {
     throw new AppError('Permission denied', 403);
   }
 
@@ -442,7 +458,7 @@ export const deleteMerchandiseProduct = asyncHandler(async (req: AuthRequest, re
   if (!product) {
     throw new AppError('Product not found', 404);
   }
-  if (!canModifyProduct(req, product)) {
+  if (!(await canModifyProduct(req, product))) {
     throw new AppError('Permission denied', 403);
   }
 
@@ -459,7 +475,7 @@ export const updateMerchandiseProductStatus = asyncHandler(async (req: AuthReque
   if (!product) {
     throw new AppError('Product not found', 404);
   }
-  if (!canModifyProduct(req, product)) {
+  if (!(await canModifyProduct(req, product))) {
     throw new AppError('Permission denied', 403);
   }
 
@@ -478,7 +494,7 @@ export const updateMerchandiseProductFeatured = asyncHandler(async (req: AuthReq
   if (!product) {
     throw new AppError('Product not found', 404);
   }
-  if (!canModifyProduct(req, product)) {
+  if (!(await canModifyProduct(req, product))) {
     throw new AppError('Permission denied', 403);
   }
 
