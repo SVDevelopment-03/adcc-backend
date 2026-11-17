@@ -24,6 +24,7 @@ import {
   generateAccessToken,
   generateRefreshToken,
   getRefreshTokenExpiryDate,
+  getSessionEndDate,
 } from '@/utils/jwt.util';
 import { t } from '@/utils/i18n';
 import {
@@ -43,6 +44,9 @@ import { sendEmail } from '@/services/email.service';
 /** Guest role and ID prefix - guest users are stateless (no DB record) */
 const GUEST_ROLE = 'Guest';
 const GUEST_ID_PREFIX = 'guest_';
+
+/** How long a refresh token keeps working after it has been rotated. */
+const REFRESH_ROTATION_GRACE_MS = 2 * 60 * 1000;
 
 function isGuestPayload(id?: string, role?: string): boolean {
   return role === GUEST_ROLE && typeof id === 'string' && id.startsWith(GUEST_ID_PREFIX);
@@ -755,11 +759,11 @@ export const refreshAccessToken = asyncHandler(
       throw new AppError(t(lang, 'auth.invalid_refresh_token'), 401);
     }
 
-    // Check if refresh token exists in database
+    // Check that this exact refresh token is stored and not expired
+    const now = new Date();
     const user = await User.findOne({
       _id: decoded.id,
-      'refreshTokens.token': refreshToken,
-      'refreshTokens.expiresAt': { $gt: new Date() },
+      refreshTokens: { $elemMatch: { token: refreshToken, expiresAt: { $gt: now } } },
     });
 
     if (!user) {
@@ -775,42 +779,42 @@ export const refreshAccessToken = asyncHandler(
       role: user.role,
     });
 
-    // Token rotation: Generate new refresh token
-    const newRefreshToken = generateRefreshToken({
-      id: user._id.toString(),
-      uid: user.firebaseUid,
-      phone: user.phone || '',
-      email: user.email || '',
-      role: user.role,
-    });
-
-    // Calculate expiry date for new refresh token
-    const expiresAt = new Date();
-    expiresAt.setTime(getRefreshTokenExpiryDate().getTime());
-
-    // Filter out expired tokens and the old refresh token, then add new one
-    const now = new Date();
-    const filteredTokens = user.refreshTokens.filter(
-      (token) =>
-        token.expiresAt >= now && token.token !== refreshToken
+    // Token rotation: the new refresh token ends when the original login
+    // session ends, so refreshing never extends a session past its length.
+    const expiresAt = getSessionEndDate(decoded);
+    const newRefreshToken = generateRefreshToken(
+      {
+        id: user._id.toString(),
+        uid: user.firebaseUid,
+        phone: user.phone || '',
+        email: user.email || '',
+        role: user.role,
+      },
+      expiresAt
     );
 
-    // Add new refresh token
-    filteredTokens.push({
-      token: newRefreshToken,
-      expiresAt,
-      createdAt: new Date(),
-    });
+    // The old token stays valid for a short grace period instead of being
+    // removed at once: if the app never receives this response (network drop,
+    // app sent to background) it can retry with the old token rather than
+    // being signed out.
+    const oldEntry = user.refreshTokens.find((token) => token.token === refreshToken);
+    const graceEnd = new Date(now.getTime() + REFRESH_ROTATION_GRACE_MS);
+    if (oldEntry && oldEntry.expiresAt > graceEnd) {
+      await User.updateOne(
+        { _id: user._id, 'refreshTokens.token': refreshToken },
+        { $set: { 'refreshTokens.$.expiresAt': graceEnd } }
+      );
+    }
 
-    // Update user with filtered tokens array (atomic operation)
-    await User.findByIdAndUpdate(
-      user._id,
-      {
-        $set: {
-          refreshTokens: filteredTokens,
-        },
-      },
-      { new: true }
+    // Separate atomic updates (not a whole-array $set) so a login or refresh
+    // on another device at the same moment cannot overwrite this one.
+    await User.updateOne(
+      { _id: user._id },
+      { $push: { refreshTokens: { token: newRefreshToken, expiresAt, createdAt: now } } }
+    );
+    await User.updateOne(
+      { _id: user._id },
+      { $pull: { refreshTokens: { expiresAt: { $lt: now } } } }
     );
 
     sendSuccess(
