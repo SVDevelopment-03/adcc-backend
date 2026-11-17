@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import jwt, { JwtPayload } from 'jsonwebtoken';
 import { AppError } from './app-error';
 
@@ -32,16 +33,32 @@ const getJWTExpiresIn = (): string => {
   return process.env.JWT_EXPIRES_IN || '5m';
 };
 
+// Login session length: users stay signed in this long after logging in
+// (or until they log out). Refreshing does not extend it.
 const getRefreshExpiresIn = (): string => {
   return process.env.REFRESH_TOKEN_EXPIRES_IN || '30d';
 };
 
-// Expiry date stored alongside a refresh token in the DB; kept in sync with the token's own lifetime
-export const getRefreshTokenExpiryDate = (): Date => {
+const getRefreshLifetimeMs = (): number => {
   const unitMs: Record<string, number> = { s: 1000, m: 60 * 1000, h: 60 * 60 * 1000, d: 24 * 60 * 60 * 1000 };
   const match = /^(\d+)\s*([smhd])?$/.exec(getRefreshExpiresIn().trim());
-  const lifetimeMs = match ? Number(match[1]) * unitMs[match[2] || 's'] : 30 * unitMs.d;
-  return new Date(Date.now() + lifetimeMs);
+  return match ? Number(match[1]) * unitMs[match[2] || 's'] : 30 * unitMs.d;
+};
+
+// Expiry date stored alongside a refresh token in the DB; kept in sync with the token's own lifetime
+export const getRefreshTokenExpiryDate = (): Date => {
+  return new Date(Date.now() + getRefreshLifetimeMs());
+};
+
+/**
+ * When the login session behind a refresh token ends. Rotated tokens keep the
+ * original login's end date; tokens issued before that rule (longer lifetimes)
+ * are capped at one session length from now.
+ */
+export const getSessionEndDate = (decodedRefreshToken: JWTPayload): Date => {
+  const cap = Date.now() + getRefreshLifetimeMs();
+  const exp = typeof decodedRefreshToken.exp === 'number' ? decodedRefreshToken.exp * 1000 : cap;
+  return new Date(Math.min(exp, cap));
 };
 
 export const generateAccessToken = (payload: JWTPayload): string => {
@@ -52,12 +69,25 @@ export const generateAccessToken = (payload: JWTPayload): string => {
   );
 };
 
-export const generateRefreshToken = (payload: JWTPayload): string => {
-  return jwt.sign(
-    payload,
-    getRefreshSecret(),
-    { expiresIn: getRefreshExpiresIn() } as jwt.SignOptions
-  );
+/**
+ * @param expiresAt Optional fixed end date (used when rotating, so the session
+ * does not get longer). Defaults to a full session length from now.
+ */
+export const generateRefreshToken = (payload: JWTPayload, expiresAt?: Date): string => {
+  // Unique per token, so two tokens issued in the same second never match.
+  const options: jwt.SignOptions = { jwtid: crypto.randomUUID() };
+  if (expiresAt) {
+    // Exact end time, so repeated rotations never drift from the login's end.
+    return jwt.sign(
+      { ...payload, exp: Math.floor(expiresAt.getTime() / 1000) },
+      getRefreshSecret(),
+      options
+    );
+  }
+  return jwt.sign(payload, getRefreshSecret(), {
+    ...options,
+    expiresIn: getRefreshExpiresIn(),
+  } as jwt.SignOptions);
 };
 
 export const generateTokens = (payload: JWTPayload) => {
