@@ -1,4 +1,4 @@
-import { isEventCalendarDateInPast } from '@/utils/event-date';
+import { isEventCalendarDateInPast, toDisplayEventDate } from '@/utils/event-date';
 import { localizeDocumentFields, SupportedLanguage, localizeEventStatic } from '@/utils/localization';
 
 const EVENT_LOCALIZED_FIELDS = {
@@ -19,6 +19,9 @@ export const localizeEventPayload = (event: Record<string, any>, lang: Supported
     if (payload.status === 'Open' || payload.status === 'Full') {
       payload.status = 'Closed';
     }
+  }
+  if (payload.eventDate) {
+    payload.eventDate = toDisplayEventDate(payload.eventDate);
   }
 
   const localizedEvent = localizeDocumentFields(payload, lang, EVENT_LOCALIZED_FIELDS);
