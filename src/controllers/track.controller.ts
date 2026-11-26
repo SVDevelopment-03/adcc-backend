@@ -13,6 +13,7 @@ import mongoose from 'mongoose';
 import { SupportedLanguage } from '@/utils/localization';
 import { localizeTrack } from '@/utils/track-payload';
 import { localizeEventPayload } from '@/utils/event-payload';
+import { attachParticipantCounts } from '@/services/event-participants.service';
 import { uploadImageBufferToS3 } from '@/services/s3-upload.service';
 import { recordAuditLog, diffChanges } from '@/services/audit-log.service';
 import { isStaffRequest, hasUnverifiedToken } from '@/utils/staff-request';
@@ -437,8 +438,9 @@ export const getTrackEvents = asyncHandler(async (req: Request, res: Response) =
     Event.countDocuments(filter),
   ]);
 
-  const localizedEvents = events.map((event) =>
-    localizeEventPayload(event as Record<string, any>, lang)
+  // Participant counts (website shows only registration-form sign-ups)
+  const localizedEvents = await attachParticipantCounts(
+    events.map((event) => localizeEventPayload(event as Record<string, any>, lang))
   );
 
   sendSuccess(
