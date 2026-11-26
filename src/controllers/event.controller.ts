@@ -25,6 +25,9 @@ import { randomInt } from 'node:crypto';
 import mongoose, { type PipelineStage } from 'mongoose';
 import { SupportedLanguage } from '@/utils/localization';
 import  {localizeEventPayload}  from '@/utils/event-payload';
+import {
+  attachParticipantCounts,
+} from '@/services/event-participants.service';
 // import { localizeDocumentFields, SupportedLanguage, localizeEventStatic } from '@/utils/localization';
 import {
   notifyAdminEventRegistration,
@@ -246,7 +249,6 @@ const EVENT_RESULT_STATUSES = new Set([
   'no_show',
 ]);
 
-const ACTIVE_PARTICIPANT_STATUSES = ['joined', 'checked_in', 'no_show', 'completed'] as const;
 
 const generateParticipantCode = async (eventId: string): Promise<string> => {
   const code = (): string => randomInt(100000000000, 1000000000000).toString();
@@ -438,15 +440,6 @@ const buildEventResultsPipeline = (eventId: string, statuses?: string[]): Pipeli
       },
     },
   ];
-};
-
-const getRegisteredParticipantCount = async (eventId: string): Promise<number> => {
-  if (!mongoose.Types.ObjectId.isValid(eventId)) return 0;
-
-  return EventResult.countDocuments({
-    eventId: new mongoose.Types.ObjectId(eventId),
-    status: { $in: ACTIVE_PARTICIPANT_STATUSES as unknown as string[] },
-  } as any);
 };
 
 const ensureEventExists = async (eventId: string, lang: SupportedLanguage) => {
@@ -764,12 +757,9 @@ export const getAllEvents = asyncHandler(async (req: Request, res: Response) => 
       : [];
   const events = [...openEvents, ...closedEvents];
 
-  const localizedEvents = await Promise.all(
-    events.map(async (event) => {
-      const localizedEvent = localizeEventPayload(event as Record<string, any>, lang);
-      localizedEvent.currentParticipants = await getRegisteredParticipantCount(String(event._id));
-      return localizedEvent;
-    })
+  // Participant counts (website shows only registration-form sign-ups)
+  const localizedEvents = await attachParticipantCounts(
+    events.map((event) => localizeEventPayload(event as Record<string, any>, lang))
   );
 
   sendSuccess(
@@ -824,12 +814,9 @@ export const getHomeEvents = asyncHandler(async (req: Request, res: Response) =>
     total = await Event.countDocuments(allFilter);
   }
 
-  const localizedEvents = await Promise.all(
-    events.map(async (event) => {
-      const localizedEvent = localizeEventPayload(event as Record<string, any>, lang);
-      localizedEvent.currentParticipants = await getRegisteredParticipantCount(String(event._id));
-      return localizedEvent;
-    })
+  // Participant counts (website shows only registration-form sign-ups)
+  const localizedEvents = await attachParticipantCounts(
+    events.map((event) => localizeEventPayload(event as Record<string, any>, lang))
   );
 
   sendSuccess(
@@ -958,8 +945,7 @@ export const getEventById = asyncHandler(async (req: Request, res: Response) => 
     throw new AppError(t(lang, "event.not_found"), 404);
   }
 
-  const localizedEvent = localizeEventPayload(event.toObject(), lang);
-  localizedEvent.currentParticipants = await getRegisteredParticipantCount(String(event._id));
+  const [localizedEvent] = await attachParticipantCounts([localizeEventPayload(event.toObject(), lang)]);
 
   sendSuccess(res, localizedEvent, t(lang, "event.eventDetails"), 201);
 });
